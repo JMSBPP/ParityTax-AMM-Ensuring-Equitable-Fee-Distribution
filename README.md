@@ -1,8 +1,7 @@
 # ParityTax-AMM-Ensuring-Equitable-Fee-Distribution
 <p align="center">
-<div style="display: flex; justify-content: center; align-items: center;">
   <img src="assets/logo.png" alt="Description" width="300"/>
-</div>
+</p>
 
 
 ## Overview
