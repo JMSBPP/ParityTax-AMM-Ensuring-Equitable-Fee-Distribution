@@ -39,3 +39,7 @@ PLP's are retail, is reasonable to think they see value on CCTP (Circle) and als
   
   -  `ParityTax-hook` **subscribes** to `JIT-Liquidity-hooks`
 
+
+## How a standard `JIT-Liquidity-hook` looks like ?
+
+- We have a detector that identifies
