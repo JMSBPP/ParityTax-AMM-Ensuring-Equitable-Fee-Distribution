@@ -33,11 +33,34 @@ PLP's are retail, is reasonable to think they see value on CCTP (Circle) and als
 
 # Design Analysis
 
-**Claim:** 
-
-- Since smart contracts do not have access to the mempool:
-  
+## `ParityTaxHook`  
   -  `ParityTax-hook` **subscribes** to `JIT-Liquidity-hooks`
+  
+  -  `TimeLockedPositionManager` **tracks** fees to each `LP's account`
+  
+  -  `FeeCalculations` consider the __fee size, LP's share of the pool, pool's fee specification__
+### `Commitment Duration Specification`
+
+  -  `beforeDepositingLiquidity` an **LP** must specify a commitment duration level `IERC7818.mint(commitmentLevel)`, the more commitment Level the more long-term commitment on liquidity.
+  
+  -  `commitmentLevel` classifies PLP's and JIT 
+
+### `Enforcement of Commitment`
+
+  -   `[IERC7818.balanceOf(LP)==0]beforeRemoveLiquidity:` the __fees__ tracked by the `globalFeeTracker`.
+  
+### `Tax System`  
+
+  - `TaxSystem` **establishes** a tax parameter $\tau \in [0,1]$.
+  
+  - `TaxSystem` **tracks** two separate global fee variables (`globalFeePLP's, globalFeeJIT`).
+
+### `FeeDistributionDuringSwaps`
+
+- `beforeSwap() => FeeDistribution.computeLPShares()`
+
+
+    
 
 
 ## How a standard `JIT-Liquidity-hook` looks like ?
