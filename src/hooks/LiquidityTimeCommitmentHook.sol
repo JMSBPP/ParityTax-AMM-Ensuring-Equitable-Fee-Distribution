@@ -6,15 +6,30 @@ import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import "v4-core/types/PoolOperation.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
-struct TimeCommitment {
-    bool jit;
+import {Position} from "v4-core/libraries/Position.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+
+struct TimeCommitmentParams {
+    bool longTerm;
     uint256 numberOfBlocks;
+    uint256 startingBlockNumber;
+}
+struct TimeCommitment {
+    address owner;
+    TimeCommitmentParams timeCommitmentParams;
+    ModifyLiquidityParams liquidityParams;
 }
 
 contract LiquidityTimeCommitmentHook is BaseHook {
+    using Position for address;
     IPoolManager public immutable manager;
 
-    // mapping(PositionKey => TimeCommitment) public liquidityWithdrawalLock;
+    error LockedLiquidity();
+
+    mapping(bytes32 positionKey => TimeCommitment) public timeCommitments;
+    //One owner can have multiple positions
+    mapping(address sender => bytes32 positionKey) public positionOwned;
+
     constructor(IPoolManager _manager) BaseHook(_manager) {}
 
     function getHookPermissions()
@@ -45,10 +60,21 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
-    ) external returns (bytes4) {
-        if (hookData.valid()) {
-            manager.unlock(hookData);
-        }
+    ) external override(BaseHook) onlyPoolManager returns (bytes4) {
+        // With valid we mean that it decodes to a TimeCommitmentParams
+        TimeCommitmentParams memory timeCommitmentParams = abi.decode(
+            hookData,
+            (TimeCommitmentParams)
+        );
+        TimeCommitment memory timeCommitment = TimeCommitment({
+            owner: sender,
+            timeCommitmentParams: timeCommitmentParams,
+            liquidityParams: params
+        });
+
+        manager.unlock(abi.encode(timeCommitment));
+
+        return IHooks.beforeAddLiquidity.selector;
     }
 
     function unlockCallback(
@@ -60,6 +86,26 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         );
 
         setLiquidityWithdrawalLock(timeCommitment);
+
+        res = "";
+    }
+
+    function setLiquidityWithdrawalLock(
+        TimeCommitment memory timeCommitment
+    ) internal {
+        if (timeCommitment.timeCommitmentParams.longTerm) {
+            //We get the respective positionKey
+            // 1. Who is the owner of the position ?
+            // 1.1 Is it msg.sender ?
+            bytes32 positionKey = timeCommitment.owner.calculatePositionKey(
+                timeCommitment.liquidityParams.tickLower,
+                timeCommitment.liquidityParams.tickUpper,
+                timeCommitment.liquidityParams.salt
+            );
+
+            positionOwned[timeCommitment.owner] = positionKey;
+            timeCommitments[positionKey] = timeCommitment;
+        }
     }
 
     function beforeRemoveLiquidity(
@@ -67,16 +113,18 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
-    ) external onlyPoolManager returns (bytes4) {
-        isLiquidityWithdrawable(sender, key, params);
+    ) external override(BaseHook) onlyPoolManager returns (bytes4) {
+        bytes32 positionKey = positionOwned[sender];
+        if (!(isLiquidityWithdrawable(positionKey))) revert LockedLiquidity();
     }
 
-    function setLiquidityWithdrawalLock(
-        TimeCommitment memory timeCommitment
-    ) internal {
-        if (!timeCommitment.jit) {
-            // 1. get the positionKey of this liquidity order
-            // Associate the positionKey with the timeCommitment
-        }
+    function isLiquidityWithdrawable(
+        bytes32 positionKey
+    ) internal returns (bool isWithdrawable) {
+        TimeCommitment memory timeCommitment = timeCommitments[positionKey];
+        isWithdrawable =
+            block.number >=
+            timeCommitment.timeCommitmentParams.startingBlockNumber +
+                timeCommitment.timeCommitmentParams.numberOfBlocks;
     }
 }
