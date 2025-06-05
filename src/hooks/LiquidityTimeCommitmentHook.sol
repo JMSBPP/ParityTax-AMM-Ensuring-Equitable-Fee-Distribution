@@ -12,15 +12,9 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
 //=========OWN RELATED =======
-
+import "../LiquidityTimeCommitmentState.sol";
 //======POSITION MANAGER RELATED =============
 
-struct TimeCommitment {
-    address liquidityProvider;
-    bool longTerm;
-    uint256 numberOfBlocks;
-    uint256 startingBlockNumber;
-}
 // lp -> liquidityRouter -> poolManager -> hook
 //msg.sender == PoolManager
 // sender == liquidityRouter
@@ -41,7 +35,7 @@ struct TimeCommitment {
 // 4. We need to make sure to control for some one calling
 //    himself shortTerm and specifying a long term commitment
 
-contract LiquidityTimeCommitmentHook is BaseHook {
+contract LiquidityTimeCommitmentHook is LiquidityTimeCommitmentState, BaseHook {
     using Position for address;
     using PoolIdLibrary for PoolKey;
     using StateLibrary for *;
@@ -53,12 +47,10 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         TimeCommitment timeCommitment
     );
     error LockedLiquidity();
-    // The position Key has an associated owner
-    // I am saying the liquidity Provider with positionKey for this pool has a time commitment of ...
-    mapping(PoolId poolId => mapping(bytes32 positionKey => TimeCommitment timeCommitment))
-        private timeCommitments;
 
-    constructor(IPoolManager poolManager) BaseHook(poolManager) {}
+    constructor(
+        IPoolManager poolManager
+    ) BaseHook(poolManager) LiquidityTimeCommitmentState(poolManager) {}
 
     function getHookPermissions()
         public
@@ -99,7 +91,7 @@ contract LiquidityTimeCommitmentHook is BaseHook {
             key,
             params
         );
-
+        poolPositions[poolId].push(lpPositionKey);
         timeCommitments[poolId][lpPositionKey] = timeCommitment;
 
         emit NewTimeCommitment(
@@ -130,6 +122,11 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         );
         if (!(isLiquidityWithdrawable(lpPositionKey, poolId)))
             revert LockedLiquidity();
+
+        // In other case :
+        // 1.We need to remove the corresponding data
+        // from the state
+        // 2. Allow to remove the liquidity
         return IHooks.beforeRemoveLiquidity.selector;
     }
 
