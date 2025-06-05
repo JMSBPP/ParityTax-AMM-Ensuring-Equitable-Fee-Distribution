@@ -35,6 +35,11 @@ struct TimeCommitment {
 //     from the sender attribute?
 // 2. How to integrate this more efficiently with the position
 //    manager ?
+// 3. Does the beforeRemoveLiquidity covers burning Position
+//    ERC-721 tokens and all other methods for removing
+//    liquidity ?
+// 4. We need to make sure to control for some one calling
+//    himself shortTerm and specifying a long term commitment
 
 contract LiquidityTimeCommitmentHook is BaseHook {
     using Position for address;
@@ -49,8 +54,8 @@ contract LiquidityTimeCommitmentHook is BaseHook {
     );
     error LockedLiquidity();
     // The position Key has an associated owner
-    // I am saying the liquidity Prrovider with positionKey for this pool has a time commitment of ...
-    mapping(bytes32 positionKey => mapping(PoolId poolId => TimeCommitment timeCommitment))
+    // I am saying the liquidity Provider with positionKey for this pool has a time commitment of ...
+    mapping(PoolId poolId => mapping(bytes32 positionKey => TimeCommitment timeCommitment))
         private timeCommitments;
 
     constructor(IPoolManager poolManager) BaseHook(poolManager) {}
@@ -95,13 +100,13 @@ contract LiquidityTimeCommitmentHook is BaseHook {
             params
         );
 
-        timeCommitments[lpPositionKey][poolId] = timeCommitment;
+        timeCommitments[poolId][lpPositionKey] = timeCommitment;
 
         emit NewTimeCommitment(
             timeCommitment.liquidityProvider,
             poolId,
             lpPositionKey,
-            timeCommitments[lpPositionKey][poolId]
+            timeCommitments[poolId][lpPositionKey]
         );
         return IHooks.beforeAddLiquidity.selector;
     }
@@ -133,15 +138,15 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         PoolId poolId
     ) internal view returns (bool isWithdrawable) {
         isWithdrawable = (block.number >=
-            timeCommitments[lpPositionKey][poolId].startingBlockNumber +
-                timeCommitments[lpPositionKey][poolId].numberOfBlocks);
+            timeCommitments[poolId][lpPositionKey].startingBlockNumber +
+                timeCommitments[poolId][lpPositionKey].numberOfBlocks);
     }
 
     function getPositionPoolTimeCommitment(
         bytes32 lpPositionKey,
         PoolId poolId
     ) public view returns (TimeCommitment memory timeCommitment) {
-        timeCommitment = timeCommitments[lpPositionKey][poolId];
+        timeCommitment = timeCommitments[poolId][lpPositionKey];
     }
 
     function getTimeCommitmentKeys(
@@ -153,7 +158,9 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         lpPositionKey = sender.calculatePositionKey(
             params.tickLower,
             params.tickUpper,
-            params.salt
+            params.salt //bytes32(tokenId)
         );
+        //This means that each lpPositionKey has a one to one
+        // relation with the tokenId of PositionToken
     }
 }
