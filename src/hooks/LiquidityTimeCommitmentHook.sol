@@ -4,33 +4,43 @@ pragma solidity ^0.8.25;
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import "v4-core/types/PoolId.sol";
 import "v4-core/types/PoolOperation.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
-struct TimeCommitmentParams {
+struct TimeCommitment {
+    address liquidityProvider;
     bool longTerm;
     uint256 numberOfBlocks;
     uint256 startingBlockNumber;
 }
-struct TimeCommitment {
-    address owner;
-    TimeCommitmentParams timeCommitmentParams;
-    ModifyLiquidityParams liquidityParams;
-}
-
+// lp -> liquidityRouter -> poolManager
+//msg.sender == PoolManager
+// sender == liquidityRouter
+// How do I find the underlying
+//liquidity Provider address
 contract LiquidityTimeCommitmentHook is BaseHook {
     using Position for address;
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary for *;
     IPoolManager public immutable manager;
 
+    event NewTimeCommitment(
+        address indexed sender,
+        PoolId indexed poolId,
+        bytes32 indexed positionKey,
+        TimeCommitment timeCommitment
+    );
     error LockedLiquidity();
+    // The position Key has an associated owner
+    // I am saying the liquidity Prrovider with positionKey for this pool has a time commitment of ...
+    mapping(bytes32 positionKey => mapping(PoolId poolId => TimeCommitment timeCommitment))
+        private timeCommitments;
 
-    mapping(bytes32 positionKey => TimeCommitment) public timeCommitments;
-    //One owner can have multiple positions
-    mapping(address sender => bytes32 positionKey) public positionOwned;
-
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
+    constructor(IPoolManager poolManager) BaseHook(poolManager) {}
 
     function getHookPermissions()
         public
@@ -62,50 +72,28 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
         // With valid we mean that it decodes to a TimeCommitmentParams
-        TimeCommitmentParams memory timeCommitmentParams = abi.decode(
-            hookData,
-            (TimeCommitmentParams)
-        );
-        TimeCommitment memory timeCommitment = TimeCommitment({
-            owner: sender,
-            timeCommitmentParams: timeCommitmentParams,
-            liquidityParams: params
-        });
-
-        manager.unlock(abi.encode(timeCommitment));
-
-        return IHooks.beforeAddLiquidity.selector;
-    }
-
-    function unlockCallback(
-        bytes memory rawData
-    ) external onlyPoolManager returns (bytes memory res) {
+        // Pool.State storage pool = _getPool(id);
         TimeCommitment memory timeCommitment = abi.decode(
-            rawData,
+            hookData,
             (TimeCommitment)
         );
 
-        setLiquidityWithdrawalLock(timeCommitment);
-
-        res = "";
-    }
-
-    function setLiquidityWithdrawalLock(
-        TimeCommitment memory timeCommitment
-    ) internal {
-        if (timeCommitment.timeCommitmentParams.longTerm) {
-            //We get the respective positionKey
-            // 1. Who is the owner of the position ?
-            // 1.1 Is it msg.sender ?
-            bytes32 positionKey = timeCommitment.owner.calculatePositionKey(
-                timeCommitment.liquidityParams.tickLower,
-                timeCommitment.liquidityParams.tickUpper,
-                timeCommitment.liquidityParams.salt
-            );
-
-            positionOwned[timeCommitment.owner] = positionKey;
-            timeCommitments[positionKey] = timeCommitment;
-        }
+        (bytes32 lpPositionKey, PoolId poolId) = getTimeCommitmentKeys(
+            timeCommitment.liquidityProvider,
+            key,
+            params
+        );
+        // This poolKeyLPPositionKey has an associated timeCommitment
+        // bytes32 PoolStateSlot = key.toId()._getPoolStateSlot();
+        timeCommitments[lpPositionKey][poolId] = timeCommitment;
+        liquidityProvidersOnPool[key].push(timeCommitment.liquidityProvider);
+        emit NewTimeCommitment(
+            timeCommitment.liquidityProvider,
+            poolId,
+            lpPositionKey,
+            timeCommitments[lpPositionKey][poolId]
+        );
+        return IHooks.beforeAddLiquidity.selector;
     }
 
     function beforeRemoveLiquidity(
@@ -114,17 +102,40 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
-        bytes32 positionKey = positionOwned[sender];
-        if (!(isLiquidityWithdrawable(positionKey))) revert LockedLiquidity();
+        address liquidityProvider = 
+        if (!(isLiquidityWithdrawable(lpPositionKey, poolId)))
+            revert LockedLiquidity();
+        return IHooks.beforeRemoveLiquidity.selector;
     }
 
     function isLiquidityWithdrawable(
-        bytes32 positionKey
-    ) internal returns (bool isWithdrawable) {
-        TimeCommitment memory timeCommitment = timeCommitments[positionKey];
-        isWithdrawable =
-            block.number >=
-            timeCommitment.timeCommitmentParams.startingBlockNumber +
-                timeCommitment.timeCommitmentParams.numberOfBlocks;
+        bytes32 lpPositionKey,
+        PoolId poolId
+    ) internal view returns (bool isWithdrawable) {
+        isWithdrawable = (block.number >=
+            timeCommitments[lpPositionKey][poolId].startingBlockNumber +
+                timeCommitments[lpPositionKey][poolId].numberOfBlocks);
     }
+
+    function getPositionPoolTimeCommitment(
+        bytes32 lpPositionKey,
+        PoolId poolId
+    ) public view returns (TimeCommitment memory timeCommitment) {
+        timeCommitment = timeCommitments[lpPositionKey][poolId];
+    }
+
+    function getTimeCommitmentKeys(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params
+    ) public returns (bytes32 lpPositionKey, PoolId poolId) {
+        poolId = key.toId();
+        lpPositionKey = sender.calculatePositionKey(
+            params.tickLower,
+            params.tickUpper,
+            params.salt
+        );
+    }
+
+
 }
