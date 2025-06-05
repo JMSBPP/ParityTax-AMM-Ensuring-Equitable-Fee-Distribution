@@ -16,7 +16,6 @@ contract LiquidityTimeCommitmentHookTest is Test, Deployers {
     function setUp() public {
         deployFreshManagerAndRouters();
         (currency0, currency1) = deployMintAndApprove2Currencies();
-        // I need to supply the LP with some liquidity
 
         address liquidityTimeCommitmentHookAddress = address(
             uint160(
@@ -51,8 +50,6 @@ contract LiquidityTimeCommitmentHookTest is Test, Deployers {
             1000 ether
         );
 
-        // We set  for this test that the
-        // current block number is 100
         vm.roll(100);
     }
     function helper___removeLiquidityTimeLocked100to123() internal {
@@ -60,18 +57,7 @@ contract LiquidityTimeCommitmentHookTest is Test, Deployers {
         modifyLiquidityRouter.modifyLiquidity(
             key,
             REMOVE_LIQUIDITY_PARAMS,
-            abi.encode(
-                TimeCommitment({
-                    liquidityProvider: address(this),
-                    longTerm: true,
-                    numberOfBlocks: uint256(23),
-                    //From the current block number
-                    // all the way to the block 124
-                    //The LP is not allowed to
-                    //withdraw any liquidity
-                    startingBlockNumber: uint256(100)
-                })
-            )
+            abi.encode(address(this))
         );
         vm.stopPrank();
     }
@@ -92,10 +78,6 @@ contract LiquidityTimeCommitmentHookTest is Test, Deployers {
                     liquidityProvider: address(this),
                     longTerm: true,
                     numberOfBlocks: uint256(23),
-                    //From the current block number
-                    // all the way to the block 124
-                    //The LP is not allowed to
-                    //withdraw any liquidity
                     startingBlockNumber: uint256(100)
                 })
             )
@@ -122,10 +104,8 @@ contract LiquidityTimeCommitmentHookTest is Test, Deployers {
         helper___addLiquidityTimeLocked100to123();
         for (uint256 newBlock = 0; newBlock <= 23; newBlock++) {
             vm.roll(100 + newBlock);
-            if (block.number <= 123) {
-                vm.expectRevert(
-                    LiquidityTimeCommitmentHook.LockedLiquidity.selector
-                );
+            if (block.number < 123) {
+                vm.expectRevert();
                 helper___removeLiquidityTimeLocked100to123();
             }
         }

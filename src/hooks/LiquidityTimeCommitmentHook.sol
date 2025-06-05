@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
-
+// ======POOL MANAGER RELATED =======
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
@@ -11,22 +11,35 @@ import {Position} from "v4-core/libraries/Position.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
+//=========OWN RELATED =======
+
+//======POSITION MANAGER RELATED =============
+
 struct TimeCommitment {
     address liquidityProvider;
     bool longTerm;
     uint256 numberOfBlocks;
     uint256 startingBlockNumber;
 }
-// lp -> liquidityRouter -> poolManager
+// lp -> liquidityRouter -> poolManager -> hook
 //msg.sender == PoolManager
 // sender == liquidityRouter
 // How do I find the underlying
 //liquidity Provider address
+//TODO: We must deal with
+// 1  Can someone call the router from a
+//    different address and still withdraw?
+// 1.1. Can the sender which is the
+//      on beforeRemoveLiquidity(sender, ...)
+//     router be asked which is the lp
+//     from the sender attribute?
+// 2. How to integrate this more efficiently with the position
+//    manager ?
+
 contract LiquidityTimeCommitmentHook is BaseHook {
     using Position for address;
     using PoolIdLibrary for PoolKey;
     using StateLibrary for *;
-    IPoolManager public immutable manager;
 
     event NewTimeCommitment(
         address indexed sender,
@@ -71,8 +84,6 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
-        // With valid we mean that it decodes to a TimeCommitmentParams
-        // Pool.State storage pool = _getPool(id);
         TimeCommitment memory timeCommitment = abi.decode(
             hookData,
             (TimeCommitment)
@@ -83,10 +94,9 @@ contract LiquidityTimeCommitmentHook is BaseHook {
             key,
             params
         );
-        // This poolKeyLPPositionKey has an associated timeCommitment
-        // bytes32 PoolStateSlot = key.toId()._getPoolStateSlot();
+
         timeCommitments[lpPositionKey][poolId] = timeCommitment;
-        liquidityProvidersOnPool[key].push(timeCommitment.liquidityProvider);
+
         emit NewTimeCommitment(
             timeCommitment.liquidityProvider,
             poolId,
@@ -102,7 +112,17 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
-        address liquidityProvider = 
+        // this needs to be the lp that originated teh call to the router
+        // TODO:
+        // Can someone call the router from a different address and still withdraw?
+        // Or can the sender which is the router be asked which is the lp?
+        address liquidityProvider = abi.decode(hookData, (address));
+
+        (bytes32 lpPositionKey, PoolId poolId) = getTimeCommitmentKeys(
+            liquidityProvider,
+            key,
+            params
+        );
         if (!(isLiquidityWithdrawable(lpPositionKey, poolId)))
             revert LockedLiquidity();
         return IHooks.beforeRemoveLiquidity.selector;
@@ -128,7 +148,7 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         address sender,
         PoolKey calldata key,
         ModifyLiquidityParams calldata params
-    ) public returns (bytes32 lpPositionKey, PoolId poolId) {
+    ) public pure returns (bytes32 lpPositionKey, PoolId poolId) {
         poolId = key.toId();
         lpPositionKey = sender.calculatePositionKey(
             params.tickLower,
@@ -136,6 +156,4 @@ contract LiquidityTimeCommitmentHook is BaseHook {
             params.salt
         );
     }
-
-
 }

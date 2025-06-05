@@ -4,75 +4,19 @@
 1. How do I retreive with an external call the Pool.State
    
 ```solidity
-  function modifyLiquidity(State storage self, ModifyLiquidityParams memory params)
+
+function modifyLiquidity(State storage self, ModifyLiquidityParams memory params)
       internal
       returns (BalanceDelta delta, BalanceDelta feeDelta)
   {
-      int128 liquidityDelta = params.liquidityDelta;
-      int24 tickLower = params.tickLower;
-      int24 tickUpper = params.tickUpper;
-      checkTicks(tickLower, tickUpper);
-
-      {
-        // UPDATING GLOBAL POOL LIQUIDITY
-      }
-
       {
           // UPDATE LP POSITION 
-            (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) =
-                  getFeeGrowthInside(self, tickLower, tickUpper);
 
-              Position.State storage position = self.positions.get(params.owner, tickLower, tickUpper, params.salt);
-              (uint256 feesOwed0, uint256 feesOwed1) =
-                  position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
-
-              // Fees earned from LPing are calculated, and returned
-              feeDelta = toBalanceDelta(feesOwed0.toInt128(), feesOwed1.toInt128());
+Position.State storage position = self.positions.get(params.owner, tickLower, tickUpper, params.salt);
+(uint256 feesOwed0, uint256 feesOwed1) =
+    position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
       }
 
-          // clear any tick data that is no longer needed
-          if (liquidityDelta < 0) {
-              if (state.flippedLower) {
-                  clearTick(self, tickLower);
-              }
-              if (state.flippedUpper) {
-                  clearTick(self, tickUpper);
-              }
-          }
-      }
-
-      if (liquidityDelta != 0) {
-          Slot0 _slot0 = self.slot0;
-          (int24 tick, uint160 sqrtPriceX96) = (_slot0.tick(), _slot0.sqrtPriceX96());
-          if (tick < tickLower) {
-              // current tick is below the passed range; liquidity can only become in range by crossing from left to
-              // right, when we'll need _more_ currency0 (it's becoming more valuable) so user must provide it
-              delta = toBalanceDelta(
-                  SqrtPriceMath.getAmount0Delta(
-                      TickMath.getSqrtPriceAtTick(tickLower), TickMath.getSqrtPriceAtTick(tickUpper), liquidityDelta
-                  ).toInt128(),
-                  0
-              );
-          } else if (tick < tickUpper) {
-              delta = toBalanceDelta(
-                  SqrtPriceMath.getAmount0Delta(sqrtPriceX96, TickMath.getSqrtPriceAtTick(tickUpper), liquidityDelta)
-                      .toInt128(),
-                  SqrtPriceMath.getAmount1Delta(TickMath.getSqrtPriceAtTick(tickLower), sqrtPriceX96, liquidityDelta)
-                      .toInt128()
-              );
-
-              self.liquidity = LiquidityMath.addDelta(self.liquidity, liquidityDelta);
-          } else {
-              // current tick is above the passed range; liquidity can only become in range by crossing from right to
-              // left, when we'll need _more_ currency1 (it's becoming more valuable) so user must provide it
-              delta = toBalanceDelta(
-                  0,
-                  SqrtPriceMath.getAmount1Delta(
-                      TickMath.getSqrtPriceAtTick(tickLower), TickMath.getSqrtPriceAtTick(tickUpper), liquidityDelta
-                  ).toInt128()
-              );
-          }
-      }
   }
 ```
 
