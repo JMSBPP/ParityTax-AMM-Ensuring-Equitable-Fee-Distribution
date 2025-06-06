@@ -48,9 +48,7 @@ contract LiquidityTimeCommitmentHook is LiquidityTimeCommitmentState, BaseHook {
     );
     error LockedLiquidity();
 
-    constructor(
-        IPoolManager poolManager
-    ) BaseHook(poolManager) LiquidityTimeCommitmentState(poolManager) {}
+    constructor(IPoolManager poolManager) BaseHook(poolManager) {}
 
     function getHookPermissions()
         public

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import "v4-core/types/PoolId.sol";
-import "./types/TimeCommitment.sol";
+import "../types/TimeCommitment.sol";
 
 struct IndexedTimeCommitments {
     bytes32 positionKey;
