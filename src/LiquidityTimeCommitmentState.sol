@@ -9,9 +9,7 @@ import "./interfaces/ILiquidityTimeCommitmentStateQuerier.sol";
 // This is we want the data contract as (LiquidityTimeCommitmentState)
 // and the most convenient implementation to update
 // state variables
-abstract contract LiquidityTimeCommitmentState is
-    ILiquidityTimeCommitmentStateQuerier
-{
+contract LiquidityTimeCommitmentState is ILiquidityTimeCommitmentStateQuerier {
     using TimeCommitmentLibrary for TimeCommitment;
 
     mapping(PoolId poolId => mapping(bytes32 positionKey => TimeCommitment timeCommitment))
@@ -26,7 +24,7 @@ abstract contract LiquidityTimeCommitmentState is
         timeCommitment = timeCommitments[poolId][positionKey];
     }
 
-    function getCommitments(
+    function getPoolCommitments(
         PoolId poolId
     ) public view returns (IndexedTimeCommitments[] memory) {
         IndexedTimeCommitments[]
@@ -51,7 +49,7 @@ abstract contract LiquidityTimeCommitmentState is
         return tempIndexedTimeCommitmentsArray;
     }
 
-    function getExpiredCommitments(
+    function getPoolExpiredCommitments(
         PoolId poolId
     ) public view returns (IndexedTimeCommitments[] memory) {
         // Get the length of the array

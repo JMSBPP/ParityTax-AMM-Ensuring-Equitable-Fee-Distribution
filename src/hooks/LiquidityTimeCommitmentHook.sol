@@ -79,6 +79,8 @@ contract LiquidityTimeCommitmentHook is LiquidityTimeCommitmentState, BaseHook {
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
+        // TODO: Validate this decodes correctly
+
         TimeCommitment memory timeCommitment = abi.decode(
             hookData,
             (TimeCommitment)

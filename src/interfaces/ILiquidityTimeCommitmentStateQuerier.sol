@@ -16,33 +16,30 @@ interface ILiquidityTimeCommitmentStateQuerier {
     ) external view returns (TimeCommitment memory);
 
     function getPoolCommitments(
-        PoolId poolId
+        PoolId poolI
     ) external view returns (IndexedTimeCommitments[] memory);
 
     function getPoolExpiredCommitments(
         PoolId poolId
-    )
-        external
-        view
-        returns (IndexedTimeCommitments[] memory indexedExpiredTimeCommitments);
+    ) external view returns (IndexedTimeCommitments[] memory);
 
-    function getPoolCommitmentsOnBlock(
-        PoolId poolId,
-        uint256 startingBlock
-    )
-        external
-        view
-        returns (IndexedTimeCommitments[] memory indexedOnBlockTimeCommitments);
+    // function getPoolCommitmentsOnBlock(
+    //     PoolId poolId,
+    //     uint256 startingBlock
+    // )
+    //     external
+    //     view
+    //     returns (IndexedTimeCommitments[] memory indexedOnBlockTimeCommitments);
 
-    function getPoolCommitmentsOnBlockWithDuration(
-        PoolId poolId,
-        uint256 startingBlock,
-        uint256 duration
-    )
-        external
-        view
-        returns (
-            IndexedTimeCommitments[]
-                memory indexedOnBlockWithDurationTimeCommitments
-        );
+    // function getPoolCommitmentsOnBlockWithDuration(
+    //     PoolId poolId,
+    //     uint256 startingBlock,
+    //     uint256 duration
+    // )
+    //     external
+    //     view
+    //     returns (
+    //         IndexedTimeCommitments[]
+    //             memory indexedOnBlockWithDurationTimeCommitments
+    //     );
 }
