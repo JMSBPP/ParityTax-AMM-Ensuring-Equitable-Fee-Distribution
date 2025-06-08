@@ -9,10 +9,16 @@ struct TimeCommitment {
 }
 
 library TimeCommitmentLibrary {
-    function getDuration(
+    function getExpirationBlock(
         TimeCommitment memory commitment
     ) internal view returns (uint256 duration) {
         duration = commitment.startingBlockNumber + commitment.numberOfBlocks;
+    }
+
+    function validateStartingBlockNumber(
+        TimeCommitment memory commitment
+    ) internal view returns (bool) {
+        return block.number >= commitment.startingBlockNumber;
     }
 
     function enforceJITConditions(
