@@ -1,7 +1,5 @@
 # `LiquidityCommitmmentManager`
 
-## Mechanism Design
-
 - LiquidityCommitment is better enforced via routers specifying the commmitment in callback data:
 
   -  If it's JIT their funds will be put on `vaults` where a `JITHook` execute the JIT liquidity for the trades, this `JITHook` has an `afterSwap` where `feeRevenue` is tracked.
@@ -12,7 +10,7 @@
 ## Services
 
 ### `setTimeCommitment`
-````solidity
+```solidity
 contract ModifyLiquidityRouter{
     function  modifyLiquidity(
         PoolKey memory key, 
@@ -65,16 +63,13 @@ contract PoolManager{
 // Notice we do not have control over manager.unlock, but we do over
 // router either on modifyLiquidity and/or unlockCallback()
 // ====LiquidityRouter.modifyLiquidity():===
-// ----
-// --> Besides checking for the correct hookData
-//  --> Is there anything else that this function can call ?
-// The answer is yes, because if the LP is asking to withdraw liquidity on the params, then the following needs to follow:
-// 1. hookData is irrelevant becuase timeCommitment is only enforced when ading liquidity
-// However there is already a record of this LP Posiyion, we need to verify that
+// If the LP is asking to withdraw liquidity on the params, then the following needs to follow:
+// 1. hookData is irrelevant because timeCommitment is only enforced when ading liquidity
+// However there is already a record of this LP Position, we need to verify that
 // the timeCommitment for the position already expired 
 // ==========================FLOW STATUS======================================
 
-// router.modifyLiquidity()->manager.unlock() -> router.unlockCallback()
+//router.modifyLiquidity()-> manager.unlock() -> router.unlockCallback()
 
 contract ModifyLiquidityRouter{
 
@@ -87,18 +82,18 @@ contract ModifyLiquidityRouter{
             //1. It needs to check that the caller is the poolManager
             //2. It needs to decode the Callback data, and consequently
             // the TimeCommitment data inside it
-            // 3. It retrieves the liquidity that is already on the specified
-            // params where the LP is looking to add liquidity ADDITIONALLY
-            // it needs to verify wheter is PLP or JIT the existing position if
-            // any
-            // It can only add more liquidity if the exiting position is the same
-            // type, this is:
-            // ---> If the existing position is PLP and the new liquidity request has other PLP params, it needs to adjust the position accordingly
-            // ---> If the existing position is JIT and the request is JIT it only add more funds to the vaults
-            // ---> If the existing position is PLP and the new liquidity request is JIT it returns incompatiblePositions Error or handles it appropiately, this is TBD
-            // ---> If the existing position is JIT and the new liquidity request is PLP it returns incompatiblePositions Error or handles it appropiately, this is TBD
+
         }
 }
+```
+
+- After this `liquidityRouter` sends the `callBackData`  to the `poolManager`, from this point on because the `poolManager` is _immutable_ , it forwards the `CallbackData` to the `LiquidityCommitmentManagerHook` where `beforeAddLiquidity` will be in charge of routing the `callbackData` accordingly, this is:
+
+
+
+- This implies that `beforeAddLiquidity` is `NoOp-Hook` since liquidity will not be added from here, but from the `LP-vaults`.
+
+
 
 
 
