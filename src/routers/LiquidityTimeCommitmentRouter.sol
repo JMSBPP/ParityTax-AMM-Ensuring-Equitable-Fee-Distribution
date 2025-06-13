@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "v4-core/types/Currency.sol";
-import "../types/LiquidityCallbackData.sol";
+import "../types/LiquidityTimeCommitmentData.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
@@ -18,8 +18,8 @@ import "v4-core/test/PoolTestBase.sol";
 error InvalidFunctionCaller___FunctionCallerMustBePoolManager();
 abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
     using StateLibrary for IPoolManager;
-    using LiquidityCallbackDataLibrary for LiquidityCallbackData;
-    using LiquidityCallbackDataLibrary for bytes;
+    using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
+    using LiquidityTimeCommitmentDataLibrary for bytes;
     constructor(IPoolManager _manager) PoolTestBase(_manager) {}
 
     function modifyLiquidity(
@@ -35,10 +35,10 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
             BalanceDelta delta
         )
     {
-        // We build the underlying liquiditycallbackData
+        // We build the underlying liquidityTimeCommitmentData
         // from the fucntion params:
-        LiquidityCallbackData
-            memory liquidityCallbackData = LiquidityCallbackData({
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
                 liquidityProvider: msg.sender,
                 poolKey: key,
                 liquidityParams: liquidityParams,
@@ -47,12 +47,12 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
                 takeClaims: true
             });
 
-        if (liquidityCallbackData.isLookingToRemoveLiquidity()) {
+        if (liquidityTimeCommitmentData.isLookingToRemoveLiquidity()) {
             // 1. hookData is irrelevant because timeCommitment
             // is only enforced when ading liquidity
             // TODO: Perhaps for removing liquidity we might need
             // hookData, this is to be determined ...
-            liquidityCallbackData.hookData = "";
+            liquidityTimeCommitmentData.hookData = "";
             // TODO: However this means that we need to verify that the LP is
             // even allowed to remove liquidity considering the timeCommitment
             // that must had specified when added the liquidity
@@ -63,14 +63,14 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
         }
         // We get the underlying time Commitment
         // NOTE: this will revert if timeCommitment is not valid
-        if (liquidityCallbackData.isLookingToAddLiquidity()) {
-            liquidityCallbackData.getTimeCommitment();
+        if (liquidityTimeCommitmentData.isLookingToAddLiquidity()) {
+            liquidityTimeCommitmentData.getTimeCommitment();
         }
         // Now wil all these checks we can forward to the
         // manager to allow us to further forward the data to
         // the hooks ...
         delta = abi.decode(
-            manager.unlock(abi.encode(liquidityCallbackData)),
+            manager.unlock(abi.encode(liquidityTimeCommitmentData)),
             (BalanceDelta)
         );
         // This handles native ETH transfers
@@ -88,7 +88,7 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
     // --> Valid deposit requests from PLP's
 
     function unlockCallback(
-        bytes memory encodedLiquidityCallBackData
+        bytes memory encodedLiquidityTimeCommitmentData
     ) external returns (bytes memory encodedLiquidityBalanceDelta) {
         //0. It needs to check that the caller is the poolManager
         // TODO: There must be a more gas efficient way and secure
@@ -98,29 +98,29 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
             revert InvalidFunctionCaller___FunctionCallerMustBePoolManager();
         // 1. It needs to decode the Callback data, and consequently
         // ...
-        LiquidityCallbackData
-            memory liquidityCallbackData = encodedLiquidityCallBackData
-                .fromBytesToLiquidityCallbackData();
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = encodedLiquidityTimeCommitmentData
+                .fromBytesToLiquidityTimeCommitmentData();
         // 1.1 ... the TimeCommitment inside it
         // TODO: Looks like we do not use this
-        // TimeCommitment memory timeCommitment = liquidityCallbackData
+        // TimeCommitment memory timeCommitment = liquidityTimeCommitmentData
         //     .getTimeCommitment();
 
         // TODO: We need to perform checks for liquidity before,
         // is this actually done querying the position since
         // liquidity is managed on vaults ?
         // (uint128 liquidityBefore, , ) = manager.getPositionInfo(
-        //     liquidityCallbackData.poolKey.toId(),
+        //     liquidityTimeCommitmentData.poolKey.toId(),
         //     address(this),
-        //     liquidityCallbackData.liquidityParams.tickLower,
-        //     liquidityCallbackData.liquidityParams.tickUpper,
-        //     liquidityCallbackData.liquidityParams.salt
+        //     liquidityTimeCommitmentData.liquidityParams.tickLower,
+        //     liquidityTimeCommitmentData.liquidityParams.tickUpper,
+        //     liquidityTimeCommitmentData.liquidityParams.salt
         // );
 
         (BalanceDelta liquidityBalanceDelta, ) = manager.modifyLiquidity(
-            liquidityCallbackData.poolKey,
-            liquidityCallbackData.liquidityParams,
-            liquidityCallbackData.hookData
+            liquidityTimeCommitmentData.poolKey,
+            liquidityTimeCommitmentData.liquidityParams,
+            liquidityTimeCommitmentData.hookData
         );
 
         // TODO: We need to perform the checks for liquidityAfter all the

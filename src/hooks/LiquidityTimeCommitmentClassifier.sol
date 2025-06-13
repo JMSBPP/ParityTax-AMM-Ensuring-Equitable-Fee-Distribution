@@ -6,17 +6,37 @@ import "../types/TimeCommitment.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 
 error IncompatiblePositionTimeCommitments();
-abstract contract TimeCommitmentLiquidityManager is BaseHook {
+abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     using Hooks for IHooks;
     using TimeCommitmentLibrary for TimeCommitment;
     using TimeCommitmentLibrary for bytes;
     using Position for *; // NOTE: This is mostly use to query positionKeys to them
     // associate position keys with time commitments
 
-    mapping(bytes32 positionKey => TimeCommitment)
-        private liquidityTimeCommitments;
+    // TODO: This is more than a mapping it seems like an
+    // alternative more suitable implementation is to
+    // either define this as a contract or levait as it is but
+    // implement a library that defines the services
+    // liquidityTimeCommitmentManager will provide
+    // CASE ONE:
 
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
+    mapping(bytes32 positionKey => TimeCommitment)
+        private liquidityTimeCommitmentManager;
+
+    // CASE TWO:
+
+    // ILiquidityTimeCommitmentManager private liquidityTimeCommitmentManager;
+
+    constructor(
+        IPoolManager _manager
+    )
+        // CASE TWO
+        // ILiquidityTimeCommitmentManager _liquidityTimeCommitmentManager
+        BaseHook(_manager)
+    {
+        // CASE TWO
+        // liquidityTimeCommitmentManager = _liquidityTimeCommitmentManager;
+    }
 
     function getHookPermissions()
         public
@@ -80,9 +100,10 @@ abstract contract TimeCommitmentLiquidityManager is BaseHook {
         // liquidityPositionKey
         // NOTE: The time commitment is assumed to be valid because
         // it was checked before being entered
-        TimeCommitment memory existingTimeCommitment = liquidityTimeCommitments[
-            liquidityPositionKey
-        ].validateCommitment();
+        TimeCommitment
+            memory existingTimeCommitment = liquidityTimeCommitmentManager[
+                liquidityPositionKey
+            ].validateCommitment();
 
         // 3. It verifies whether is PLP or JIT the existing position if any:
         // It can only add more liquidity if the existing position is the same type,
