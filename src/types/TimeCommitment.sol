@@ -68,12 +68,12 @@ library TimeCommitmentLibrary {
      */
     function setJITCommitment(
         TimeCommitment memory timeCommitment
-    ) internal pure returns (TimeCommitment memory JIT_TimeCommitment) {
+    ) internal returns (TimeCommitment memory JIT_TimeCommitment) {
         if (timeCommitment.isJIT) {
             JIT_TimeCommitment = TimeCommitment({
                 isJIT: true,
-                startingBlock: timeCommitment.startingBlock,
-                endingBlock: timeCommitment.startingBlock
+                startingBlock: block.number,
+                endingBlock: block.number
             });
         }
     }
@@ -103,14 +103,31 @@ library TimeCommitmentLibrary {
      */
     function validateCommitment(
         TimeCommitment memory timeCommitment
-    ) internal view {
+    ) internal returns (TimeCommitment memory correctedTimeCommitment) {
         if (block.number < timeCommitment.startingBlock)
             revert InvalidTimeCommitment__BlockAlreadyPassed();
         if (timeCommitment.endingBlock < timeCommitment.startingBlock)
             revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
         if (!isPLPCommitment(timeCommitment)) {
-            setJITCommitment(timeCommitment);
+            correctedTimeCommitment = setJITCommitment(timeCommitment);
         }
+
+        if (isPLPCommitment(timeCommitment)) {
+            correctedTimeCommitment = timeCommitment;
+        }
+    }
+
+    /**
+     * @dev Calculates the remaining commitment of a TimeCommitment.
+     *      The remaining commitment is the difference between the ending block of the commitment and the current block number.
+     * @param timeCommitment The TimeCommitment to calculate the remaining commitment of.
+     * @return remainingCommitment The remaining commitment as a uint256.
+     */
+    // @note The remaining commitment can be lower than 256 bits.
+    function getRemainingCommitment(
+        TimeCommitment memory timeCommitment
+    ) internal view returns (uint256 remainingCommitment) {
+        remainingCommitment = timeCommitment.endingBlock - block.number;
     }
 
     /**
@@ -131,8 +148,9 @@ library TimeCommitmentLibrary {
      */
     function fromBytesToTimeCommitment(
         bytes memory encodedTimeCommitment
-    ) internal view returns (TimeCommitment memory timeCommitment) {
-        timeCommitment = abi.decode(encodedTimeCommitment, (TimeCommitment));
-        validateCommitment(timeCommitment);
+    ) internal returns (TimeCommitment memory timeCommitment) {
+        timeCommitment = validateCommitment(
+            abi.decode(encodedTimeCommitment, (TimeCommitment))
+        );
     }
 }

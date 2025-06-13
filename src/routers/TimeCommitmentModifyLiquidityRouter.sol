@@ -13,9 +13,11 @@ import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
 //====ROUTER SPECIFIC =====
 
-import {PoolTestBase} from "v4-core/test/PoolTestBase.sol";
+import "v4-core/test/PoolTestBase.sol";
+
 error InvalidFunctionCaller___FunctionCallerMustBePoolManager();
 abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
+    using StateLibrary for IPoolManager;
     using LiquidityCallbackDataLibrary for LiquidityCallbackData;
     using LiquidityCallbackDataLibrary for bytes;
     constructor(IPoolManager _manager) PoolTestBase(_manager) {}
@@ -41,14 +43,10 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
                 poolKey: key,
                 liquidityParams: liquidityParams,
                 hookData: hookData,
-                settleUsingBurn: false,
-                takeClaims: false
+                settleUsingBurn: true, // NOTE: We will need claim to handle liquidity
+                takeClaims: true
             });
-        // We get the underlying time Commitment
-        // NOTE: this will revert if timeCommitment is not valid
-        if (liquidityCallbackData.isLookingToAddLiquidity()) {
-            liquidityCallbackData.getTimeCommitment();
-        }
+
         if (liquidityCallbackData.isLookingToRemoveLiquidity()) {
             // 1. hookData is irrelevant because timeCommitment
             // is only enforced when ading liquidity
@@ -62,6 +60,11 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
             // Addtionally if when querying the timeCommitment we find out that it
             // is JIT, we need to revert stating that JIT's withdraw liquidity
             // on the JITHook afterSwap Functions
+        }
+        // We get the underlying time Commitment
+        // NOTE: this will revert if timeCommitment is not valid
+        if (liquidityCallbackData.isLookingToAddLiquidity()) {
+            liquidityCallbackData.getTimeCommitment();
         }
         // Now wil all these checks we can forward to the
         // manager to allow us to further forward the data to
@@ -106,7 +109,6 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
         // TODO: We need to perform checks for liquidity before,
         // is this actually done querying the position since
         // liquidity is managed on vaults ?
-        // NOTE: getPositionInfo() is not a service provided by IPoolManager
         // (uint128 liquidityBefore, , ) = manager.getPositionInfo(
         //     liquidityCallbackData.poolKey.toId(),
         //     address(this),
@@ -114,6 +116,7 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
         //     liquidityCallbackData.liquidityParams.tickUpper,
         //     liquidityCallbackData.liquidityParams.salt
         // );
+
         (BalanceDelta liquidityBalanceDelta, ) = manager.modifyLiquidity(
             liquidityCallbackData.poolKey,
             liquidityCallbackData.liquidityParams,
