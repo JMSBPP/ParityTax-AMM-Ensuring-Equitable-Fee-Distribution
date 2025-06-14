@@ -68,7 +68,7 @@ library TimeCommitmentLibrary {
      */
     function setJITCommitment(
         TimeCommitment memory timeCommitment
-    ) internal returns (TimeCommitment memory JIT_TimeCommitment) {
+    ) internal view returns (TimeCommitment memory JIT_TimeCommitment) {
         if (timeCommitment.isJIT) {
             JIT_TimeCommitment = TimeCommitment({
                 isJIT: true,
@@ -103,7 +103,7 @@ library TimeCommitmentLibrary {
      */
     function validateCommitment(
         TimeCommitment memory timeCommitment
-    ) internal returns (TimeCommitment memory correctedTimeCommitment) {
+    ) internal view returns (TimeCommitment memory correctedTimeCommitment) {
         if (block.number < timeCommitment.startingBlock)
             revert InvalidTimeCommitment__BlockAlreadyPassed();
         if (timeCommitment.endingBlock < timeCommitment.startingBlock)
@@ -148,7 +148,7 @@ library TimeCommitmentLibrary {
      */
     function fromBytesToTimeCommitment(
         bytes memory encodedTimeCommitment
-    ) internal returns (TimeCommitment memory timeCommitment) {
+    ) internal view returns (TimeCommitment memory timeCommitment) {
         timeCommitment = validateCommitment(
             abi.decode(encodedTimeCommitment, (TimeCommitment))
         );

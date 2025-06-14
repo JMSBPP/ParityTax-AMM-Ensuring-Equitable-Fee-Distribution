@@ -5,7 +5,10 @@ import "v4-periphery/src/utils/BaseHook.sol";
 import "../types/TimeCommitment.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 
+import {ILiquidityTimeCommitmentManager} from "../interfaces/ILiquidityTimeCommitmentManager.sol";
+
 error IncompatiblePositionTimeCommitments();
+
 abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     using Hooks for IHooks;
     using TimeCommitmentLibrary for TimeCommitment;
@@ -13,29 +16,26 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     using Position for *; // NOTE: This is mostly use to query positionKeys to them
     // associate position keys with time commitments
 
-    // TODO: This is more than a mapping it seems like an
-    // alternative more suitable implementation is to
-    // either define this as a contract or levait as it is but
-    // implement a library that defines the services
-    // liquidityTimeCommitmentManager will provide
-    // CASE ONE:
-
-    mapping(bytes32 positionKey => TimeCommitment)
-        private liquidityTimeCommitmentManager;
-
-    // CASE TWO:
-
-    // ILiquidityTimeCommitmentManager private liquidityTimeCommitmentManager;
+    ILiquidityTimeCommitmentManager private liquidityTimeCommitmentManager;
 
     constructor(
-        IPoolManager _manager
+        IPoolManager _manager,
+        ILiquidityTimeCommitmentManager _initialLiquidityTimeCommitmentManager
     )
         // CASE TWO
         // ILiquidityTimeCommitmentManager _liquidityTimeCommitmentManager
         BaseHook(_manager)
     {
-        // CASE TWO
-        // liquidityTimeCommitmentManager = _liquidityTimeCommitmentManager;
+        setLiquidityTimeCommitmentManager(
+            _initialLiquidityTimeCommitmentManager
+        );
+    }
+    //TODO: Again who and in what conditions can upgrade the manager
+    // QUESTION: implications of updating ?
+    function setLiquidityTimeCommitmentManager(
+        ILiquidityTimeCommitmentManager _liquidityTimeCommitmentManager
+    ) internal {
+        liquidityTimeCommitmentManager = _liquidityTimeCommitmentManager;
     }
 
     function getHookPermissions()
@@ -63,6 +63,7 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     }
     //NOTE: At this point of the transaction the HookData has been already verified
     // to be correct or not, if not correct the transaction would have ended on the router
+    //
     function beforeAddLiquidity(
         address sender,
         PoolKey calldata key,
@@ -101,9 +102,8 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
         // NOTE: The time commitment is assumed to be valid because
         // it was checked before being entered
         TimeCommitment
-            memory existingTimeCommitment = liquidityTimeCommitmentManager[
-                liquidityPositionKey
-            ].validateCommitment();
+            memory existingTimeCommitment = liquidityTimeCommitmentManager
+                .getPositionTimeCommitment(liquidityPositionKey);
 
         // 3. It verifies whether is PLP or JIT the existing position if any:
         // It can only add more liquidity if the existing position is the same type,
@@ -129,6 +129,13 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
             // we need a "ClaimsManager" instead of "VaultManager",
             // And the claim tokens are the ones stored on "Vaults", in this case
             // PLP vaults, to earn passive income...
+            liquidityTimeCommitmentManager.directLiquidity(
+                key,
+                params,
+                true,
+                liquidityPositionKey,
+                enteredTimeCommitment
+            );
         }
 
         // ---> If the existing position is JIT and the request is JIT it only add more funds to the vaults
@@ -138,6 +145,13 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
             // NOTE: In this case the "ClaimsManager" does not route the funds
             // to "PLPVaults" but to "JITClaim" manager that has a reference ta JITHook
             // This hook selects the orders where to apply JIT liquidity
+            liquidityTimeCommitmentManager.directLiquidity(
+                key,
+                params,
+                false,
+                liquidityPositionKey,
+                enteredTimeCommitment
+            );
         }
         // We could only query the liquidity but:
         // QUESTION:

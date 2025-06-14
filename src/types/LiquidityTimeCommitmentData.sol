@@ -59,7 +59,7 @@ library LiquidityTimeCommitmentDataLibrary {
      */
     function getTimeCommitment(
         LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
-    ) internal returns (TimeCommitment memory timeCommitment) {
+    ) internal view returns (TimeCommitment memory timeCommitment) {
         hookDataDecodesToEncodedTimeCommitment(liquidityTimeCommitmentData);
         timeCommitment = liquidityTimeCommitmentData
             .hookData
