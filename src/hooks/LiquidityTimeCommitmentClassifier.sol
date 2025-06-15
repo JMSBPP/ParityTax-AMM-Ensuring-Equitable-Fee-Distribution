@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "v4-periphery/src/utils/BaseHook.sol";
-import "../types/TimeCommitment.sol";
+import "../types/LiquidityTimeCommitmentData.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 
 import {ILiquidityTimeCommitmentManager} from "../interfaces/ILiquidityTimeCommitmentManager.sol";
@@ -11,6 +11,8 @@ error IncompatiblePositionTimeCommitments();
 
 abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     using Hooks for IHooks;
+    using LiquidityTimeCommitmentDataLibrary for bytes;
+    using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using TimeCommitmentLibrary for TimeCommitment;
     using TimeCommitmentLibrary for bytes;
     using Position for *; // NOTE: This is mostly use to query positionKeys to them
@@ -70,11 +72,10 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override(BaseHook) onlyPoolManager returns (bytes4) {
-        // 1 It decodes the timeCommitment data passed
-        // on the hookData from the poolManager
-
-        TimeCommitment memory enteredTimeCommitment = hookData
-            .fromBytesToTimeCommitment();
+        // 1 It decodes the LiquidityTimeCommitmentData
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = hookData
+                .fromBytesToLiquidityTimeCommitmentData();
 
         // 2. It retrieves the liquidity that is already on the specified
         // params where the LP is looking to add liquidity
@@ -91,11 +92,17 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
         // If sender is the LP asscociated with the position,
         //  ->  Then it follows:
 
-        bytes32 liquidityPositionKey = sender.calculatePositionKey(
-            params.tickLower,
-            params.tickUpper,
-            params.salt
-        );
+        bytes32 liquidityPositionKey = liquidityTimeCommitmentData
+            .liquidityProvider
+            .calculatePositionKey(
+                params.tickLower,
+                params.tickUpper,
+                params.salt
+            );
+
+        TimeCommitment
+            memory enteredTimeCommitment = liquidityTimeCommitmentData
+                .getTimeCommitment();
 
         // We can now get the TimeCommitment associated with the
         // liquidityPositionKey
@@ -134,7 +141,7 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
                 params,
                 true,
                 liquidityPositionKey,
-                enteredTimeCommitment
+                liquidityTimeCommitmentData
             );
         }
 
@@ -150,7 +157,7 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
                 params,
                 false,
                 liquidityPositionKey,
-                enteredTimeCommitment
+                liquidityTimeCommitmentData
             );
         }
         // We could only query the liquidity but:

@@ -13,6 +13,9 @@ interface IJITHook {
         bytes calldata hookData
     ) external returns (bytes4, BeforeSwapDelta, uint24);
 
+    // TODO: The after swap is an afterSwapReturnDelta because this way we cna charge taxes on
+    // the output token then, rather than enforrcing JITHooks to comply with an interface we need
+    // JITHooks to be compliant to be compliant with an anstract contract, then ...
     function afterSwap(
         address sender,
         PoolKey calldata key,

@@ -116,11 +116,12 @@ abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
         //     liquidityTimeCommitmentData.liquidityParams.tickUpper,
         //     liquidityTimeCommitmentData.liquidityParams.salt
         // );
-
+        // I need to pass the whole liquidityTimeCommitmentData to
+        // the pool classifer ..
         (BalanceDelta liquidityBalanceDelta, ) = manager.modifyLiquidity(
             liquidityTimeCommitmentData.poolKey,
             liquidityTimeCommitmentData.liquidityParams,
-            liquidityTimeCommitmentData.hookData
+            liquidityTimeCommitmentData.fromLiquidityTimeCommitmentDataToBytes()
         );
 
         // TODO: We need to perform the checks for liquidityAfter all the

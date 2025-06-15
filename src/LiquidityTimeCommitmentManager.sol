@@ -8,6 +8,8 @@ import "v4-core/types/BalanceDelta.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import "v4-core/types/Currency.sol";
+import {Currency} from "v4-core/types/Currency.sol";
+import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
@@ -39,7 +41,9 @@ abstract contract LiquidityTimeCommitmentManager is
     using TickMath for int24;
     using BalanceDeltaLibrary for BalanceDelta;
     using CurrencyLibrary for Currency;
+    using CurrencySettler for Currency;
     using CurrencyLibrary for uint256;
+
     // NOTE:
 
     //     The positionKey already contains the lpAddress
@@ -101,17 +105,22 @@ abstract contract LiquidityTimeCommitmentManager is
         _plpLiquidityOperator = plpLiquidityOperators[positionKey];
     }
 
-    function getPositionTimeCommitment(
+    function getPositionLiquidityTimeCommitmentData(
         bytes32 positionKey
-    ) external view returns (TimeCommitment memory timeCommitment) {
+    )
+        external
+        view
+        returns (LiquidityTimeCommitmentData memory liquidityTimeCommitment)
+    {
         // TODO: We need to search on the JITOperator and PLPOperator
         // this is
         try
-            plpLiquidityOperators[positionKey].getPositionTimeCommitment(
-                positionKey
-            )
-        returns (TimeCommitment memory plpTimeCommitment) {
-            timeCommitment = plpTimeCommitment;
+            plpLiquidityOperators[positionKey]
+                .getPositionLiquidityTimeCommitmentData(positionKey)
+        returns (
+            LiquidityTimeCommitmentData memory plpLiquidityTimeCommitmentData
+        ) {
+            liquidityTimeCommitment = plpLiquidityTimeCommitmentData;
         } catch (bytes memory reason) {
             if (
                 keccak256(reason) ==
@@ -119,10 +128,14 @@ abstract contract LiquidityTimeCommitmentManager is
                 keccak256(reason) ==
                 keccak256(
                     "InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock()"
+                ) ||
+                keccak256(reason) ==
+                keccak256(
+                    "InvalidHookData___HookDataDoesNotDecodeToTimeCommitment()"
                 )
             ) {
-                timeCommitment = jitLiquidityOperators[positionKey]
-                    .getPositionTimeCommitment(positionKey);
+                liquidityTimeCommitment = jitLiquidityOperators[positionKey]
+                    .getPositionLiquidityTimeCommitmentData(positionKey);
             } else {
                 // rethrow the error if it is not one of the expected errors
                 revert InvalidTimeCommitment___NoCommitmentAssociatedWithPosition();
@@ -161,7 +174,7 @@ abstract contract LiquidityTimeCommitmentManager is
         ModifyLiquidityParams memory liquidityParams,
         bool isJIT,
         bytes32 liquidityPositionKey,
-        TimeCommitment memory timeCommitment
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
     ) external {
         BalanceDelta liquidityDelta = getPositionLiquidityDelta(
             poolKey,
@@ -173,29 +186,65 @@ abstract contract LiquidityTimeCommitmentManager is
             liquidityDelta.amount1()
         );
 
+        // THIS is to be stored on the PoolManager regardless of the type of LP
+        // Then ...
+        poolKey.currency0.settle(
+            poolManager,
+            liquidityTimeCommitmentData.liquidityProvider,
+            uint256(liquidityOnCurrency0.toUint128()),
+            false
+        );
+        poolKey.currency1.settle(
+            poolManager,
+            liquidityTimeCommitmentData.liquidityProvider,
+            uint256(liquidityOnCurrency1.toUint128()),
+            false
+        );
+
         // transferring liquidity to the pool
         if (isJIT) {
-            poolManager.burn(
+            // Minting claim tokens to the respective liquidity Operator
+            poolKey.currency0.take(
+                poolManager,
                 address(jitLiquidityOperators[liquidityPositionKey]),
-                poolKey.currency0.toId(),
-                uint256(liquidityOnCurrency0.toUint128())
+                uint256(liquidityOnCurrency0.toUint128()),
+                true //NOTE: Mint claim tokens from poolManager
+                // to the liquidity operator
             );
+            poolKey.currency1.take(
+                poolManager,
+                address(jitLiquidityOperators[liquidityPositionKey]),
+                uint256(liquidityOnCurrency1.toUint128()),
+                true //NOTE: Mint claim tokens from poolManager
+                // to the liquidity operator
+            );
+
             jitLiquidityOperators[liquidityPositionKey]
-                .setPositionTimeCommitment(
+                .setPositionLiquidityTimeCommitmentData(
                     liquidityPositionKey,
-                    timeCommitment
+                    liquidityTimeCommitmentData
                 );
         }
         if (!isJIT) {
-            poolManager.burn(
+            // Minting claim tokens to the respective liquidity Operator
+            poolKey.currency0.take(
+                poolManager,
                 address(plpLiquidityOperators[liquidityPositionKey]),
-                poolKey.currency1.toId(),
-                uint256(liquidityOnCurrency1.toUint128())
+                uint256(liquidityOnCurrency0.toUint128()),
+                true //NOTE: Mint claim tokens from poolManager
+                // to the liquidity operator
+            );
+            poolKey.currency1.take(
+                poolManager,
+                address(plpLiquidityOperators[liquidityPositionKey]),
+                uint256(liquidityOnCurrency1.toUint128()),
+                true //NOTE: Mint claim tokens from poolManager
+                // to the liquidity operator
             );
             plpLiquidityOperators[liquidityPositionKey]
-                .setPositionTimeCommitment(
+                .setPositionLiquidityTimeCommitmentData(
                     liquidityPositionKey,
-                    timeCommitment
+                    liquidityTimeCommitmentData
                 );
         }
     }

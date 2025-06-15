@@ -2,14 +2,32 @@
 pragma solidity ^0.8.24;
 
 import "../types/LiquidityTimeCommitmentData.sol";
+import "../types/PositionTimeCommitmentKey.sol";
+import "../types/LiquidityPositionAccounting.sol";
+import "v4-core/libraries/Position.sol";
+
 interface ILiquidityOperator {
     //NOTE: This funciton is only callable by the liquidityTimeCommitmen
     // Manager
-    function setPositionTimeCommitment(
-        bytes32 liquidityTimeCommitment,
-        TimeCommitment memory timeCommitment
+    function setPositionLiquidityTimeCommitmentData(
+        bytes32 positionKey,
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
     ) external;
-    function getPositionTimeCommitment(
-        bytes32 liquidityTimeCommitment
-    ) external view returns (TimeCommitment memory timeCommitment);
+    function getPositionLiquidityTimeCommitmentData(
+        bytes32 positionKey
+    )
+        external
+        view
+        returns (
+            LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
+        );
+
+    function getLiquidityPositionAccounting(
+        bytes32 positionTimeCommitmentKey
+    )
+        external
+        view
+        returns (
+            LiquidityPositionAccounting memory liquidityPositionAccounting
+        );
 }

@@ -101,12 +101,38 @@ library LiquidityTimeCommitmentDataLibrary {
         bytes memory encodedLiquidityTimeCommitmentData
     )
         internal
-        pure
+        view
         returns (LiquidityTimeCommitmentData memory liquidityTimeCommitmentData)
     {
-        liquidityTimeCommitmentData = abi.decode(
-            encodedLiquidityTimeCommitmentData,
-            (LiquidityTimeCommitmentData)
+        //TODO: Is check that the underlying timeCommitment is valid
+        LiquidityTimeCommitmentData memory _liquidityTimeCommitmentData = abi
+            .decode(
+                encodedLiquidityTimeCommitmentData,
+                (LiquidityTimeCommitmentData)
+            );
+        fromLiquidityTimeCommitmentDataToBytes(_liquidityTimeCommitmentData);
+        // If this passes, we are all good ..
+        liquidityTimeCommitmentData = _liquidityTimeCommitmentData;
+    }
+
+    /**
+     * @dev Encodes the LiquidityCallbackData into bytes.
+     *      This function first verifies that the hookData in the callback data
+     *      decodes to a valid TimeCommitment using the `getTimeCommitment` function.
+     *      If the hookData is invalid, the function reverts with an error.
+     * @param liquidityTimeCommitmentData The callback data to encode.
+     * @return encodedLiquidityTimeCommitmentData The encoded callback data.
+     */
+    function fromLiquidityTimeCommitmentDataToBytes(
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
+    ) internal view returns (bytes memory encodedLiquidityTimeCommitmentData) {
+        // NOTE: This also validates that the hookData decodes to a valid TimeCommitment
+        getTimeCommitment(liquidityTimeCommitmentData);
+        // If this passes, we can continue
+        // we need to encode LiquidityTimeCommitmentData
+        // this is ..
+        encodedLiquidityTimeCommitmentData = abi.encode(
+            liquidityTimeCommitmentData
         );
     }
 }

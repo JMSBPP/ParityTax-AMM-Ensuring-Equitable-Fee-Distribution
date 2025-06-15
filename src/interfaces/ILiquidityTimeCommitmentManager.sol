@@ -13,6 +13,6 @@ interface ILiquidityTimeCommitmentManager {
         ModifyLiquidityParams memory liquidityParams,
         bool isJIT,
         bytes32 liquidityPositionKey,
-        TimeCommitment memory timeCommitment
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
     ) external;
 }
