@@ -49,7 +49,7 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
         permissions = Hooks.Permissions({
             beforeInitialize: false,
             afterInitialize: false,
-            beforeAddLiquidity: false,
+            beforeAddLiquidity: true,
             afterAddLiquidity: false,
             beforeRemoveLiquidity: true,
             afterRemoveLiquidity: false,
@@ -67,11 +67,11 @@ abstract contract LiquidityTimeCommitmentClassifier is BaseHook {
     // to be correct or not, if not correct the transaction would have ended on the router
     //
     function beforeAddLiquidity(
-        address sender,
+        /*address sender,*/
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
-    ) external override(BaseHook) onlyPoolManager returns (bytes4) {
+    ) external onlyPoolManager returns (bytes4) {
         // 1 It decodes the LiquidityTimeCommitmentData
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = hookData

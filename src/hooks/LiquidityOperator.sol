@@ -25,4 +25,36 @@ abstract contract LiquidityOperator is ILiquidityOperator {
 
     mapping(PositionTimeCommitmentKey => LiquidityPositionAccounting)
         private liquidityPositionAccountings;
+
+    function setPositionLiquidityTimeCommitmentData(
+        bytes32 positionKey,
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
+    ) external virtual {
+        liquidityPositionsTimeCommitmentData[
+            positionKey
+        ] = liquidityTimeCommitmentData;
+    }
+    function getPositionLiquidityTimeCommitmentData(
+        bytes32 positionKey
+    )
+        external
+        view
+        returns (LiquidityTimeCommitmentData memory liquidityTimeCommitmentData)
+    {
+        liquidityTimeCommitmentData = liquidityPositionsTimeCommitmentData[
+            positionKey
+        ];
+    }
+
+    function getLiquidityPositionAccounting(
+        bytes32 positionTimeCommitmentKey
+    )
+        external
+        view
+        returns (LiquidityPositionAccounting memory liquidityPositionAccounting)
+    {
+        liquidityPositionAccounting = liquidityPositionAccountings[
+            PositionTimeCommitmentKey.wrap(positionTimeCommitmentKey)
+        ];
+    }
 }

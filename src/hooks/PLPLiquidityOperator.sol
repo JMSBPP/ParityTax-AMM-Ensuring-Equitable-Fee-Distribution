@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IPLPHook} from "../interfaces/IPLPHook.sol";
-import "v4-periphery/src/utils/BaseHook.sol";
+import "./LiquidityOperator.sol";
+import {IPLPHook} from "./interfaces/IPLPHook.sol";
+import "./base/PLPHookBase.sol";
 
-abstract contract PLPHook is BaseHook, IPLPHook {
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
-    // TODO: This function can not be further overwritten, or if it can be overwriteen
-    // is to ADD persmissions and NOT remove them such that it does not change the
-    // JIT funcitonality and most importantly the ability to tax the JIT.
+contract PLPLiquidityOperator is LiquidityOperator, PLPHookBase {
+    constructor(IPoolManager _manager) PLPHookBase(_manager) {}
     function getHookPermissions()
         public
         pure
-        override(BaseHook)
+        override
         returns (Hooks.Permissions memory permissions)
     {
         permissions = Hooks.Permissions({
@@ -40,12 +38,7 @@ abstract contract PLPHook is BaseHook, IPLPHook {
         BalanceDelta delta,
         BalanceDelta feesAccrued,
         bytes calldata hookData
-    )
-        external
-        override(BaseHook, IPLPHook)
-        onlyPoolManager
-        returns (bytes4, BalanceDelta)
-    {
+    ) external override onlyPoolManager returns (bytes4, BalanceDelta) {
         return
             _afterAddLiquidity(
                 sender,
@@ -55,5 +48,13 @@ abstract contract PLPHook is BaseHook, IPLPHook {
                 feesAccrued,
                 hookData
             );
+    }
+    function getClaimableLiquidityOnCurrency(
+        Currency currency
+    ) external view returns (uint256 claimableLiquidityBalance) {
+        claimableLiquidityBalance = poolManager.balanceOf(
+            address(this),
+            currency.toId()
+        );
     }
 }

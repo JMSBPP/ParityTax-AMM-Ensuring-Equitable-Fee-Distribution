@@ -16,7 +16,7 @@ import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import "v4-core/test/PoolTestBase.sol";
 
 error InvalidFunctionCaller___FunctionCallerMustBePoolManager();
-abstract contract TimeCommitmentModifyLiquidityRouter is PoolTestBase {
+contract LiquidityTimeCommitmentRouter is PoolTestBase {
     using StateLibrary for IPoolManager;
     using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using LiquidityTimeCommitmentDataLibrary for bytes;

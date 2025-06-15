@@ -19,9 +19,9 @@ import "./types/LiquidityTimeCommitmentData.sol";
 
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
 import {ImmutableState} from "v4-periphery/src/base/ImmutableState.sol";
-import {ILiquidityOperator} from "./interfaces/ILiquidityOperator.sol";
-import {IPLPLiquidityOperator} from "./interfaces/IPLPLiquidityOperator.sol";
-import {IJITLiquidityOperator} from "./interfaces/IJITLiquidityOperator.sol";
+import {ILiquidityOperator} from "./hooks/interfaces/ILiquidityOperator.sol";
+import {IPLPLiquidityOperator} from "./hooks/interfaces/IPLPLiquidityOperator.sol";
+import {IJITLiquidityOperator} from "./hooks/interfaces/IJITLiquidityOperator.sol";
 
 import {LiquidityTimeCommitmentActions} from "./libs/LiquidityTimeCommitmentActions.sol";
 import {ILiquidityTimeCommitmentManager} from "./interfaces/ILiquidityTimeCommitmentManager.sol";
@@ -192,13 +192,17 @@ abstract contract LiquidityTimeCommitmentManager is
             poolManager,
             liquidityTimeCommitmentData.liquidityProvider,
             uint256(liquidityOnCurrency0.toUint128()),
-            false
+            false // NOTE: We are not burning ERC6909 tokens
+            // this is we are transfering ERC20 tokens
+            // to the pool Manager
         );
         poolKey.currency1.settle(
             poolManager,
             liquidityTimeCommitmentData.liquidityProvider,
             uint256(liquidityOnCurrency1.toUint128()),
-            false
+            false // NOTE: We are not burning ERC6909 tokens
+            // this is we are transfering ERC20 tokens
+            // to the pool Manager
         );
 
         // transferring liquidity to the pool
