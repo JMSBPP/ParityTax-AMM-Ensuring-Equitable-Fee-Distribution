@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 import "./TimeCommitment.sol";
+import {Position} from "v4-core/libraries/Position.sol";
 
 /// @notice Structure to hold data related to liquidity callback.
 /// @param liquidityProvider The address of the liquidity provider.
@@ -28,6 +29,7 @@ error InvalidHookData___HookDataDoesNotDecodeToTimeCommitment();
 library LiquidityTimeCommitmentDataLibrary {
     using TimeCommitmentLibrary for bytes;
     using TimeCommitmentLibrary for TimeCommitment;
+    using Position for *; // Allows us to query positionKeys to associate position keys with time commitments
 
     /**
      * @dev Checks if the hookData in LiquidityCallbackData decodes to a valid TimeCommitment.
@@ -64,6 +66,19 @@ library LiquidityTimeCommitmentDataLibrary {
         timeCommitment = liquidityTimeCommitmentData
             .hookData
             .fromBytesToTimeCommitment();
+    }
+
+    function getPositionKey(
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData,
+        ModifyLiquidityParams memory liquidityParams
+    ) internal pure returns (bytes32 positionKey) {
+        positionKey = liquidityTimeCommitmentData
+            .liquidityProvider
+            .calculatePositionKey(
+                liquidityParams.tickLower,
+                liquidityParams.tickUpper,
+                liquidityParams.salt
+            );
     }
 
     /**
@@ -134,5 +149,12 @@ library LiquidityTimeCommitmentDataLibrary {
         encodedLiquidityTimeCommitmentData = abi.encode(
             liquidityTimeCommitmentData
         );
+    }
+
+    function fromMsgDataToLiquidityTimeCommitmentData(
+        bytes memory msgData
+    ) internal view returns (LiquidityTimeCommitmentData memory) {
+        // This is the same as fromBytesToLiquidityTimeCommitmentData
+        return fromBytesToLiquidityTimeCommitmentData(msgData);
     }
 }

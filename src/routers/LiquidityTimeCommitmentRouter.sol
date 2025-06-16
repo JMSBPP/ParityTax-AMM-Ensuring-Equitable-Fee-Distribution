@@ -10,17 +10,20 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
+
+import {Currency} from "v4-core/types/Currency.sol";
+import {SafeCallback} from "v4-periphery/src/base/SafeCallback.sol";
 
 //====ROUTER SPECIFIC =====
 
-import "v4-core/test/PoolTestBase.sol";
+contract LiquidityTimeCommitmentRouter is SafeCallback {
+    using TransientStateLibrary for IPoolManager;
 
-error InvalidFunctionCaller___FunctionCallerMustBePoolManager();
-contract LiquidityTimeCommitmentRouter is PoolTestBase {
     using StateLibrary for IPoolManager;
     using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using LiquidityTimeCommitmentDataLibrary for bytes;
-    constructor(IPoolManager _manager) PoolTestBase(_manager) {}
+    constructor(IPoolManager _manager) SafeCallback(_manager) {}
 
     function modifyLiquidity(
         PoolKey memory key,
@@ -66,13 +69,24 @@ contract LiquidityTimeCommitmentRouter is PoolTestBase {
         if (liquidityTimeCommitmentData.isLookingToAddLiquidity()) {
             liquidityTimeCommitmentData.getTimeCommitment();
         }
-        // Now wil all these checks we can forward to the
+        // Now with all these checks we can forward to the
         // manager to allow us to further forward the data to
         // the hooks ...
         delta = abi.decode(
-            manager.unlock(abi.encode(liquidityTimeCommitmentData)),
+            poolManager.unlock(abi.encode(liquidityTimeCommitmentData)),
             (BalanceDelta)
         );
+        // function unlock(bytes calldata data) external override returns (bytes memory result) {
+        //     if (Lock.isUnlocked()) AlreadyUnlocked.selector.revertWith();
+
+        //     Lock.unlock();
+
+        //     // the caller does everything in this callback, including paying what they owe via calls to settle
+        //     result = IUnlockCallback(msg.sender).unlockCallback(data);
+
+        //     if (NonzeroDeltaCount.read() != 0) CurrencyNotSettled.selector.revertWith();
+        //         Lock.lock();
+        // }
         // This handles native ETH transfers
         // TODO: Verify if this is correct for our use case ...
         uint256 ethBalance = address(this).balance;
@@ -87,38 +101,16 @@ contract LiquidityTimeCommitmentRouter is PoolTestBase {
     // --> Valid deposit requests from JIT's
     // --> Valid deposit requests from PLP's
 
-    function unlockCallback(
-        bytes memory encodedLiquidityTimeCommitmentData
-    ) external returns (bytes memory encodedLiquidityBalanceDelta) {
-        //0. It needs to check that the caller is the poolManager
-        // TODO: There must be a more gas efficient way and secure
-        // way to do this, we also need to consider re-entrancy and
-        // other vulnerabilities
-        if (msg.sender != address(manager))
-            revert InvalidFunctionCaller___FunctionCallerMustBePoolManager();
-        // 1. It needs to decode the Callback data, and consequently
-        // ...
+    function _unlockCallback(
+        bytes calldata data
+    ) internal override returns (bytes memory) {
+        bytes memory encodedLiquidityTimeCommitmentData = data;
+
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = encodedLiquidityTimeCommitmentData
                 .fromBytesToLiquidityTimeCommitmentData();
-        // 1.1 ... the TimeCommitment inside it
-        // TODO: Looks like we do not use this
-        // TimeCommitment memory timeCommitment = liquidityTimeCommitmentData
-        //     .getTimeCommitment();
 
-        // TODO: We need to perform checks for liquidity before,
-        // is this actually done querying the position since
-        // liquidity is managed on vaults ?
-        // (uint128 liquidityBefore, , ) = manager.getPositionInfo(
-        //     liquidityTimeCommitmentData.poolKey.toId(),
-        //     address(this),
-        //     liquidityTimeCommitmentData.liquidityParams.tickLower,
-        //     liquidityTimeCommitmentData.liquidityParams.tickUpper,
-        //     liquidityTimeCommitmentData.liquidityParams.salt
-        // );
-        // I need to pass the whole liquidityTimeCommitmentData to
-        // the pool classifer ..
-        (BalanceDelta liquidityBalanceDelta, ) = manager.modifyLiquidity(
+        (BalanceDelta liquidityBalanceDelta, ) = poolManager.modifyLiquidity(
             liquidityTimeCommitmentData.poolKey,
             liquidityTimeCommitmentData.liquidityParams,
             liquidityTimeCommitmentData.fromLiquidityTimeCommitmentDataToBytes()
@@ -126,6 +118,20 @@ contract LiquidityTimeCommitmentRouter is PoolTestBase {
 
         // TODO: We need to perform the checks for liquidityAfter all the
         // internal routing from manager and hooks has been done
-        encodedLiquidityBalanceDelta = abi.encode(liquidityBalanceDelta);
+        return abi.encode(liquidityBalanceDelta);
+    }
+
+    function _fetchBalances(
+        Currency currency,
+        address user,
+        address deltaHolder
+    )
+        internal
+        view
+        returns (uint256 userBalance, uint256 poolBalance, int256 delta)
+    {
+        userBalance = currency.balanceOf(user);
+        poolBalance = currency.balanceOf(address(poolManager));
+        delta = poolManager.currencyDelta(deltaHolder, currency);
     }
 }
