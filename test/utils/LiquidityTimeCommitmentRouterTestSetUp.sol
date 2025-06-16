@@ -19,7 +19,7 @@ contract LiquidityTimeCommitmentRouterTestSetup is PosmTestSetup {
         internal
         returns (Currency currency)
     {
-        MockERC20 token = deployTokens(1, 2 * 255)[0];
+        MockERC20 token = deployTokens(1, 2 ** 255)[0];
         token.approve(
             address(_liquidityTimeCommitmentRouter),
             Constants.MAX_UINT256
@@ -30,7 +30,7 @@ contract LiquidityTimeCommitmentRouterTestSetup is PosmTestSetup {
 
     function _deployMintAndApproveToLiquiditTimeCommitmentRouter2Currencies()
         internal
-        returns (Currency currency0, Currency currency1)
+        returns (Currency, Currency)
     {
         Currency _currencyA = _deployMintAndApproveToLiquidityTimeCommitmentRouterCurrency();
         Currency _currencyB = _deployMintAndApproveToLiquidityTimeCommitmentRouterCurrency();

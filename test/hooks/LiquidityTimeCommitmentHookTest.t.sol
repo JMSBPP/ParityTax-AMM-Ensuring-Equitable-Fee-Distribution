@@ -16,13 +16,13 @@ contract LiquidityTimeCommitmentHookTest is
     Test,
     LiquidityTimeCommitmentRouterTestSetup
 {
-    using TimeCommitmentLibrary for TimeCommitment;
-    using TimeCommitmentLibrary for bytes;
+    using TimeCommitmentLibrary for *;
     using LiquidityTimeCommitmentDataLibrary for bytes;
     using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using Hooks for IHooks;
     using HookMiner for address;
     using Position for *;
+    using CurrencyLibrary for Currency;
 
     // 0. We need initally a couple of addresses one representing
     // A PLP and another representing a JIT
@@ -37,13 +37,23 @@ contract LiquidityTimeCommitmentHookTest is
         // TODO:
 
         // 1. We need to deploy the poolManager
-        deployFreshManager();
-
+        _deployLiquidityTimeCommitmentRouter();
         // 2. We need to deploy2currencies and deploy and approve the
         // liquidityTimeCommitmentRouter
         _deployMintAndApproveToLiquiditTimeCommitmentRouter2Currencies();
         // 3. We need to provide tokens to the providers, so they can interact with the pool
+        console.log(
+            "Circulating Supply Currency 0:",
+            currency0.balanceOfSelf()
+        );
+        console.log(
+            "Circulating Supply Currency 1:",
+            currency1.balanceOfSelf()
+        );
         currency0.transfer(_plpLp, 1000e18);
+        currency1.transfer(_plpLp, 1000e18);
+
+        currency0.transfer(_jitLp, 1000e18);
         currency1.transfer(_jitLp, 1000e18);
 
         // The Custom Router that considers the LiquidityTimeCommitmentCallbackData
@@ -57,15 +67,15 @@ contract LiquidityTimeCommitmentHookTest is
                     Hooks.AFTER_SWAP_FLAG |
                     Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
                     Hooks.AFTER_ADD_LIQUIDITY_FLAG |
-                    Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG |
-                    Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG
+                    Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG |
+                    Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG
             ),
             type(LiquidityTimeCommitmentHook).creationCode,
             abi.encode(address(manager))
         );
         // NOTE: The address is valid for this testing environment
         deployCodeTo(
-            "../../src/hooks/LiquidityTimeCommitmentHook.sol:LiquidityTimeCommitmentHook",
+            "src/hooks/LiquidityTimeCommitmentHook.sol:LiquidityTimeCommitmentHook",
             abi.encode(address(manager)),
             liquidityTimeCommitmentHookAddress
         );
@@ -81,7 +91,7 @@ contract LiquidityTimeCommitmentHookTest is
         );
 
         deployCodeTo(
-            "../../src/LiquidityTimeCommitmentManager.sol:LiquidityTimeCommitmentManager",
+            "src/LiquidityTimeCommitmentManager.sol:LiquidityTimeCommitmentManager",
             abi.encode(address(manager)),
             jitLiquidityManagerAddress
         );
@@ -97,7 +107,7 @@ contract LiquidityTimeCommitmentHookTest is
         );
 
         deployCodeTo(
-            "../../src/LiquidityTimeCommitmentManager.sol:LiquidityTimeCommitmentManager",
+            "src/LiquidityTimeCommitmentManager.sol:LiquidityTimeCommitmentManager",
             abi.encode(address(manager)),
             plpLiquidityManagerAddress
         );
@@ -122,11 +132,8 @@ contract LiquidityTimeCommitmentHookTest is
         external
     {
         //1. We set the hookData params for a JIT
-        TimeCommitment memory jitTimeCommitment = TimeCommitment({
-            isJIT: true,
-            startingBlock: 0,
-            endingBlock: 0
-        }).setJITCommitment();
+        TimeCommitment memory jitTimeCommitment = uint256(block.number + 1)
+            .setJITCommitment();
         //2 Let's put together the hookData
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({

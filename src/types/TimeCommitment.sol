@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+uint256 constant TIME_COMMITMENT_SIZE = 60;
 
 /**
  * @title TimeCommitment
@@ -36,6 +37,9 @@ error InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
 //TODO: We need to determine a maximum liquidityCommitment
 // not enforcing for "inifinite" commitments
 
+error InvalidTimeCommitment__StartingBlockMustBeStrictlyLessThanEndingBlock();
+error InvalidRawData___RawDataDoesNotDecodeToTimeCommitment();
+
 /**
  * @title TimeCommitmentLibrary
  * @notice A library for manipulating TimeCommitments.
@@ -47,35 +51,57 @@ library TimeCommitmentLibrary {
     // can not take that long
 
     /**
+     * @dev Sets a TimeCommitment as a JIT (Just-In-Time) commitment.
+     *      A JIT commitment is a commitment that is fulfilled at a specific block number.
+     *      The starting block of the commitment is set to the same block number as the ending block.
+     * @param startingBlock The TimeCommitment to set as a JIT commitment.
+     * @return JIT_TimeCommitment The modified TimeCommitment with the starting block set to the same block number as the ending block.
+     */
+    function setJITCommitment(
+        uint256 startingBlock
+    ) internal view returns (TimeCommitment memory JIT_TimeCommitment) {
+        if (startingBlock < block.number) {
+            revert InvalidTimeCommitment__BlockAlreadyPassed();
+        }
+        JIT_TimeCommitment = TimeCommitment({
+            isJIT: true,
+            startingBlock: startingBlock,
+            endingBlock: startingBlock
+        });
+    }
+
+    function setPLPCommitment(
+        uint256 startingBlock,
+        uint256 endingBlock
+    ) internal view returns (TimeCommitment memory PLP_TimeCommitment) {
+        if (startingBlock > endingBlock) {
+            revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
+        }
+        if (startingBlock < block.number) {
+            revert InvalidTimeCommitment__BlockAlreadyPassed();
+        }
+        if (startingBlock == endingBlock) {
+            revert InvalidTimeCommitment__StartingBlockMustBeStrictlyLessThanEndingBlock();
+        } else {
+            PLP_TimeCommitment = TimeCommitment({
+                isJIT: false,
+                startingBlock: startingBlock,
+                endingBlock: endingBlock
+            });
+        }
+    }
+    /**
      * @dev Calculates the duration of a TimeCommitment.
      * @param timeCommitment The TimeCommitment to calculate the duration of.
      * @return commitmmentDuration The duration of the TimeCommitment.
      */
     function getDuration(
         TimeCommitment memory timeCommitment
-    ) internal pure returns (uint256 commitmmentDuration) {
+    ) internal view returns (uint256 commitmmentDuration) {
+        validateCommitment(timeCommitment);
         commitmmentDuration =
             timeCommitment.endingBlock -
             timeCommitment.startingBlock;
-    }
-
-    /**
-     * @dev Sets a TimeCommitment as a JIT (Just-In-Time) commitment.
-     *      A JIT commitment is a commitment that is fulfilled at a specific block number.
-     *      The starting block of the commitment is set to the same block number as the ending block.
-     * @param timeCommitment The TimeCommitment to set as a JIT commitment.
-     * @return JIT_TimeCommitment The modified TimeCommitment with the starting block set to the same block number as the ending block.
-     */
-    function setJITCommitment(
-        TimeCommitment memory timeCommitment
-    ) internal view returns (TimeCommitment memory JIT_TimeCommitment) {
-        if (timeCommitment.isJIT) {
-            JIT_TimeCommitment = TimeCommitment({
-                isJIT: true,
-                startingBlock: block.number,
-                endingBlock: block.number
-            });
-        }
     }
 
     /**
@@ -86,11 +112,19 @@ library TimeCommitmentLibrary {
      */
     function isPLPCommitment(
         TimeCommitment memory timeCommitment
-    ) internal pure returns (bool isValidPLPTimeCommitment) {
-        if (!timeCommitment.isJIT) {
-            isValidPLPTimeCommitment =
-                timeCommitment.endingBlock > timeCommitment.startingBlock;
-        }
+    ) internal view returns (bool isValidPLPTimeCommitment) {
+        isValidPLPTimeCommitment =
+            timeCommitment.startingBlock ==
+            setPLPCommitment(
+                timeCommitment.startingBlock,
+                timeCommitment.endingBlock
+            ).startingBlock &&
+            timeCommitment.endingBlock ==
+            setPLPCommitment(
+                timeCommitment.startingBlock,
+                timeCommitment.endingBlock
+            ).endingBlock &&
+            !timeCommitment.isJIT;
     }
 
     /**
@@ -104,16 +138,20 @@ library TimeCommitmentLibrary {
     function validateCommitment(
         TimeCommitment memory timeCommitment
     ) internal view returns (TimeCommitment memory correctedTimeCommitment) {
-        if (block.number < timeCommitment.startingBlock)
+        if (timeCommitment.startingBlock < block.number)
             revert InvalidTimeCommitment__BlockAlreadyPassed();
         if (timeCommitment.endingBlock < timeCommitment.startingBlock)
             revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
         if (!isPLPCommitment(timeCommitment)) {
-            correctedTimeCommitment = setJITCommitment(timeCommitment);
+            correctedTimeCommitment = setJITCommitment(
+                timeCommitment.startingBlock
+            );
         }
-
         if (isPLPCommitment(timeCommitment)) {
-            correctedTimeCommitment = timeCommitment;
+            correctedTimeCommitment = setPLPCommitment(
+                timeCommitment.startingBlock,
+                timeCommitment.endingBlock
+            );
         }
     }
 
@@ -127,6 +165,7 @@ library TimeCommitmentLibrary {
     function getRemainingCommitment(
         TimeCommitment memory timeCommitment
     ) internal view returns (uint256 remainingCommitment) {
+        validateCommitment(timeCommitment);
         remainingCommitment = timeCommitment.endingBlock - block.number;
     }
 
@@ -137,20 +176,24 @@ library TimeCommitmentLibrary {
      */
     function toBytes(
         TimeCommitment memory timeCommitment
-    ) internal pure returns (bytes memory encodedTimeCommitment) {
+    ) internal view returns (bytes memory encodedTimeCommitment) {
+        validateCommitment(timeCommitment);
         encodedTimeCommitment = abi.encode(timeCommitment);
     }
 
     /**
      * @dev Decodes bytes to a TimeCommitment and validates the commitment.
-     * @param encodedTimeCommitment The encoded TimeCommitment as bytes.
+     * @param rawData The encoded TimeCommitment as bytes.
      * @return timeCommitment The decoded and validated TimeCommitment.
      */
     function fromBytesToTimeCommitment(
-        bytes memory encodedTimeCommitment
+        bytes memory rawData
     ) internal view returns (TimeCommitment memory timeCommitment) {
+        if (rawData.length != TIME_COMMITMENT_SIZE) {
+            revert InvalidRawData___RawDataDoesNotDecodeToTimeCommitment();
+        }
         timeCommitment = validateCommitment(
-            abi.decode(encodedTimeCommitment, (TimeCommitment))
+            abi.decode(rawData, (TimeCommitment))
         );
     }
 }

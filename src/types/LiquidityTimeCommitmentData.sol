@@ -6,12 +6,15 @@ import {ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 import "./TimeCommitment.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 
+uint256 constant TIME_COMMITMENT_DURATION_SIZE = 60;
+
 /// @notice Structure to hold data related to liquidity callback.
 /// @param liquidityProvider The address of the liquidity provider.
 /// @param poolKey The key of the pool.
 /// @param hookData Additional data used in the callback.
 /// @param settleUsingBurn Indicates if settlement should use burn.
 /// @param takeClaims Indicates if claims should be taken.
+
 struct LiquidityTimeCommitmentData {
     address liquidityProvider;
     PoolKey poolKey;
@@ -27,8 +30,7 @@ error InvalidHookData___HookDataDoesNotDecodeToTimeCommitment();
 /// @title Liquidity Callback Data Library
 /// @dev Provides functions for handling LiquidityCallbackData.
 library LiquidityTimeCommitmentDataLibrary {
-    using TimeCommitmentLibrary for bytes;
-    using TimeCommitmentLibrary for TimeCommitment;
+    using TimeCommitmentLibrary for *;
     using Position for *; // Allows us to query positionKeys to associate position keys with time commitments
 
     /**
@@ -39,18 +41,14 @@ library LiquidityTimeCommitmentDataLibrary {
      */
     function hookDataDecodesToEncodedTimeCommitment(
         LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
-    ) internal pure {
+    ) internal view returns (TimeCommitment memory tc) {
         bytes memory hookData = liquidityTimeCommitmentData.hookData;
-        if (
-            hookData.length !=
-            TimeCommitment({
-                isJIT: true,
-                startingBlock: type(uint256).max, // NOTICE: this is a placeholder
-                endingBlock: type(uint256).max //         still valid timeCommitment
-            }).toBytes().length
-        ) {
+        if (hookData.length != TIME_COMMITMENT_DURATION_SIZE) {
             revert InvalidHookData___HookDataDoesNotDecodeToTimeCommitment();
         }
+        // Try decoding to ensure it's valid
+        tc = hookData.fromBytesToTimeCommitment();
+        // Optionally, add more semantic checks here
     }
 
     /**
@@ -62,10 +60,9 @@ library LiquidityTimeCommitmentDataLibrary {
     function getTimeCommitment(
         LiquidityTimeCommitmentData memory liquidityTimeCommitmentData
     ) internal view returns (TimeCommitment memory timeCommitment) {
-        hookDataDecodesToEncodedTimeCommitment(liquidityTimeCommitmentData);
-        timeCommitment = liquidityTimeCommitmentData
-            .hookData
-            .fromBytesToTimeCommitment();
+        timeCommitment = hookDataDecodesToEncodedTimeCommitment(
+            liquidityTimeCommitmentData
+        );
     }
 
     function getPositionKey(
