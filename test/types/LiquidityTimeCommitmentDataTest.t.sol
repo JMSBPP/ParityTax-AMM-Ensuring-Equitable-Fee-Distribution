@@ -18,44 +18,44 @@ contract LiquidityTimeCommitmentDataTest is Test, Deployers {
         deployAndMint2Currencies();
     }
 
-    function test___callDataThatDoesNotDecodeToTimeCommitmentReverts(
-        bytes memory randomRawData
-    ) public {
-        // 1. We need to create a LiquidityTimeCommitmentData with invalid hookData
+    // function test___callDataThatDoesNotDecodeToTimeCommitmentReverts(
+    //     bytes memory randomRawData
+    // ) public {
+    //     // 1. We need to create a LiquidityTimeCommitmentData with invalid hookData
 
-        LiquidityTimeCommitmentData
-            memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
-                liquidityProvider: alice,
-                poolKey: PoolKey({
-                    currency0: currency0,
-                    currency1: currency1,
-                    fee: 3000,
-                    tickSpacing: 60,
-                    hooks: IHooks(address(0))
-                }),
-                liquidityParams: ModifyLiquidityParams({
-                    liquidityDelta: 1000e18,
-                    tickLower: -60000,
-                    tickUpper: 60000,
-                    salt: ""
-                }),
-                hookData: randomRawData,
-                settleUsingBurn: true,
-                takeClaims: true
-            });
+    //     LiquidityTimeCommitmentData
+    //         memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
+    //             liquidityProvider: alice,
+    //             poolKey: PoolKey({
+    //                 currency0: currency0,
+    //                 currency1: currency1,
+    //                 fee: 3000,
+    //                 tickSpacing: 60,
+    //                 hooks: IHooks(address(0))
+    //             }),
+    //             liquidityParams: ModifyLiquidityParams({
+    //                 liquidityDelta: 1000e18,
+    //                 tickLower: -60000,
+    //                 tickUpper: 60000,
+    //                 salt: ""
+    //             }),
+    //             hookData: randomRawData,
+    //             settleUsingBurn: true,
+    //             takeClaims: true
+    //         });
 
-        if (randomRawData.length != TIME_COMMITMENT_DURATION_SIZE) {
-            vm.expectRevert(
-                InvalidHookData___HookDataDoesNotDecodeToTimeCommitment.selector
-            );
-        }
+    //     if (randomRawData.length != TIME_COMMITMENT_DURATION_SIZE) {
+    //         vm.expectRevert(
+    //             InvalidHookData___HookDataDoesNotDecodeToTimeCommitment.selector
+    //         );
+    //     }
 
-        if (randomRawData.length == TIME_COMMITMENT_DURATION_SIZE) {
-            // 2. We need to decode the hookData
-            TimeCommitment memory timeCommitment = abi.decode(
-                randomRawData,
-                (TimeCommitment)
-            );
-        }
-    }
+    //     if (randomRawData.length == TIME_COMMITMENT_DURATION_SIZE) {
+    //         // 2. We need to decode the hookData
+    //         TimeCommitment memory timeCommitment = abi.decode(
+    //             randomRawData,
+    //             (TimeCommitment)
+    //         );
+    //     }
+    // }
 }

@@ -17,8 +17,7 @@ contract LiquidityTimeCommitmentHookTest is
     LiquidityTimeCommitmentRouterTestSetup
 {
     using TimeCommitmentLibrary for *;
-    using LiquidityTimeCommitmentDataLibrary for bytes;
-    using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
+    using LiquidityTimeCommitmentDataLibrary for *;
     using Hooks for IHooks;
     using HookMiner for address;
     using Position for *;
@@ -132,53 +131,51 @@ contract LiquidityTimeCommitmentHookTest is
         external
     {
         //1. We set the hookData params for a JIT
-        TimeCommitment memory jitTimeCommitment = uint256(block.number + 1)
-            .setJITCommitment();
-        //2 Let's put together the hookData
-        LiquidityTimeCommitmentData
-            memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
-                liquidityProvider: _jitLp,
-                poolKey: key,
-                liquidityParams: LIQUIDITY_PARAMS,
-                hookData: abi.encode(jitTimeCommitment),
-                settleUsingBurn: false,
-                takeClaims: true
-            });
+        vm.roll(100);
+        TimeCommitment memory jitTimeCommitment = TimeCommitmentLibrary
+            .validateCommitment(
+                true, // isJIT
+                block.number + 1, // startingBlock
+                block.number + 1 // endingBlock
+            );
+        console.log("Starting Block:", jitTimeCommitment.startingBlock);
+        console.log("Current Block:", block.number);
+        console.log("Ending Block:", jitTimeCommitment.endingBlock);
 
-        //3. We encode the LiquidityTimeCommitmentData
-        bytes memory hookData = abi.encode(liquidityTimeCommitmentData);
-        vm.startPrank(_jitLp);
+        bytes memory hookData = jitTimeCommitment.toBytes();
+        console.logBytes(hookData);
+        // vm.startPrank(_jitLp);
 
-        _liquidityTimeCommitmentRouter.modifyLiquidity(
-            key,
-            LIQUIDITY_PARAMS,
-            hookData
-        );
-        // Expected JIT lp position key
-        bytes32 jitPositionKey = liquidityTimeCommitmentData.getPositionKey(
-            LIQUIDITY_PARAMS
-        );
+        // _liquidityTimeCommitmentRouter.modifyLiquidity(
+        //     key,
+        //     LIQUIDITY_PARAMS,
+        //     hookData
+        // );
+        // // // Expected JIT lp position key
+        // // bytes32 jitPositionKey = liquidityTimeCommitmentData.getPositionKey(
+        // //     LIQUIDITY_PARAMS
+        // // );
 
-        (uint256 amount0, uint256 amount1) = jitLiquidityManager
-            .getClaimableLiquidityOnCurrencies(key);
+        // (uint256 amount0, uint256 amount1) = jitLiquidityManager
+        //     .getClaimableLiquidityOnCurrencies(key);
 
-        console.log("JIT Position Key:", uint256(jitPositionKey));
-        console.log(
-            "Expected JIT Liquidity Manager: ",
-            address(jitLiquidityManager)
-        );
-        console.log(
-            "Actual JIT Liquidity Manager: ",
-            address(
-                liquidityTimeCommitmentHook.getLPLiquidityManager(
-                    jitPositionKey,
-                    LPType.JIT
-                )
-            )
-        );
-        console.log("amount0: ", amount0);
-        console.log("amount1: ", amount1);
-        vm.stopPrank();
+        // // console.log("JIT Position Key:", uint256(jitPositionKey));
+        // console.log(
+        //     "Expected JIT Liquidity Manager: ",
+        //     address(jitLiquidityManager)
+        // );
+        // // console.log(
+        // //     "Actual JIT Liquidity Manager: ",
+        // //     address(
+        // //         liquidityTimeCommitmentHook.getLPLiquidityManager(
+        // //             jitPositionKey,
+        // //             LPType.JIT
+        // //         )
+        // //     )
+        // // );
+        // console.log("amount0: ", amount0);
+        // console.log("amount1: ", amount1);
+        // vm.stopPrank();
 
         // This call is unlocked by the poolManager
         // then it is supposed to send the

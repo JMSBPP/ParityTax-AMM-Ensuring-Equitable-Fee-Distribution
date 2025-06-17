@@ -23,6 +23,7 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
     using StateLibrary for IPoolManager;
     using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using LiquidityTimeCommitmentDataLibrary for bytes;
+    using TimeCommitmentLibrary for *;
     constructor(IPoolManager _manager) SafeCallback(_manager) {}
 
     function modifyLiquidity(
@@ -38,14 +39,14 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
             BalanceDelta delta
         )
     {
-        // We build the underlying liquidityTimeCommitmentData
-        // from the fucntion params:
+        TimeCommitment memory timeCommitment = hookData
+            .fromBytesToTimeCommitment();
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
                 liquidityProvider: msg.sender,
                 poolKey: key,
                 liquidityParams: liquidityParams,
-                hookData: hookData,
+                hookData: timeCommitment.toBytes(),
                 settleUsingBurn: true, // NOTE: We will need claim to handle liquidity
                 takeClaims: true
             });

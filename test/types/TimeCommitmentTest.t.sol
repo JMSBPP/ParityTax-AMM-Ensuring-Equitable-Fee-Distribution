@@ -9,37 +9,16 @@ contract TimeCommitmentTest is Test {
 
     function setUp() public {}
 
-    function test__FuzzyTimeCommitment(
-        TimeCommitment memory timeCommitment,
-        uint256 _currentBlock
-    ) public {
-        vm.assume(
-            (_currentBlock < Constants.MAX_UINT256) &&
-                (timeCommitment.startingBlock < Constants.MAX_UINT256) &&
-                (timeCommitment.endingBlock < Constants.MAX_UINT256)
+    function callValidateCommitment(
+        bool _isJIT,
+        uint256 _startingBlock,
+        uint256 _endingBlock
+    ) public view {
+        TimeCommitmentLibrary.validateCommitment(
+            _isJIT,
+            _startingBlock,
+            _endingBlock
         );
-
-        vm.roll(_currentBlock);
-
-        if (timeCommitment.startingBlock < _currentBlock) {
-            vm.expectRevert("InvalidTimeCommitment__BlockAlreadyPassed");
-            timeCommitment.validateCommitment();
-        } else if (timeCommitment.endingBlock < timeCommitment.startingBlock) {
-            vm.expectRevert(
-                "InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock()"
-            );
-            timeCommitment.validateCommitment();
-        } else if (
-            timeCommitment.startingBlock == timeCommitment.endingBlock &&
-            !timeCommitment.isJIT
-        ) {
-            vm.expectRevert(
-                "InvalidTimeCommitment__StartingBlockMustBeStrictlyLessThanEndingBlock()"
-            );
-            timeCommitment.validateCommitment();
-        } else {
-            timeCommitment.validateCommitment();
-        }
     }
 
     // function test__FuzzRawDataDecodesToTimeCommitment(

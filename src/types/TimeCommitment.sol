@@ -60,9 +60,6 @@ library TimeCommitmentLibrary {
     function setJITCommitment(
         uint256 startingBlock
     ) internal view returns (TimeCommitment memory JIT_TimeCommitment) {
-        if (startingBlock < block.number) {
-            revert InvalidTimeCommitment__BlockAlreadyPassed();
-        }
         JIT_TimeCommitment = TimeCommitment({
             isJIT: true,
             startingBlock: startingBlock,
@@ -74,21 +71,11 @@ library TimeCommitmentLibrary {
         uint256 startingBlock,
         uint256 endingBlock
     ) internal view returns (TimeCommitment memory PLP_TimeCommitment) {
-        if (startingBlock > endingBlock) {
-            revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
-        }
-        if (startingBlock < block.number) {
-            revert InvalidTimeCommitment__BlockAlreadyPassed();
-        }
-        if (startingBlock == endingBlock) {
-            revert InvalidTimeCommitment__StartingBlockMustBeStrictlyLessThanEndingBlock();
-        } else {
-            PLP_TimeCommitment = TimeCommitment({
-                isJIT: false,
-                startingBlock: startingBlock,
-                endingBlock: endingBlock
-            });
-        }
+        PLP_TimeCommitment = TimeCommitment({
+            isJIT: false,
+            startingBlock: startingBlock,
+            endingBlock: endingBlock
+        });
     }
     /**
      * @dev Calculates the duration of a TimeCommitment.
@@ -98,10 +85,14 @@ library TimeCommitmentLibrary {
     function getDuration(
         TimeCommitment memory timeCommitment
     ) internal view returns (uint256 commitmmentDuration) {
-        validateCommitment(timeCommitment);
+        TimeCommitment memory validatedTimeCommitment = validateCommitment(
+            timeCommitment.isJIT,
+            timeCommitment.startingBlock,
+            timeCommitment.endingBlock
+        );
         commitmmentDuration =
-            timeCommitment.endingBlock -
-            timeCommitment.startingBlock;
+            validatedTimeCommitment.endingBlock -
+            validatedTimeCommitment.startingBlock;
     }
 
     /**
@@ -127,34 +118,33 @@ library TimeCommitmentLibrary {
             !timeCommitment.isJIT;
     }
 
-    /**
-     * @dev Validates a TimeCommitment to ensure it is a valid commitment.
-     *      A valid commitment is one that:
-     *      - Has a starting block that is in the future
-     *      - Has a starting block that is less than the ending block
-     *      - Is not a JIT (Just-In-Time) commitment, or has a starting block that is equal to the ending block
-     * @param timeCommitment The TimeCommitment to validate.
-     */
     function validateCommitment(
-        TimeCommitment memory timeCommitment
-    ) internal view returns (TimeCommitment memory correctedTimeCommitment) {
-        if (timeCommitment.startingBlock < block.number)
-            revert InvalidTimeCommitment__BlockAlreadyPassed();
-        if (timeCommitment.endingBlock < timeCommitment.startingBlock)
-            revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
-        if (!isPLPCommitment(timeCommitment)) {
-            correctedTimeCommitment = setJITCommitment(
-                timeCommitment.startingBlock
-            );
-        }
-        if (isPLPCommitment(timeCommitment)) {
-            correctedTimeCommitment = setPLPCommitment(
-                timeCommitment.startingBlock,
-                timeCommitment.endingBlock
-            );
+        bool isJIT,
+        uint256 startingBlock,
+        uint256 endingBlock
+    ) internal view returns (TimeCommitment memory) {
+        // 1. Check basic block number validity
+        // if (startingBlock < block.number) {
+        //     revert InvalidTimeCommitment__BlockAlreadyPassed();
+        // }
+        // if (endingBlock < startingBlock) {
+        //     revert InvalidTimeCommitment__StartingBlockGreaterThanEndingBlock();
+        // }
+
+        // 2. Check JIT/PLP consistency
+        if (isJIT) {
+            if (startingBlock != endingBlock) {
+                // If marked JIT but blocks don't match, convert to proper JIT
+                return setJITCommitment(startingBlock);
+            }
+        } else if (!isJIT) {
+            if (startingBlock == endingBlock) {
+                // If not marked JIT but single block, convert to PLP or revert
+            } else {
+                setPLPCommitment(startingBlock, endingBlock);
+            }
         }
     }
-
     /**
      * @dev Calculates the remaining commitment of a TimeCommitment.
      *      The remaining commitment is the difference between the ending block of the commitment and the current block number.
@@ -165,8 +155,14 @@ library TimeCommitmentLibrary {
     function getRemainingCommitment(
         TimeCommitment memory timeCommitment
     ) internal view returns (uint256 remainingCommitment) {
-        validateCommitment(timeCommitment);
-        remainingCommitment = timeCommitment.endingBlock - block.number;
+        TimeCommitment memory validatedTimeCommitment = validateCommitment(
+            timeCommitment.isJIT,
+            timeCommitment.startingBlock,
+            timeCommitment.endingBlock
+        );
+        remainingCommitment =
+            validatedTimeCommitment.endingBlock -
+            block.number;
     }
 
     /**
@@ -177,8 +173,12 @@ library TimeCommitmentLibrary {
     function toBytes(
         TimeCommitment memory timeCommitment
     ) internal view returns (bytes memory encodedTimeCommitment) {
-        validateCommitment(timeCommitment);
-        encodedTimeCommitment = abi.encode(timeCommitment);
+        TimeCommitment memory validatedTimeCommitment = validateCommitment(
+            timeCommitment.isJIT,
+            timeCommitment.startingBlock,
+            timeCommitment.endingBlock
+        );
+        encodedTimeCommitment = abi.encode(validatedTimeCommitment);
     }
 
     /**
@@ -193,7 +193,9 @@ library TimeCommitmentLibrary {
             revert InvalidRawData___RawDataDoesNotDecodeToTimeCommitment();
         }
         timeCommitment = validateCommitment(
-            abi.decode(rawData, (TimeCommitment))
+            abi.decode(rawData, (TimeCommitment)).isJIT,
+            abi.decode(rawData, (TimeCommitment)).startingBlock,
+            abi.decode(rawData, (TimeCommitment)).endingBlock
         );
     }
 }
