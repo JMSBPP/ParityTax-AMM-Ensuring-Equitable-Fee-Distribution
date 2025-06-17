@@ -21,8 +21,7 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
     using TransientStateLibrary for IPoolManager;
 
     using StateLibrary for IPoolManager;
-    using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
-    using LiquidityTimeCommitmentDataLibrary for bytes;
+    using LiquidityTimeCommitmentDataLibrary for *;
     using TimeCommitmentLibrary for *;
     constructor(IPoolManager _manager) SafeCallback(_manager) {}
 
@@ -41,15 +40,15 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
     {
         TimeCommitment memory timeCommitment = hookData
             .fromBytesToTimeCommitment();
-        LiquidityTimeCommitmentData
-            memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData({
-                liquidityProvider: msg.sender,
-                poolKey: key,
-                liquidityParams: liquidityParams,
-                hookData: timeCommitment.toBytes(),
-                settleUsingBurn: true, // NOTE: We will need claim to handle liquidity
-                takeClaims: true
-            });
+        LiquidityTimeCommitmentData memory liquidityTimeCommitmentData = msg
+            .sender
+            .setLiquidityTimeCommitmentData(
+                key,
+                liquidityParams,
+                timeCommitment,
+                true,
+                true
+            );
 
         if (liquidityTimeCommitmentData.isLookingToRemoveLiquidity()) {
             // 1. hookData is irrelevant because timeCommitment

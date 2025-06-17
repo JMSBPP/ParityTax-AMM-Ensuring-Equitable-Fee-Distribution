@@ -132,12 +132,10 @@ contract LiquidityTimeCommitmentHookTest is
     {
         //1. We set the hookData params for a JIT
         vm.roll(100);
-        TimeCommitment memory jitTimeCommitment = TimeCommitmentLibrary
-            .validateCommitment(
-                true, // isJIT
-                block.number + 1, // startingBlock
-                block.number + 1 // endingBlock
-            );
+        TimeCommitment memory jitTimeCommitment = true.setTimeCommitment(
+            block.number + 1, // startingBlock
+            block.number + 1 // endingBlock
+        );
         console.log("Starting Block:", jitTimeCommitment.startingBlock);
         console.log("Current Block:", block.number);
         console.log("Ending Block:", jitTimeCommitment.endingBlock);
