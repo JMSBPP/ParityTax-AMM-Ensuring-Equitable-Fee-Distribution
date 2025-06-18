@@ -1,3 +1,0 @@
-# `TaxMath`
-
-## Mechanism Design
