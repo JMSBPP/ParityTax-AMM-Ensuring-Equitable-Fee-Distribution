@@ -6,7 +6,7 @@ import {ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 import "./TimeCommitment.sol";
 import {Position} from "v4-core/libraries/Position.sol";
 
-uint256 constant LIQIDITY_TIME_COMMITMENT_DATA_SIZE = 0x220; //544
+uint256 constant LIQUIDITY_TIME_COMMITMENT_DATA_SIZE = 576;
 
 /// @notice Structure to hold data related to liquidity callback.
 /// @param liquidityProvider The address of the liquidity provider.
@@ -100,7 +100,7 @@ library LiquidityTimeCommitmentDataLibrary {
     {
         if (
             encodedLiquidityTimeCommitmentData.length !=
-            LIQIDITY_TIME_COMMITMENT_DATA_SIZE
+            LIQUIDITY_TIME_COMMITMENT_DATA_SIZE
         ) {
             revert InvalidHookData___rawDataDoesNotDecodeToLiquidityTimeCommitmentData();
         }

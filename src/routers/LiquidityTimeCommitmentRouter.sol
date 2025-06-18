@@ -109,11 +109,12 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = encodedLiquidityTimeCommitmentData
                 .fromBytesToLiquidityTimeCommitmentData();
-
+        bytes memory hookData = liquidityTimeCommitmentData
+            .fromLiquidityTimeCommitmentDataToBytes();
         (BalanceDelta liquidityBalanceDelta, ) = poolManager.modifyLiquidity(
             liquidityTimeCommitmentData.poolKey,
             liquidityTimeCommitmentData.liquidityParams,
-            liquidityTimeCommitmentData.fromLiquidityTimeCommitmentDataToBytes()
+            hookData
         );
 
         // TODO: We need to perform the checks for liquidityAfter all the

@@ -11,6 +11,7 @@ import "../utils/LiquidityTimeCommitmentRouterTestSetUp.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import "../../src/hooks/LiquidityTimeCommitmentHook.sol";
 import "../../src/LiquidityTimeCommitmentManager.sol";
+import "../../src/LiquidityTimeCommitmentHookStorage.sol";
 
 contract LiquidityTimeCommitmentHookTest is
     Test,
@@ -30,6 +31,8 @@ contract LiquidityTimeCommitmentHookTest is
 
     //========CONTRACTS TO BE TESTED =============================
     LiquidityTimeCommitmentHook internal liquidityTimeCommitmentHook;
+    LiquidityTimeCommitmentHookStorage
+        internal liquidityTimeCommitmentHookStorage;
     LiquidityTimeCommitmentManager internal plpLiquidityManager;
     LiquidityTimeCommitmentManager internal jitLiquidityManager;
     function setUp() public {
@@ -49,17 +52,19 @@ contract LiquidityTimeCommitmentHookTest is
             "Circulating Supply Currency 1:",
             currency1.balanceOfSelf()
         );
-        currency0.transfer(_plpLp, 1000e18);
-        currency1.transfer(_plpLp, 1000e18);
+        currency0.transfer(_plpLp, 1000e30);
+        currency1.transfer(_plpLp, 1000e30);
 
-        currency0.transfer(_jitLp, 1000e18);
-        currency1.transfer(_jitLp, 1000e18);
+        currency0.transfer(_jitLp, 1000e30);
+        currency1.transfer(_jitLp, 1000e30);
 
         // The Custom Router that considers the LiquidityTimeCommitmentCallbackData
         // is finally deployed
         // 5. With router, positionManager, poolManager out of the way
         // we need to deploy the LiquidityTimeCommitmentClassifier
         // and operators
+        // 5.1 Deploy the LiquidityTimeCommitmentHookStorage
+        liquidityTimeCommitmentHookStorage = new LiquidityTimeCommitmentHookStorage();
         (address liquidityTimeCommitmentHookAddress, ) = address(this).find(
             uint160(
                 Hooks.BEFORE_SWAP_FLAG |
@@ -75,7 +80,10 @@ contract LiquidityTimeCommitmentHookTest is
         // NOTE: The address is valid for this testing environment
         deployCodeTo(
             "src/hooks/LiquidityTimeCommitmentHook.sol:LiquidityTimeCommitmentHook",
-            abi.encode(address(manager)),
+            abi.encode(
+                address(manager),
+                address(liquidityTimeCommitmentHookStorage)
+            ),
             liquidityTimeCommitmentHookAddress
         );
 
@@ -132,48 +140,61 @@ contract LiquidityTimeCommitmentHookTest is
     {
         //1. We set the hookData params for a JIT
         vm.roll(100);
+        vm.startPrank(_jitLp);
         TimeCommitment memory jitTimeCommitment = true.setTimeCommitment(
             block.number + 1, // startingBlock
             block.number + 1 // endingBlock
         );
+
         console.log("Starting Block:", jitTimeCommitment.startingBlock);
         console.log("Current Block:", block.number);
         console.log("Ending Block:", jitTimeCommitment.endingBlock);
 
         bytes memory hookData = jitTimeCommitment.toBytes();
         console.logBytes(hookData);
-        // vm.startPrank(_jitLp);
+        console.log(hookData.length);
+        console.log(IERC20(Currency.unwrap(currency0)).balanceOf(_jitLp));
+        console.log(IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp));
+        IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp);
+        IERC20(Currency.unwrap(currency0)).approve(
+            address(liquidityTimeCommitmentHook),
+            IERC20(Currency.unwrap(currency0)).balanceOf(_jitLp)
+        );
+        IERC20(Currency.unwrap(currency1)).approve(
+            address(liquidityTimeCommitmentHook),
+            IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp)
+        );
 
-        // _liquidityTimeCommitmentRouter.modifyLiquidity(
-        //     key,
-        //     LIQUIDITY_PARAMS,
-        //     hookData
+        _liquidityTimeCommitmentRouter.modifyLiquidity(
+            key,
+            LIQUIDITY_PARAMS,
+            hookData
+        );
+        // // Expected JIT lp position key
+        // bytes32 jitPositionKey = liquidityTimeCommitmentData.getPositionKey(
+        //     LIQUIDITY_PARAMS
         // );
-        // // // Expected JIT lp position key
-        // // bytes32 jitPositionKey = liquidityTimeCommitmentData.getPositionKey(
-        // //     LIQUIDITY_PARAMS
-        // // );
 
-        // (uint256 amount0, uint256 amount1) = jitLiquidityManager
-        //     .getClaimableLiquidityOnCurrencies(key);
-
-        // // console.log("JIT Position Key:", uint256(jitPositionKey));
+        (uint256 amount0, uint256 amount1) = jitLiquidityManager
+            .getClaimableLiquidityOnCurrencies(key);
+        vm.stopPrank();
+        // console.log("JIT Position Key:", uint256(jitPositionKey));
+        console.log(
+            "Expected JIT Liquidity Manager: ",
+            address(jitLiquidityManager)
+        );
         // console.log(
-        //     "Expected JIT Liquidity Manager: ",
-        //     address(jitLiquidityManager)
+        //     "Actual JIT Liquidity Manager: ",
+        //     address(
+        //         liquidityTimeCommitmentHook.getLPLiquidityManager(
+        //             jitPositionKey,
+        //             LPType.JIT
+        //         )
+        //     )
         // );
-        // // console.log(
-        // //     "Actual JIT Liquidity Manager: ",
-        // //     address(
-        // //         liquidityTimeCommitmentHook.getLPLiquidityManager(
-        // //             jitPositionKey,
-        // //             LPType.JIT
-        // //         )
-        // //     )
-        // // );
-        // console.log("amount0: ", amount0);
-        // console.log("amount1: ", amount1);
-        // vm.stopPrank();
+        console.log("amount0: ", amount0);
+        console.log("amount1: ", amount1);
+        vm.stopPrank();
 
         // This call is unlocked by the poolManager
         // then it is supposed to send the

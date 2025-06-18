@@ -1,19 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test, console} from "forge-std/Test.sol";
-import "v4-core/types/Currency.sol";
-import "@uniswap/v4-core/test/utils/Deployers.sol";
-import {IHooks} from "v4-core/interfaces/IHooks.sol";
-
-import "../helpers/LiquidityTimeCommitmentWrapper.sol";
-
-contract LiquidityTimeCommitmentDataTest is Test, Deployers {
-    using LiquidityTimeCommitmentDataLibrary for *;
-    using CurrencyLibrary for Currency;
-    using TimeCommitmentLibrary for *;
-
-    address internal liquidityProvider = makeAddr("liquidityProvider");
+import "../helpers/LiquidityTimeCommitmentDataStateHelper.sol";
+contract LiquidityTimeCommitmentDataTest is
+    LiquidityTimeCommitmentDataStateHelper
+{
     LiquidityTimeCommitmentWrapper liquidityTimeCommitmentDataLibrary;
     function setUp() public {
         deployAndMint2Currencies();
@@ -24,39 +15,11 @@ contract LiquidityTimeCommitmentDataTest is Test, Deployers {
         );
     }
 
-    function test__Unit__getTimeCommitmentFromLiquidityTimeCommitmentData()
+    function test__Unit__getTimeCommitmentFromJitLiquidityTimeCommitmentData()
         public
     {
-        vm.roll(21_200_900);
-        TimeCommitment memory underlyingTimeCommitment = TimeCommitment(
-            true,
-            block.number + 1,
-            block.number + 1
-        );
-        PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 3000,
-            tickSpacing: 60,
-            hooks: IHooks(address(0))
-        });
-        ModifyLiquidityParams memory liquidityParams = ModifyLiquidityParams({
-            tickLower: -120,
-            tickUpper: 120,
-            liquidityDelta: 1000e18,
-            salt: bytes32(0)
-        });
-
         LiquidityTimeCommitmentData
-            memory liquidityTimeCommitmentData = LiquidityTimeCommitmentData(
-                liquidityProvider,
-                poolKey,
-                liquidityParams,
-                underlyingTimeCommitment.toBytes(),
-                true,
-                true
-            );
-
+            memory liquidityTimeCommitmentData = stateHelper__JITCommitmentDefaultPositiveLiquiditySettings();
         TimeCommitment
             memory timeCommitment = liquidityTimeCommitmentDataLibrary
                 .getTimeCommitment(liquidityTimeCommitmentData);
@@ -65,9 +28,38 @@ contract LiquidityTimeCommitmentDataTest is Test, Deployers {
         assertEq(timeCommitment.endingBlock, block.number + 1);
         LiquidityTimeCommitmentData
             memory invalidLiquidityTimeCommitmentData = LiquidityTimeCommitmentData({
-                liquidityProvider: liquidityProvider,
-                poolKey: poolKey,
-                liquidityParams: liquidityParams,
+                liquidityProvider: liquidityTimeCommitmentData
+                    .liquidityProvider,
+                poolKey: liquidityTimeCommitmentData.poolKey,
+                liquidityParams: liquidityTimeCommitmentData.liquidityParams,
+                hookData: bytes("garbage"),
+                settleUsingBurn: true,
+                takeClaims: true
+            });
+        vm.expectRevert(
+            InvalidRawData___RawDataDoesNotDecodeToTimeCommitment.selector
+        );
+        liquidityTimeCommitmentDataLibrary.getTimeCommitment(
+            invalidLiquidityTimeCommitmentData
+        );
+    }
+    function test__Unit__getTimeCommitmentFromPlpLiquidityTimeCommitmentData()
+        public
+    {
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = stateHelper__PLPCommitmentDefaultPositiveLiquiditySettings();
+        TimeCommitment
+            memory timeCommitment = liquidityTimeCommitmentDataLibrary
+                .getTimeCommitment(liquidityTimeCommitmentData);
+        assertEq(timeCommitment.isJIT, false);
+        assertEq(timeCommitment.startingBlock, block.number + 1);
+        assertEq(timeCommitment.endingBlock, block.number + 5);
+        LiquidityTimeCommitmentData
+            memory invalidLiquidityTimeCommitmentData = LiquidityTimeCommitmentData({
+                liquidityProvider: liquidityTimeCommitmentData
+                    .liquidityProvider,
+                poolKey: liquidityTimeCommitmentData.poolKey,
+                liquidityParams: liquidityTimeCommitmentData.liquidityParams,
                 hookData: bytes("garbage"),
                 settleUsingBurn: true,
                 takeClaims: true
@@ -80,5 +72,69 @@ contract LiquidityTimeCommitmentDataTest is Test, Deployers {
         );
     }
 
-    function test__Unit__getPositionKey() public {}
+    function test__Unit__getPositionKey() public {
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = stateHelper__JITCommitmentDefaultPositiveLiquiditySettings();
+        bytes32 positionKey = liquidityTimeCommitmentDataLibrary.getPositionKey(
+            liquidityTimeCommitmentData,
+            liquidityTimeCommitmentData.liquidityParams
+        );
+        assertLt(0, uint256(positionKey));
+    }
+
+    function test__Unit__isLookingToAddLiquidity() public {
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = stateHelper__JITCommitmentDefaultPositiveLiquiditySettings();
+        bool isLookingToAddLiquidity = liquidityTimeCommitmentDataLibrary
+            .isLookingToAddLiquidity(liquidityTimeCommitmentData);
+        assertEq(isLookingToAddLiquidity, true);
+    }
+
+    function test__Unit__isLookingToRemoveLiquidity() public {
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = stateHelper__JITCommitmentDefaultNegativeLiquiditySettings();
+        bool isLookingToRemoveLiquidity = liquidityTimeCommitmentDataLibrary
+            .isLookingToRemoveLiquidity(liquidityTimeCommitmentData);
+        assertEq(isLookingToRemoveLiquidity, true);
+    }
+
+    function test__Unit__fromBytesToLiquidityTimeCommitmentData() public {
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = stateHelper__JITCommitmentDefaultPositiveLiquiditySettings();
+        bytes memory encodedLiquidityTimeCommitmentData = abi.encode(
+            liquidityTimeCommitmentData
+        );
+        LiquidityTimeCommitmentData
+            memory decodedLiquidityTimeCommitmentData = liquidityTimeCommitmentDataLibrary
+                .fromBytesToLiquidityTimeCommitmentData(
+                    encodedLiquidityTimeCommitmentData
+                );
+        TimeCommitment
+            memory timeCommitment = liquidityTimeCommitmentDataLibrary
+                .getTimeCommitment(decodedLiquidityTimeCommitmentData);
+        assertEq(timeCommitment.isJIT, true);
+        assertEq(timeCommitment.startingBlock, block.number + 1);
+        assertEq(timeCommitment.endingBlock, block.number + 1);
+        bytes memory encodedInvalidLiquidityTimeCommitmentData = abi.encode(
+            LiquidityTimeCommitmentData({
+                liquidityProvider: liquidityTimeCommitmentData
+                    .liquidityProvider,
+                poolKey: liquidityTimeCommitmentData.poolKey,
+                liquidityParams: liquidityTimeCommitmentData.liquidityParams,
+                hookData: bytes("garbage"),
+                settleUsingBurn: true,
+                takeClaims: true
+            })
+        );
+
+        vm.expectRevert(
+            InvalidHookData___rawDataDoesNotDecodeToLiquidityTimeCommitmentData
+                .selector
+        );
+        liquidityTimeCommitmentDataLibrary
+            .fromBytesToLiquidityTimeCommitmentData(
+                encodedInvalidLiquidityTimeCommitmentData
+            );
+    }
+    // TODO: Missing coverage for the rest of functions ...
 }

@@ -8,21 +8,17 @@ import {Position} from "v4-core/libraries/Position.sol";
 import "v4-core/types/Currency.sol";
 import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import "../libs/LiquidityManagerHelper.sol";
-import "../types/LiquidityTimeCommitmentData.sol";
-import "../interfaces/ILiquidityManager.sol";
+import "../LiquidityTimeCommitmentHookStorageAdmin.sol";
 
 error IncompatiblePositionTimeCommitments();
 error UnauthorizedAction___MethodOnlyAvailableForPLP();
 error UnauthorizedAction___MethodOnlyAvailableForJIT();
 error UnsuccessfulLiquidityRouting___LPTypeNotSupported();
 
-enum LPType {
-    NONE, //NOTE: This is the default LP type, when LP does not have any position
-    PLP, //NOTE: This is the PLP LP
-    JIT //NOTE: This is the JIT LP
-}
-
-contract LiquidityTimeCommitmentHook is BaseHook {
+contract LiquidityTimeCommitmentHook is
+    BaseHook,
+    LiquidityTimeCommitmentHookStorageAdmin
+{
     using SafeCast for *;
     using LiquidityManagerHelper for IPoolManager;
     using Hooks for IHooks;
@@ -36,14 +32,6 @@ contract LiquidityTimeCommitmentHook is BaseHook {
     using Position for *; // NOTE: This is mostly use to query positionKeys to them
     // associate position keys with time commitments
 
-    mapping(bytes32 positionKey => LiquidityTimeCommitmentData)
-        private liquidityPositionsTimeCommitmentData;
-
-    mapping(bytes32 positionKey => LPType) private liquidityPositionType;
-
-    mapping(bytes32 positionKey => mapping(LPType => ILiquidityManager))
-        private liquidityManagers;
-
     //TODO: Is the sender on afterAddLiquidity the LP?
     // If ii is it eeasilly gfollows ..
     modifier onlyPLPAuthorized(
@@ -55,12 +43,24 @@ contract LiquidityTimeCommitmentHook is BaseHook {
             liquidityParams.tickUpper,
             liquidityParams.salt
         );
-        if (liquidityPositionType[liquidityPositionKey] != LPType.PLP) {
+        if (
+            _storage.getLiquidityPositionType(liquidityPositionKey) !=
+            LPType.PLP
+        ) {
             revert UnauthorizedAction___MethodOnlyAvailableForPLP();
         }
         _;
     }
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
+
+    constructor(
+        IPoolManager _manager,
+        ILiquidityTimeCommitmentHookStorage _liquidityTimeCommitmentHookStorage
+    )
+        BaseHook(_manager)
+        LiquidityTimeCommitmentHookStorageAdmin(
+            _liquidityTimeCommitmentHookStorage
+        )
+    {}
 
     function getHookPermissions()
         public
@@ -94,6 +94,16 @@ contract LiquidityTimeCommitmentHook is BaseHook {
     //NOTE: At this point of the transaction the HookData has been already verified
     // to be correct or not, if not correct the transaction would have ended on the router
     //
+    // function getPositionKey
+    // TODO: There is potentially more usefull information needed to be broadcasted
+    // to the blockchain ... TBD
+    event LiquidityTimeCommitmentHookInitialized(
+        bytes32 indexed liquidityPositionKey
+    );
+    event LiquidityAmountsToBeAdded(
+        uint256 indexed liquidityOnCurrency0,
+        uint256 indexed liquidityOnCurrency1
+    );
     function _beforeAddLiquidity(
         address sender,
         PoolKey calldata key,
@@ -101,62 +111,74 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         bytes calldata hookData
     ) internal override onlyPoolManager returns (bytes4) {
         //NOTE: This performs the checks that the hookData is valid
+
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = hookData
                 .fromBytesToLiquidityTimeCommitmentData();
 
         bytes32 liquidityPositionKey = liquidityTimeCommitmentData
             .getPositionKey(params);
-
+        // NOTE: The time commitment is assumed to be valid because
+        // it was checked before being entered
         TimeCommitment
             memory enteredTimeCommitment = liquidityTimeCommitmentData
                 .getTimeCommitment();
 
-        // NOTE: The time commitment is assumed to be valid because
-        // it was checked before being entered
-        TimeCommitment
-            memory existingTimeCommitment = liquidityPositionsTimeCommitmentData[
-                liquidityPositionKey
-            ].getTimeCommitment();
+        //NOTE: If this is the first time adding liquidty with commitment
+        // the existingTimeCommitment is null, this is a special case then.
+        //This can be checked with try/catch becasue  all timeCommitments
+        // are validated before arriving here ...
 
-        if (
-            (!(existingTimeCommitment.isJIT) && enteredTimeCommitment.isJIT) ||
-            (existingTimeCommitment.isJIT && !(enteredTimeCommitment.isJIT))
+        try _storage.getTimeCommitment(liquidityPositionKey) returns (
+            TimeCommitment memory existingTimeCommitment
         ) {
-            revert IncompatiblePositionTimeCommitments();
+            if (
+                existingTimeCommitment.isJIT != enteredTimeCommitment.isJIT ||
+                !(existingTimeCommitment.isJIT) !=
+                !(enteredTimeCommitment.isJIT)
+            ) {
+                revert IncompatiblePositionTimeCommitments();
+            }
+        } catch (bytes memory) {
+            //TODO: The reason is specifically decoded to the error
+            // on the TimeCommitment library
+            // InvalidRawData___RawDataDoesNotDecodeToTimeCommitment()
+            emit LiquidityTimeCommitmentHookInitialized(liquidityPositionKey);
         }
 
-        BalanceDelta liquidityDelta = poolManager.getPositionLiquidityDelta(
-            key,
-            params
-        );
+        (
+            uint256 liquidityOnCurrency0,
+            uint256 liquidityOnCurrency1
+        ) = getLiquiditiesPositiveDeltas(key, params);
 
-        (int128 liquidityOnCurrency0, int128 liquidityOnCurrency1) = (
-            liquidityDelta.amount0(),
-            liquidityDelta.amount1()
+        emit LiquidityAmountsToBeAdded(
+            liquidityOnCurrency0,
+            liquidityOnCurrency1
         );
 
         _settleLiquidityOnCurrencies(
             key,
             liquidityTimeCommitmentData,
-            uint256(liquidityOnCurrency0.toUint128()),
-            uint256(liquidityOnCurrency1.toUint128())
+            liquidityOnCurrency0,
+            liquidityOnCurrency1
         );
 
-        liquidityPositionsTimeCommitmentData[
-            liquidityPositionKey
-        ] = liquidityTimeCommitmentData;
+        _storage.setLiquidityTimeCommitmentData(
+            liquidityPositionKey,
+            liquidityTimeCommitmentData
+        );
 
         _routeLiquidity(
             key,
             liquidityPositionKey,
-            uint256(liquidityOnCurrency0.toUint128()),
-            uint256(liquidityOnCurrency1.toUint128()),
+            liquidityOnCurrency0,
+            liquidityOnCurrency1,
             liquidityTimeCommitmentData
         );
 
         return IHooks.beforeAddLiquidity.selector;
     }
+
     // TODO: This is guarded to PLP LP's, so we need to find a method
     // to associate the calldata with the timeCommitments
     // to guard this functions
@@ -171,19 +193,14 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         internal
         virtual
         override
-        onlyPLPAuthorized(sender, params)
+        // onlyPLPAuthorized(sender, params)
         onlyPoolManager
         returns (bytes4, BalanceDelta)
     {
-        return
-            _afterAddLiquidity(
-                sender,
-                key,
-                params,
-                delta,
-                feesAccrued,
-                hookData
-            );
+        return (
+            IHooks.afterAddLiquidity.selector,
+            BalanceDeltaLibrary.ZERO_DELTA
+        );
     }
     // TODO: This is guarded to JIT LP's, so we need to find a method
     // to associate the calldata with the timeCommitments
@@ -209,6 +226,25 @@ contract LiquidityTimeCommitmentHook is BaseHook {
         bytes calldata hookData
     ) internal virtual override returns (bytes4, int128) {
         return _afterSwap(sender, key, params, delta, hookData);
+    }
+
+    function getLiquiditiesPositiveDeltas(
+        PoolKey memory poolKey,
+        ModifyLiquidityParams calldata params
+    )
+        internal
+        view
+        returns (uint256 liquidityOnCurrency0, uint256 liquidityOnCurrency1)
+    {
+        BalanceDelta liquidityDelta = poolManager.getPositionLiquidityDelta(
+            poolKey,
+            params
+        );
+
+        (liquidityOnCurrency0, liquidityOnCurrency1) = (
+            uint256(liquidityDelta.amount0().toUint128()),
+            uint256(liquidityDelta.amount1().toUint128())
+        );
     }
 
     //NOTE: The initial liquidity request with the funds is assumed to
@@ -268,41 +304,37 @@ contract LiquidityTimeCommitmentHook is BaseHook {
     ) internal {
         //
         if (liquidityTimeCommitmentData.getTimeCommitment().isJIT) {
-            liquidityPositionType[liquidityPositionKey] = LPType.JIT; //NOTE: This is a JIT LP
+            _storage.setLiquidityPositionType(liquidityPositionKey, LPType.JIT); //NOTE: This is a JIT LP
             _takeLiquidityOnCurrencies(
                 key,
-                address(liquidityManagers[liquidityPositionKey][LPType.JIT]),
+                address(
+                    _storage.getLiquidityManager(
+                        liquidityPositionKey,
+                        LPType.JIT
+                    )
+                ),
                 liquidityOnCurrency0,
                 liquidityOnCurrency1
             );
         } else if (!liquidityTimeCommitmentData.getTimeCommitment().isJIT) {
-            liquidityPositionType[liquidityPositionKey] = LPType.PLP; //NOTE: This is a PLP LP
+            _storage.setLiquidityPositionType(liquidityPositionKey, LPType.PLP); //NOTE: This is a PLP LP
             _takeLiquidityOnCurrencies(
                 key,
-                address(liquidityManagers[liquidityPositionKey][LPType.PLP]),
+                address(
+                    _storage.getLiquidityManager(
+                        liquidityPositionKey,
+                        LPType.PLP
+                    )
+                ),
                 liquidityOnCurrency0,
                 liquidityOnCurrency1
             );
         } else {
-            liquidityPositionType[liquidityPositionKey] = LPType.NONE; //NOTE: This is a NONE LP
+            _storage.setLiquidityPositionType(
+                liquidityPositionKey,
+                LPType.NONE
+            ); //NOTE: This is a NONE LP
             revert UnsuccessfulLiquidityRouting___LPTypeNotSupported();
         }
-    }
-
-    //NOTE: This has special guards, this function is provisional
-    // only forr testing the flow of beforeSwap
-    function setLPLiquidityManager(
-        bytes32 positionKey,
-        LPType lpType,
-        ILiquidityManager liquidityManager
-    ) external {
-        liquidityManagers[positionKey][lpType] = liquidityManager;
-    }
-
-    function getLPLiquidityManager(
-        bytes32 positionKey,
-        LPType lpType
-    ) external view returns (ILiquidityManager liquidityManager) {
-        liquidityManager = liquidityManagers[positionKey][lpType];
     }
 }
