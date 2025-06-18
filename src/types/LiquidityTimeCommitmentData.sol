@@ -32,7 +32,6 @@ error InvalidHookData___rawDataDoesNotDecodeToLiquidityTimeCommitmentData();
 library LiquidityTimeCommitmentDataLibrary {
     using TimeCommitmentLibrary for *;
     using Position for *; // Allows us to query positionKeys to associate position keys with time commitments
-
     /**
      * @dev Retrieves the TimeCommitment from the given LiquidityCallbackData.
      *      Validates that the hookData in LiquidityCallbackData decodes to a TimeCommitment.
@@ -47,6 +46,14 @@ library LiquidityTimeCommitmentDataLibrary {
             .fromBytesToTimeCommitment();
     }
 
+    /**
+     * @notice Computes the position key for a given liquidity time commitment.
+     * @dev This function calculates the position key using the liquidity provider's address
+     *      and the parameters associated with modifying liquidity.
+     * @param liquidityTimeCommitmentData The LiquidityTimeCommitmentData which includes the liquidity provider.
+     * @param liquidityParams The ModifyLiquidityParams containing tick bounds and a salt for position key calculation.
+     * @return positionKey The computed position key for the given liquidity commitment.
+     */
     function getPositionKey(
         LiquidityTimeCommitmentData memory liquidityTimeCommitmentData,
         ModifyLiquidityParams memory liquidityParams
@@ -195,11 +202,4 @@ library LiquidityTimeCommitmentDataLibrary {
             _liquidityTimeCommitmentData
         );
     }
-
-    // function fromMsgDataToLiquidityTimeCommitmentData(
-    //     bytes memory msgData
-    // ) internal view returns (LiquidityTimeCommitmentData memory) {
-    //     // This is the same as fromBytesToLiquidityTimeCommitmentData
-    //     return fromBytesToLiquidityTimeCommitmentData(msgData);
-    // }
 }

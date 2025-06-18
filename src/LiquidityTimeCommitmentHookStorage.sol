@@ -12,7 +12,7 @@ contract LiquidityTimeCommitmentHookStorage is
 
     mapping(bytes32 positionKey => LPType) private liquidityPositionType;
 
-    mapping(bytes32 positionKey => mapping(LPType => ILiquidityManager))
+    mapping(bytes32 positionKey => mapping(LPType => ILiquidityTimeCommitmentManager))
         private liquidityManagers;
 
     function getLiquidityTimeCommitmentData(
@@ -39,14 +39,14 @@ contract LiquidityTimeCommitmentHookStorage is
     function getLiquidityManager(
         bytes32 positionKey,
         LPType lpType
-    ) external view returns (ILiquidityManager) {
+    ) external view returns (ILiquidityTimeCommitmentManager) {
         return liquidityManagers[positionKey][lpType];
     }
 
     function setLiquidityManager(
         bytes32 positionKey,
         LPType lpType,
-        ILiquidityManager liquidityManager
+        ILiquidityTimeCommitmentManager liquidityManager
     ) external {
         liquidityManagers[positionKey][lpType] = liquidityManager;
     }

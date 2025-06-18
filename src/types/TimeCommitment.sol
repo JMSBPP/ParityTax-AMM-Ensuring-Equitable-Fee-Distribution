@@ -129,6 +129,11 @@ library TimeCommitmentLibrary {
         encodedTimeCommitment = abi.encode(validatedTimeCommitment);
     }
 
+    /**
+     * @dev Decodes a TimeCommitment from bytes.
+     * @param rawData The bytes data to decode.
+     * @return timeCommitment The decoded TimeCommitment.
+     */
     function fromBytesToTimeCommitment(
         bytes memory rawData
     ) internal view returns (TimeCommitment memory timeCommitment) {

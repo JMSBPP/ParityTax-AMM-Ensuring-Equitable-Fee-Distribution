@@ -1,5 +1,11 @@
 # `LiquidityTimeCommitmentHook`
 
+## `ADD LIQUIDITY FLOW`
+
+- The data flow is exhibited on the [addLiquidity sequence diagram](../communication/sequenceDiagrams/addLiquidity.excalidraw.png)
+
+## `REMOVE LIQUIDITY FLOW`
+
 
 ## `SWAP FLOW`
 

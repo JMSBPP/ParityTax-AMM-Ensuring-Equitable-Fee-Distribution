@@ -5,17 +5,13 @@ pragma solidity ^0.8.24;
 
 //========================TEST-UTILS =======================
 
-import {Test, console, Vm} from "forge-std/Test.sol";
-import "@uniswap/v4-core/test/utils/Deployers.sol";
-import "../utils/LiquidityTimeCommitmentRouterTestSetUp.sol";
-import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
-import "../../src/hooks/LiquidityTimeCommitmentHook.sol";
-import "../../src/LiquidityTimeCommitmentManager.sol";
-import "../../src/LiquidityTimeCommitmentHookStorage.sol";
-
-contract LiquidityTimeCommitmentHookTest is
-    Test,
-    LiquidityTimeCommitmentRouterTestSetup
+import "../helpers/LiquidityTimeCommitmentHookStateHelper.sol";
+import "v4-periphery/src/utils/HookMiner.sol";
+/// @title Liquidity Time Commitment Hook Test
+/// @notice This contract tests the functionality of the Liquidity Time Commitment Hook
+/// @dev This contract sets up a testing environment for verifying the behavior of the Liquidity Time Commitment Hook
+contract LiquidityTimeCommitmenUnitHookTest is
+    LiquidityTimeCommitmentHookStateHelper
 {
     using TimeCommitmentLibrary for *;
     using LiquidityTimeCommitmentDataLibrary for *;
@@ -26,11 +22,7 @@ contract LiquidityTimeCommitmentHookTest is
 
     // 0. We need initally a couple of addresses one representing
     // A PLP and another representing a JIT
-    address internal _plpLp = makeAddr("PLP");
-    address internal _jitLp = makeAddr("JIT");
 
-    //========CONTRACTS TO BE TESTED =============================
-    LiquidityTimeCommitmentHook internal liquidityTimeCommitmentHook;
     LiquidityTimeCommitmentHookStorage
         internal liquidityTimeCommitmentHookStorage;
     LiquidityTimeCommitmentManager internal plpLiquidityManager;
@@ -135,70 +127,32 @@ contract LiquidityTimeCommitmentHookTest is
         vm.roll(100);
     }
 
+    /// @notice Tests the routing of add liquidity operation to JIT Liquidity Manager.
+    /// @dev Sets up a JIT time commitment and routes liquidity modification through the JIT manager.
+    /// The function logs block numbers, balance approvals, and liquidity amounts
+    // for debugging.
     function test__beforeAddLiquidity__shouldRouteToJITLiquidityManager()
         external
     {
-        //1. We set the hookData params for a JIT
-        vm.roll(100);
+        bytes
+            memory hookData = test__StateHelper_beforeAddLiquidity__JITFirstTimeCommitedPosition();
         vm.startPrank(_jitLp);
-        TimeCommitment memory jitTimeCommitment = true.setTimeCommitment(
-            block.number + 1, // startingBlock
-            block.number + 1 // endingBlock
-        );
-
-        console.log("Starting Block:", jitTimeCommitment.startingBlock);
-        console.log("Current Block:", block.number);
-        console.log("Ending Block:", jitTimeCommitment.endingBlock);
-
-        bytes memory hookData = jitTimeCommitment.toBytes();
-        console.logBytes(hookData);
-        console.log(hookData.length);
-        console.log(IERC20(Currency.unwrap(currency0)).balanceOf(_jitLp));
-        console.log(IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp));
-        IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp);
-        IERC20(Currency.unwrap(currency0)).approve(
-            address(liquidityTimeCommitmentHook),
-            IERC20(Currency.unwrap(currency0)).balanceOf(_jitLp)
-        );
-        IERC20(Currency.unwrap(currency1)).approve(
-            address(liquidityTimeCommitmentHook),
-            IERC20(Currency.unwrap(currency1)).balanceOf(_jitLp)
-        );
 
         _liquidityTimeCommitmentRouter.modifyLiquidity(
             key,
             LIQUIDITY_PARAMS,
             hookData
         );
-        // // Expected JIT lp position key
-        // bytes32 jitPositionKey = liquidityTimeCommitmentData.getPositionKey(
-        //     LIQUIDITY_PARAMS
-        // );
 
         (uint256 amount0, uint256 amount1) = jitLiquidityManager
             .getClaimableLiquidityOnCurrencies(key);
         vm.stopPrank();
-        // console.log("JIT Position Key:", uint256(jitPositionKey));
+
         console.log(
             "Expected JIT Liquidity Manager: ",
             address(jitLiquidityManager)
         );
-        // console.log(
-        //     "Actual JIT Liquidity Manager: ",
-        //     address(
-        //         liquidityTimeCommitmentHook.getLPLiquidityManager(
-        //             jitPositionKey,
-        //             LPType.JIT
-        //         )
-        //     )
-        // );
         console.log("amount0: ", amount0);
         console.log("amount1: ", amount1);
-        vm.stopPrank();
-
-        // This call is unlocked by the poolManager
-        // then it is supposed to send the
-        // CallbackData with keys to the
-        // hook
     }
 }

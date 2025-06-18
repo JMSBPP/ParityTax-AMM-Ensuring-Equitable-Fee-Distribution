@@ -4,6 +4,10 @@ pragma solidity ^0.8.24;
 import "v4-periphery/test/shared/PosmTestSetup.sol";
 import "../../src/routers/LiquidityTimeCommitmentRouter.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
+/// @title LiquidityTimeCommitmentRouterTestSetup
+/// @notice A state helper contract that facilitates tests for the LiquidityTimeCommitmentRouter
+/// @dev This contract is a child of PosmTestSetup and adds additional state for the
+//  LiquidityTimeCommitmentRouter
 contract LiquidityTimeCommitmentRouterTestSetup is PosmTestSetup {
     LiquidityTimeCommitmentRouter internal _liquidityTimeCommitmentRouter;
 

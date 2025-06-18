@@ -5,6 +5,9 @@ import {Test, console} from "forge-std/Test.sol";
 import "../helpers/TimeCommitmentLibraryWrapper.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
+/// @title Test suite for TimeCommitmentLibrary
+/// @notice This contract contain tests for TimeCommitmentLibrary
+/// @dev This contract is used to test the TimeCommitmentLibrary
 contract TimeCommitmentTest is Test {
     using TimeCommitmentLibrary for *;
 
@@ -13,6 +16,10 @@ contract TimeCommitmentTest is Test {
         timeCommitmentLibrary = new TimeCommitmentLibraryWrapper();
     }
 
+    /// @notice Test that a JIT TimeCommitment is correctly set.
+    /// @dev This function tests that a JIT TimeCommitment is correctly set.
+    /// It tests that the commitment is set with the correct values and that the
+    /// remaining commitment and duration are correctly calculated.
     function test__Unit__setJitTimeCommiment() external {
         vm.roll(100);
         bool isJIT = true;
@@ -30,6 +37,11 @@ contract TimeCommitmentTest is Test {
         );
         assertEq(0, timeCommitmentLibrary.getDuration(jitTimeCommitment));
     }
+
+    /// @notice Test that a PLP TimeCommitment is correctly set.
+    /// @dev This function tests that a PLP TimeCommitment is correctly set.
+    /// It tests that the commitment is set with the correct values and that the
+    /// remaining commitment and duration are correctly calculated.
     function test__Unit__setPlpTimeCommitment() external {
         vm.roll(100);
         bool isJIT = true;
@@ -51,6 +63,14 @@ contract TimeCommitmentTest is Test {
         );
     }
 
+    /// @notice Test that a TimeCommitment is correctly set.
+    /// @dev This function tests that a TimeCommitment is correctly set.
+    /// It tests that the commitment is set with the correct values and that the
+    /// remaining commitment and duration are correctly calculated.
+    /// @param isJIT Whether the commitment is a JIT commitment or not.
+    /// @param startingBlock The block number when the commitment starts.
+    /// @param endingBlock The block number when the commitment ends.
+    /// @param blockNumber The block number to set the commitment on.
     function test__Fuzz__setTimeCommitment(
         bool isJIT,
         uint256 startingBlock,
@@ -114,6 +134,12 @@ contract TimeCommitmentTest is Test {
         }
     }
 
+    /**
+     * @notice Tests the decoding of a TimeCommitment from bytes.
+     * @dev This function tests both the failure case with invalid data and the success case with valid data.
+     * It first verifies that garbage data reverts with an appropriate error,
+     * then encodes a valid TimeCommitment, decodes it, and checks equivalence.
+     */
     function test__Unit__DecodeTimeCommitment() external {
         vm.roll(100);
         bytes memory garbage = bytes("garbageData");
@@ -121,11 +147,12 @@ contract TimeCommitmentTest is Test {
             InvalidRawData___RawDataDoesNotDecodeToTimeCommitment.selector
         );
         timeCommitmentLibrary.fromBytesToTimeCommitment(garbage);
+
         TimeCommitment memory validTimeCommitment = timeCommitmentLibrary
             .setTimeCommitment(false, 101, 200);
-
         bytes memory encodedTimeCommitment = abi.encode(validTimeCommitment);
         console.log(encodedTimeCommitment.length);
+
         TimeCommitment memory decodedTimeCommitment = timeCommitmentLibrary
             .fromBytesToTimeCommitment(encodedTimeCommitment);
 

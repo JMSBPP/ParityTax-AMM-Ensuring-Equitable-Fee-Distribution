@@ -10,12 +10,22 @@ import "v4-core/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "v4-core/libraries/SqrtPriceMath.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
+/// @title Liquidity Manager Helper Library
+/// @notice Provides utility functions for managing liquidity in a pool
+/// @dev Utilizes various mathematical and state libraries to calculate liquidity deltas
 library LiquidityManagerHelper {
     using SafeCast for *;
     using TickMath for int24;
     using StateLibrary for IPoolManager;
     using SqrtPriceMath for uint160;
 
+    /**
+     * @notice Calculates the position liquidity delta for a given pool and liquidity parameters.
+     * @param poolManager The pool manager interface.
+     * @param poolKey The key of the pool containing specific parameters.
+     * @param liquidityParams The parameters defining the liquidity modification.
+     * @return liquidityDelta The balance delta representing the liquidity change.
+     */
     function getPositionLiquidityDelta(
         IPoolManager poolManager,
         PoolKey memory poolKey,

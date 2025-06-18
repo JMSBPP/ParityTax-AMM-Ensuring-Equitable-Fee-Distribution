@@ -2,19 +2,21 @@
 pragma solidity ^0.8.24;
 
 import "v4-periphery/src/base/SafeCallback.sol";
-import "./interfaces/ILiquidityManager.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
+import "./interfaces/ILiquidityTimeCommitmentManager.sol";
 import "v4-core/types/Currency.sol";
 import "v4-periphery/src/base/ImmutableState.sol";
 
-contract LiquidityTimeCommitmentManager is ImmutableState, ILiquidityManager {
+contract LiquidityTimeCommitmentManager is
+    ImmutableState,
+    ILiquidityTimeCommitmentManager
+{
     using CurrencyLibrary for Currency;
     constructor(IPoolManager _poolManager) ImmutableState(_poolManager) {}
 
     function getClaimableLiquidityOnCurrencies(
         PoolKey memory poolKey
     )
-        public
+        external
         view
         virtual
         returns (
