@@ -15,14 +15,15 @@ import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol
 import {Currency} from "v4-core/types/Currency.sol";
 import {SafeCallback} from "v4-periphery/src/base/SafeCallback.sol";
 
-//====ROUTER SPECIFIC =====
+import "../libs/LiquidityManagerHelper.sol";
 
+error InvalidState___LiquidityChangeNotValid();
 contract LiquidityTimeCommitmentRouter is SafeCallback {
     using TransientStateLibrary for IPoolManager;
-
     using StateLibrary for IPoolManager;
     using LiquidityTimeCommitmentDataLibrary for *;
     using TimeCommitmentLibrary for *;
+    using LiquidityManagerHelper for *;
     constructor(IPoolManager _manager) SafeCallback(_manager) {}
 
     function modifyLiquidity(
@@ -100,39 +101,87 @@ contract LiquidityTimeCommitmentRouter is SafeCallback {
     // --> Valid withdrawal requests from PLP's
     // --> Valid deposit requests from JIT's
     // --> Valid deposit requests from PLP's
+    //===========PART OF THE ISSUE OF CurrencyNotSettled() ========
+
+    event LiquidityDeltas(int128 dx, int128 dy);
+    event LiquidityOnPosition(uint128 liquidityBefore, uint128 liquidityAfter);
+    //===========================================================
 
     function _unlockCallback(
         bytes calldata data
     ) internal override returns (bytes memory) {
         bytes memory encodedLiquidityTimeCommitmentData = data;
 
+        //NOTE: This is the same decoding done  on
+        // PoolModifyLiquidityTest for the
+        // CallbackData
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = encodedLiquidityTimeCommitmentData
                 .fromBytesToLiquidityTimeCommitmentData();
+        //NOTE: This is adddtional decoding/encoding
+        // done here to get the TimeCommmitment
+        // which is one of the reasons why we need
+        // a Custom liquidity router
         bytes memory hookData = liquidityTimeCommitmentData
             .fromLiquidityTimeCommitmentDataToBytes();
+
+        //NOTE: This is the same as in PoolModifyLiquidityTest
+
+        (uint128 liquidityBefore, , ) = poolManager.getPositionInfo(
+            liquidityTimeCommitmentData.poolKey.toId(),
+            address(this), //QUESTION: Is the router
+            // the owner of the position ?
+            liquidityTimeCommitmentData.liquidityParams.tickLower,
+            liquidityTimeCommitmentData.liquidityParams.tickUpper,
+            liquidityTimeCommitmentData.liquidityParams.salt
+        );
+
+        //====FOR DEBUGGIN PURPOESES ONLY ======
+        // TODO: From the liquidity params liquidityDelta which is
+        // a int128 I wnat to get the respective
+        // liquidityToBeAddedOnCurrency0,
+        // liquidityToBeAddedOnCurrency1
+        // NOTE: This is the same as in PoolModifyLiquidityTest
+        // The modifyLiquidity request from the LP
+        // get's forwarded to
+        // router -> manager -> hook ->
+        // liquidityManager -> manager -> router
         (BalanceDelta liquidityBalanceDelta, ) = poolManager.modifyLiquidity(
             liquidityTimeCommitmentData.poolKey,
             liquidityTimeCommitmentData.liquidityParams,
             hookData
         );
+        //===========PART OF THE ISSUE OF CurrencyNotSettled() ========
+
+        emit LiquidityDeltas(
+            liquidityBalanceDelta.amount0(),
+            liquidityBalanceDelta.amount1()
+        );
+        //===========================================================
+        (uint128 liquidityAfter, , ) = poolManager.getPositionInfo(
+            liquidityTimeCommitmentData.poolKey.toId(),
+            address(this), //QUESTION: Is the router
+            // the owner of the position ?
+            liquidityTimeCommitmentData.liquidityParams.tickLower,
+            liquidityTimeCommitmentData.liquidityParams.tickUpper,
+            liquidityTimeCommitmentData.liquidityParams.salt
+        );
+        emit LiquidityOnPosition(liquidityBefore, liquidityAfter);
+        if (
+            !poolManager.invariantModifyingLiquidity(
+                liquidityTimeCommitmentData.poolKey,
+                liquidityTimeCommitmentData.liquidityProvider,
+                address(this),
+                liquidityBefore,
+                liquidityTimeCommitmentData.liquidityParams,
+                liquidityAfter
+            )
+        ) {
+            revert InvalidState___LiquidityChangeNotValid();
+        }
 
         // TODO: We need to perform the checks for liquidityAfter all the
         // internal routing from manager and hooks has been done
         return abi.encode(liquidityBalanceDelta);
-    }
-
-    function _fetchBalances(
-        Currency currency,
-        address user,
-        address deltaHolder
-    )
-        internal
-        view
-        returns (uint256 userBalance, uint256 poolBalance, int256 delta)
-    {
-        userBalance = currency.balanceOf(user);
-        poolBalance = currency.balanceOf(address(poolManager));
-        delta = poolManager.currencyDelta(deltaHolder, currency);
     }
 }

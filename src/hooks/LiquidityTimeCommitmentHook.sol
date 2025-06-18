@@ -9,6 +9,14 @@ import "v4-core/types/Currency.sol";
 import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import "../libs/LiquidityManagerHelper.sol";
 import "../LiquidityTimeCommitmentHookStorageAdmin.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
+
+//=====PART OF THE ISSUE OF CurrencyNotSettled() ========
+import "v4-core/libraries/NonzeroDeltaCount.sol";
+
+event NonZeroDeltaCounts(uint256 counts);
+// =====================================================
 
 error IncompatiblePositionTimeCommitments();
 error UnauthorizedAction___MethodOnlyAvailableForPLP();
@@ -21,6 +29,8 @@ contract LiquidityTimeCommitmentHook is
 {
     using SafeCast for *;
     using LiquidityManagerHelper for IPoolManager;
+    using TransientStateLibrary for IPoolManager;
+    using StateLibrary for IPoolManager;
     using Hooks for IHooks;
     using CurrencySettler for Currency;
     using BalanceDeltaLibrary for BalanceDelta;
@@ -88,6 +98,8 @@ contract LiquidityTimeCommitmentHook is
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: true, //NOTE: This enables me the ability to transfer
             // JIT tax fee revenue to PLP's
+            //=====PART OF THE ISSUE OF CurrencyNotSettled() ========
+            // - NOTE: The true/false does not affect the error
             afterRemoveLiquidityReturnDelta: false
         });
     }
@@ -145,36 +157,49 @@ contract LiquidityTimeCommitmentHook is
             // InvalidRawData___RawDataDoesNotDecodeToTimeCommitment()
             emit LiquidityTimeCommitmentHookInitialized(liquidityPositionKey);
         }
-
-        (
-            uint256 liquidityOnCurrency0,
-            uint256 liquidityOnCurrency1
-        ) = getLiquiditiesPositiveDeltas(key, params);
-
-        emit LiquidityAmountsToBeAdded(
-            liquidityOnCurrency0,
-            liquidityOnCurrency1
+        (uint128 liquidityOnPositionBefore, , ) = poolManager.getPositionInfo(
+            key.toId(),
+            liquidityPositionKey
         );
 
-        _settleLiquidityOnCurrencies(
-            key,
-            liquidityTimeCommitmentData,
-            liquidityOnCurrency0,
-            liquidityOnCurrency1
-        );
+        // (
+        //     uint256 liquidityOnCurrency0,
+        //     uint256 liquidityOnCurrency1
+        // ) = getLiquiditiesPositiveDeltas(key, params);
+
+        // emit LiquidityAmountsToBeAdded(
+        //     liquidityOnCurrency0,
+        //     liquidityOnCurrency1
+        // );
+        // // Is
+
+        // _settleLiquidityOnCurrencies(
+        //     key,
+        //     liquidityTimeCommitmentData,
+        //     liquidityOnCurrency0,
+        //     liquidityOnCurrency1
+        // );
 
         _storage.setLiquidityTimeCommitmentData(
             liquidityPositionKey,
             liquidityTimeCommitmentData
         );
 
-        _routeLiquidity(
-            key,
-            liquidityPositionKey,
-            liquidityOnCurrency0,
-            liquidityOnCurrency1,
-            liquidityTimeCommitmentData
-        );
+        // _routeLiquidity(
+        //     key,
+        //     liquidityPositionKey,
+        //     liquidityOnCurrency0,
+        //     liquidityOnCurrency1,
+        //     liquidityTimeCommitmentData
+        // );
+
+        // TODO: Right after _routingLiquidity we want to retreive the deltas
+        // from transientStorage, for this one can use the NonZeroDelta library
+        //1. Create a branch specialized for this issue, with the code there ...
+        //2. Read the non-zero deltas from transientStorage
+        // 2.1 Read the counts.
+        // ========FOR-DEBUGIING PURPOSES======
+        // NOTE: This is not part of the core logic.
 
         return IHooks.beforeAddLiquidity.selector;
     }
