@@ -24,6 +24,9 @@
   - [Arquitecture](#arquitecture)
   - [Key-Metrics](#key-metrics)
   - [Setup](#setup)
+    - [Build](#build)
+    - [Test](#test)
+    - [Deploy](#deploy)
   - [Applications](#applications)
   - [Extensions \& Future Roadmap](#extensions--future-roadmap)
   - [Mathematical Appendix](#mathematical-appendix)
@@ -66,6 +69,15 @@ A more balanced liquidity ecosystem where:
 ## Key-Metrics
 
 ## Setup
+
+### Build
+
+### Test
+
+### Deploy
+
+
+
 
 ## Applications
 
