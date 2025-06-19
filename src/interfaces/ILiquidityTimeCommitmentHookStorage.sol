@@ -95,4 +95,42 @@ interface ILiquidityTimeCommitmentHookStorage {
         bytes32 positionKey,
         LPType lpType
     ) external;
+
+    /**
+     * @notice Stores the liquidity manager on transient storage.
+     * @dev This function stores the address of the liquidity manager on a predefined transient storage slot.
+     * @param liquidityManager The liquidity manager to be stored.
+     */
+    function storeLiquidityManagerOnTransientStorage(
+        ILiquidityTimeCommitmentManager liquidityManager
+    ) external;
+
+    /**
+     * @notice Retrieves the liquidity manager from transient storage.
+     * @dev This function retrieves the liquidity manager address stored on a predefined transient storage slot.
+     * @return liquidityManager The liquidity manager address stored on transient storage.
+     */
+    function getLiquidityManagerFromTransientStorage()
+        external
+        view
+        returns (ILiquidityTimeCommitmentManager);
+
+    /**
+     * @notice Stores the liquidity position key on transient storage.
+     * @dev This function stores the liquidity position key on a predefined transient storage slot.
+     * @param liquidityPositionKey The liquidity position key to be stored.
+     */
+    function storeLiquidityPositionKeyOnTransientStorage(
+        bytes32 liquidityPositionKey
+    ) external;
+
+    /**
+     * @notice Retrieves the liquidity position key from transient storage.
+     * @dev This function retrieves the liquidity position key stored on a predefined transient storage slot.
+     * @return liquidityPositionKey The liquidity position key stored on transient storage.
+     */
+    function getLiquidityPositionKeyFromTransientStorage()
+        external
+        view
+        returns (bytes32);
 }

@@ -8,12 +8,13 @@ import {ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import "v4-core/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "v4-core/libraries/SqrtPriceMath.sol";
-import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import "v4-core/libraries/StateLibrary.sol";
 import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
 
 import "v4-core/types/Currency.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-
+import "v4-core/types/Slot0.sol";
+import "v4-core/libraries/Pool.sol";
 /// @title Liquidity Manager Helper Library
 /// @notice Provides utility functions for managing liquidity in a pool
 /// @dev Utilizes various mathematical and state libraries to calculate liquidity deltas
@@ -24,42 +25,73 @@ library LiquidityManagerHelper {
     using SqrtPriceMath for uint160;
     using CurrencyLibrary for Currency;
     using TransientStateLibrary for IPoolManager;
+    using Slot0Library for *;
     /**
      * @notice Calculates the position liquidity delta for a given pool and liquidity parameters.
      * @param poolManager The pool manager interface.
      * @param poolKey The key of the pool containing specific parameters.
      * @param liquidityParams The parameters defining the liquidity modification.
-     * @return liquidityDelta The balance delta representing the liquidity change.
+     * @return delta The balance delta representing the liquidity change.
      */
     function getPositionLiquidityDelta(
         IPoolManager poolManager,
         PoolKey memory poolKey,
         ModifyLiquidityParams memory liquidityParams
-    ) internal view returns (BalanceDelta liquidityDelta) {
-        (uint160 currentSqrtPriceX96, , , ) = poolManager.getSlot0(
-            poolKey.toId()
-        );
+    ) internal view returns (BalanceDelta delta) {
+        int128 liquidityDelta = liquidityParams.liquidityDelta.toInt128();
+        int24 tickLower = liquidityParams.tickLower;
+        int24 tickUpper = liquidityParams.tickUpper;
 
-        liquidityDelta = toBalanceDelta(
-            SqrtPriceMath
-                .getAmount0Delta(
-                    currentSqrtPriceX96,
-                    liquidityParams.tickLower.getSqrtPriceAtTick(),
-                    liquidityParams.liquidityDelta.toInt128().toUint128(),
-                    true
-                )
-                .toInt128(),
-            SqrtPriceMath
-                .getAmount1Delta(
-                    currentSqrtPriceX96,
-                    liquidityParams.tickUpper.getSqrtPriceAtTick(),
-                    liquidityParams.liquidityDelta.toInt128().toUint128(),
-                    true
-                )
-                .toInt128()
-        );
+        if (liquidityDelta != 0) {
+            (uint160 sqrtPriceX96, int24 tick, , ) = poolManager.getSlot0(
+                poolKey.toId()
+            );
+            if (tick < tickLower) {
+                // current tick is below the passed range; liquidity can only become in range by crossing from left to
+                // right, when we'll need _more_ currency0 (it's becoming more valuable) so user must provide it
+                delta = toBalanceDelta(
+                    SqrtPriceMath
+                        .getAmount0Delta(
+                            TickMath.getSqrtPriceAtTick(tickLower),
+                            TickMath.getSqrtPriceAtTick(tickUpper),
+                            liquidityDelta
+                        )
+                        .toInt128(),
+                    0
+                );
+            } else if (tick < tickUpper) {
+                delta = toBalanceDelta(
+                    SqrtPriceMath
+                        .getAmount0Delta(
+                            sqrtPriceX96,
+                            TickMath.getSqrtPriceAtTick(tickUpper),
+                            liquidityDelta
+                        )
+                        .toInt128(),
+                    SqrtPriceMath
+                        .getAmount1Delta(
+                            TickMath.getSqrtPriceAtTick(tickLower),
+                            sqrtPriceX96,
+                            liquidityDelta
+                        )
+                        .toInt128()
+                );
+            } else {
+                // current tick is above the passed range; liquidity can only become in range by crossing from right to
+                // left, when we'll need _more_ currency1 (it's becoming more valuable) so user must provide it
+                delta = toBalanceDelta(
+                    0,
+                    SqrtPriceMath
+                        .getAmount1Delta(
+                            TickMath.getSqrtPriceAtTick(tickLower),
+                            TickMath.getSqrtPriceAtTick(tickUpper),
+                            liquidityDelta
+                        )
+                        .toInt128()
+                );
+            }
+        }
     }
-
     function invariantModifyingLiquidity(
         IPoolManager poolManager,
         PoolKey memory poolKey,

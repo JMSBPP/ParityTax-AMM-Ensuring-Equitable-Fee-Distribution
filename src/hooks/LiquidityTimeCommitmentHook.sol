@@ -11,7 +11,7 @@ import "../libs/LiquidityManagerHelper.sol";
 import "../LiquidityTimeCommitmentHookStorageAdmin.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
-
+import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 //=====PART OF THE ISSUE OF CurrencyNotSettled() ========
 import "v4-core/libraries/NonzeroDeltaCount.sol";
 
@@ -39,6 +39,7 @@ contract LiquidityTimeCommitmentHook is
     using LiquidityTimeCommitmentDataLibrary for LiquidityTimeCommitmentData;
     using TimeCommitmentLibrary for TimeCommitment;
     using TimeCommitmentLibrary for bytes;
+    using CurrencyDelta for *;
     using Position for *; // NOTE: This is mostly use to query positionKeys to them
     // associate position keys with time commitments
 
@@ -116,6 +117,8 @@ contract LiquidityTimeCommitmentHook is
         uint256 indexed liquidityOnCurrency0,
         uint256 indexed liquidityOnCurrency1
     );
+    event DecodedHookDataSize(uint256 indexed size);
+    event BalancesChecker(uint256 indexed balance0, uint256 indexed balance1);
     function _beforeAddLiquidity(
         address sender,
         PoolKey calldata key,
@@ -123,7 +126,7 @@ contract LiquidityTimeCommitmentHook is
         bytes calldata hookData
     ) internal override onlyPoolManager returns (bytes4) {
         //NOTE: This performs the checks that the hookData is valid
-
+        emit DecodedHookDataSize(hookData.length);
         LiquidityTimeCommitmentData
             memory liquidityTimeCommitmentData = hookData
                 .fromBytesToLiquidityTimeCommitmentData();
@@ -157,41 +160,107 @@ contract LiquidityTimeCommitmentHook is
             // InvalidRawData___RawDataDoesNotDecodeToTimeCommitment()
             emit LiquidityTimeCommitmentHookInitialized(liquidityPositionKey);
         }
-        (uint128 liquidityOnPositionBefore, , ) = poolManager.getPositionInfo(
-            key.toId(),
-            liquidityPositionKey
-        );
-
-        // (
-        //     uint256 liquidityOnCurrency0,
-        //     uint256 liquidityOnCurrency1
-        // ) = getLiquiditiesPositiveDeltas(key, params);
-
-        // emit LiquidityAmountsToBeAdded(
-        //     liquidityOnCurrency0,
-        //     liquidityOnCurrency1
-        // );
-        // // Is
-
-        // _settleLiquidityOnCurrencies(
-        //     key,
-        //     liquidityTimeCommitmentData,
-        //     liquidityOnCurrency0,
-        //     liquidityOnCurrency1
-        // );
-
         _storage.setLiquidityTimeCommitmentData(
             liquidityPositionKey,
             liquidityTimeCommitmentData
         );
+        // From already verified timeCommitment we have
+        // set the LPType enum:
+        // ==>
+        LPType lpType = enteredTimeCommitment.isJIT ? LPType.JIT : LPType.PLP;
+        //Given this lpType and the position key we can query the
+        // liquidity manager associated with the position and the LPType
+        ILiquidityTimeCommitmentManager liquidityManager = _storage
+            .getLiquidityManager(liquidityPositionKey, lpType);
+        // In order to settle balances on the afterAddLiquidity function
+        // we need to store this in transient storage so it can be queried
+        // in the afterAddLiquidity function,to do so
+        _storeLiquidityManagerOnTransientStorage(liquidityManager);
+        _storeLiquidityPositionKeyOnTransientStorage(liquidityPositionKey);
+        // TODO: Now that we have defined the positionKey of the liquidity
+        // provider and now if it is JIT or PLP with it's timeCommitment
+        // and we know this is addingLiquidity action.
+        // The PoolManager will do this:
+        // key.hooks.beforeModifyLiquidity(key, params, hookData);
 
-        // _routeLiquidity(
-        //     key,
-        //     liquidityPositionKey,
-        //     liquidityOnCurrency0,
-        //     liquidityOnCurrency1,
-        //     liquidityTimeCommitmentData
-        // );
+        //BalanceDelta principalDelta;
+        //     (principalDelta, feesAccrued) = pool.modifyLiquidity(
+        //         Pool.ModifyLiquidityParams({
+        //             owner: msg.sender,
+        //             tickLower: params.tickLower,
+        //             tickUpper: params.tickUpper,
+        //             liquidityDelta: params.liquidityDelta.toInt128(),
+        //             tickSpacing: key.tickSpacing,
+        //             salt: params.salt
+        //         })
+        //     );
+        // First for feesAccrued:: ==>
+        // {
+        //  (uint256 dFee0, uint256 dFee1) = getFeeGrowthInside(self, tickLower, tickUpper);
+        //  Position.State storage position = self.positions.get(
+        //                                                      params.owner,
+        //                                                      tickLower,
+        //                                                      tickUpper,
+        //                                                      params.salt);
+        // (uint256 fees0, uint256 fees1) = position.update(
+        //                                                  liquidityDelta,
+        //                                                  dfee0,
+        //                                                  dfee1);
+        //
+        // feesAccrued = toBalanceDelta(fees0.toInt128(), fees1.toInt128());
+        //}
+        // Now for principalDelta:: ==>
+        // {
+        //      (int24 tick, uint160 sqrtPriceX96) = (_slot0.tick(),
+        //                                            _slot0.sqrtPriceX96());
+        // if (tick < tickLower) {
+        //     // current tick is below the passed range; liquidity can only become in range by crossing from left to
+        //     // right, when we'll need _more_ currency0 (it's becoming more valuable) so user must provide it
+        //     principalDelta = toBalanceDelta(
+        //                                     SqrtPriceMath.getAmount0Delta(
+        //                                                                    TickMath.getSqrtPriceAtTick(tickLower),
+        //                                                                    TickMath.getSqrtPriceAtTick(tickUpper),
+        //                                                                     liquidityDelta
+        //                                                                   ).toInt128()
+        //                                                                   ,
+        //                                                                   0
+        //                                     );
+        // } else if (tick < tickUpper) {
+        //     principalDelta = toBalanceDelta(
+        //                                     SqrtPriceMath.getAmount0Delta(
+        //                                                                   sqrtPriceX96,
+        //                                                                   TickMath.getSqrtPriceAtTick(tickUpper),
+        //                                                                    liquidityDelta
+        //                                                                   ).toInt128()
+        //                                                                    ,
+        //                                     SqrtPriceMath.getAmount1Delta(
+        //                                                                   TickMath.getSqrtPriceAtTick(tickLower),
+        //                                                                   sqrtPriceX96,
+        //                                                                   liquidityDelta
+        //                                                                   ).toInt128()
+        //                                     );
+
+        // self.liquidity = LiquidityMath.addDelta(self.liquidity, principalDelta);
+        // } else {
+        //     // current tick is above the passed range; liquidity can only become in range by crossing from right to
+        //     // left, when we'll need _more_ currency1 (it's becoming more valuable) so user must provide it
+        //     principalDelta = toBalanceDelta(
+        //                                      0
+        //                                      ,
+        //                                      SqrtPriceMath.getAmount1Delta(
+        //                                                                    TickMath.getSqrtPriceAtTick(tickLower),
+        //                                                                    TickMath.getSqrtPriceAtTick(tickUpper),
+        //                                                                     liquidityDelta
+        //                                                                   ).toInt128()
+        //                                      );
+        // }
+        //
+        // }
+        // ==========================>
+        // callerDelta = principalDelta + feesAccrued;
+        // Notice in this case msg.sender =liquidityTimeCommitmentRouter
+        // Therefore this is what get's returned to the poolManager before
+        // it excecutes afterAddLiquidity
 
         // TODO: Right after _routingLiquidity we want to retreive the deltas
         // from transientStorage, for this one can use the NonZeroDelta library
@@ -200,13 +269,20 @@ contract LiquidityTimeCommitmentHook is
         // 2.1 Read the counts.
         // ========FOR-DEBUGIING PURPOSES======
         // NOTE: This is not part of the core logic.
-
+        // =====Only for testing purposes=====
+        (uint256 balance0, uint256 balance1) = (
+            key.currency0.balanceOf(address(poolManager)),
+            key.currency1.balanceOf(address(poolManager))
+        );
+        emit BalancesChecker(balance0, balance1);
         return IHooks.beforeAddLiquidity.selector;
     }
 
     // TODO: This is guarded to PLP LP's, so we need to find a method
     // to associate the calldata with the timeCommitments
     // to guard this functions
+    event AfterAddLiquidityDeltaCounts(uint256 count);
+    event LiquidityDeltas(int256 onX, int256 onY);
     function _afterAddLiquidity(
         address sender,
         PoolKey calldata key,
@@ -222,6 +298,62 @@ contract LiquidityTimeCommitmentHook is
         onlyPoolManager
         returns (bytes4, BalanceDelta)
     {
+        // TODO: Because we have the afterAddLiquidityReturDelta we have the
+        // the following case
+        // (callerDelta, hookDelta) = key.hooks.afterModifyLiquidity(key, params, callerDelta, feesAccrued, hookData);
+        // (hookDelta != BalanceDeltaLibrary.ZERO_DELTA)
+        // _accountPoolBalanceDelta(key, hookDelta, address(this));
+        //    _accountDelta(key.currency0, delta.amount0(), address(this));
+        //     _accountDelta(key.currency1, delta.amount1(), address(this));
+        // ==> _accountDelta(currency, delta.amountX(), address(this))
+        // ====>         if (delta == 0) return;
+
+        //            (int256 previous, int256 next) = currency.applyDelta(
+        //                                                                 address(this),
+        //                                                                 hookDelta);
+        //
+        //              if (next == 0) {
+        //                               NonzeroDeltaCount.decrement();
+        //               } else if (previous == 0) {
+        //                               NonzeroDeltaCount.increment();
+        //               }
+        // Where we need to build our hookDelta
+        // Our hookDelta is how much we want to send to the liquidityManager
+        // associated with the positionKey
+        // 1. so we query the liquidityManager from transientStorage
+        LiquidityTimeCommitmentData
+            memory liquidityTimeCommitmentData = hookData
+                .fromBytesToLiquidityTimeCommitmentData();
+
+        (
+            bytes32 liquidityPositionKey,
+            ILiquidityTimeCommitmentManager liquidityManager
+        ) = (
+                _getLiquidityPositionKeyFromTransientStorage(),
+                _getLiquidityManagerFromTransientStorage()
+            );
+        (uint256 balance0, uint256 balance1) = (
+            key.currency0.balanceOf(address(this)),
+            key.currency1.balanceOf(address(this))
+        );
+        emit BalancesChecker(balance0, balance1);
+
+        // 2. We want the liquidityDelta to be the amounts to be sent
+        // to the liquidityManager
+        //
+        // CurrencyDelta has the getDelta(Currency, address deltaOwner) function
+        // which retrieves the deltaCurrency of the owner of the delta
+        // to implement this option we need to know who is the owner of the
+        // delta at this point
+        // Since _accountToDelta has not been called yet at this point
+        // we think the deltaOwner is the poolManager let's verify that
+        // Looks like the deltaOwner is the router ...
+        // (int256 liquidityDeltaCurrency0, int256 liquidityDeltaCurrency1) = (
+        //     key.currency0.getDelta(deltaOwner),
+        //     key.currency1.getDelta(deltaOwner)
+        // );
+
+        // emit LiquidityDeltas(liquidityDeltaCurrency0, liquidityDeltaCurrency1);
         return (
             IHooks.afterAddLiquidity.selector,
             BalanceDeltaLibrary.ZERO_DELTA
@@ -251,25 +383,6 @@ contract LiquidityTimeCommitmentHook is
         bytes calldata hookData
     ) internal virtual override returns (bytes4, int128) {
         return _afterSwap(sender, key, params, delta, hookData);
-    }
-
-    function getLiquiditiesPositiveDeltas(
-        PoolKey memory poolKey,
-        ModifyLiquidityParams calldata params
-    )
-        internal
-        view
-        returns (uint256 liquidityOnCurrency0, uint256 liquidityOnCurrency1)
-    {
-        BalanceDelta liquidityDelta = poolManager.getPositionLiquidityDelta(
-            poolKey,
-            params
-        );
-
-        (liquidityOnCurrency0, liquidityOnCurrency1) = (
-            uint256(liquidityDelta.amount0().toUint128()),
-            uint256(liquidityDelta.amount1().toUint128())
-        );
     }
 
     //NOTE: The initial liquidity request with the funds is assumed to

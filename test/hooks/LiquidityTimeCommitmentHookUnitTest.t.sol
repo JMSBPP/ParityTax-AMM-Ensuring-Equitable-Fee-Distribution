@@ -7,6 +7,8 @@ pragma solidity ^0.8.24;
 
 import "../helpers/LiquidityTimeCommitmentHookStateHelper.sol";
 import "v4-periphery/src/utils/HookMiner.sol";
+import "../../src/interfaces/ILiquidityTimeCommitmentRouter.sol";
+import {TickMath} from "v4-core/libraries/TickMath.sol";
 /// @title Liquidity Time Commitment Hook Test
 /// @notice This contract tests the functionality of the Liquidity Time Commitment Hook
 /// @dev This contract sets up a testing environment for verifying the behavior of the Liquidity Time Commitment Hook
@@ -19,6 +21,7 @@ contract LiquidityTimeCommitmenUnitHookTest is
     using HookMiner for address;
     using Position for *;
     using CurrencyLibrary for Currency;
+    using TickMath for *;
 
     // 0. We need initally a couple of addresses one representing
     // A PLP and another representing a JIT
@@ -136,6 +139,11 @@ contract LiquidityTimeCommitmenUnitHookTest is
     {
         bytes
             memory hookData = test__StateHelper_beforeAddLiquidity__JITFirstTimeCommitedPosition();
+
+        console.log("Current Tick: ", SQRT_PRICE_1_2.getTickAtSqrtPrice());
+        console.log("Position Tick Below: ", LIQUIDITY_PARAMS.tickLower);
+        console.log("Position Tick Above: ", LIQUIDITY_PARAMS.tickUpper);
+
         vm.startPrank(_jitLp);
 
         _liquidityTimeCommitmentRouter.modifyLiquidity(
