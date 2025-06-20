@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 import "./TimeCommitment.sol";
-import {Position} from "v4-core/libraries/Position.sol";
+import "v4-core/libraries/Position.sol";
 
 uint256 constant LIQUIDITY_TIME_COMMITMENT_DATA_SIZE = 576;
 

@@ -26,72 +26,7 @@ library LiquidityManagerHelper {
     using CurrencyLibrary for Currency;
     using TransientStateLibrary for IPoolManager;
     using Slot0Library for *;
-    /**
-     * @notice Calculates the position liquidity delta for a given pool and liquidity parameters.
-     * @param poolManager The pool manager interface.
-     * @param poolKey The key of the pool containing specific parameters.
-     * @param liquidityParams The parameters defining the liquidity modification.
-     * @return delta The balance delta representing the liquidity change.
-     */
-    function getPositionLiquidityDelta(
-        IPoolManager poolManager,
-        PoolKey memory poolKey,
-        ModifyLiquidityParams memory liquidityParams
-    ) internal view returns (BalanceDelta delta) {
-        int128 liquidityDelta = liquidityParams.liquidityDelta.toInt128();
-        int24 tickLower = liquidityParams.tickLower;
-        int24 tickUpper = liquidityParams.tickUpper;
 
-        if (liquidityDelta != 0) {
-            (uint160 sqrtPriceX96, int24 tick, , ) = poolManager.getSlot0(
-                poolKey.toId()
-            );
-            if (tick < tickLower) {
-                // current tick is below the passed range; liquidity can only become in range by crossing from left to
-                // right, when we'll need _more_ currency0 (it's becoming more valuable) so user must provide it
-                delta = toBalanceDelta(
-                    SqrtPriceMath
-                        .getAmount0Delta(
-                            TickMath.getSqrtPriceAtTick(tickLower),
-                            TickMath.getSqrtPriceAtTick(tickUpper),
-                            liquidityDelta
-                        )
-                        .toInt128(),
-                    0
-                );
-            } else if (tick < tickUpper) {
-                delta = toBalanceDelta(
-                    SqrtPriceMath
-                        .getAmount0Delta(
-                            sqrtPriceX96,
-                            TickMath.getSqrtPriceAtTick(tickUpper),
-                            liquidityDelta
-                        )
-                        .toInt128(),
-                    SqrtPriceMath
-                        .getAmount1Delta(
-                            TickMath.getSqrtPriceAtTick(tickLower),
-                            sqrtPriceX96,
-                            liquidityDelta
-                        )
-                        .toInt128()
-                );
-            } else {
-                // current tick is above the passed range; liquidity can only become in range by crossing from right to
-                // left, when we'll need _more_ currency1 (it's becoming more valuable) so user must provide it
-                delta = toBalanceDelta(
-                    0,
-                    SqrtPriceMath
-                        .getAmount1Delta(
-                            TickMath.getSqrtPriceAtTick(tickLower),
-                            TickMath.getSqrtPriceAtTick(tickUpper),
-                            liquidityDelta
-                        )
-                        .toInt128()
-                );
-            }
-        }
-    }
     function invariantModifyingLiquidity(
         IPoolManager poolManager,
         PoolKey memory poolKey,
@@ -124,29 +59,29 @@ library LiquidityManagerHelper {
     function fetchBalancesCurrency0(
         IPoolManager poolManager,
         PoolKey memory poolKey,
-        address liquidityProvider,
-        address liquidityRouter
+        address user,
+        address deltaHolder
     )
         internal
         view
         returns (uint256 userBalance, uint256 poolBalance, int256 delta)
     {
-        userBalance = poolKey.currency0.balanceOf(liquidityProvider);
+        userBalance = poolKey.currency0.balanceOf(user);
         poolBalance = poolKey.currency0.balanceOf(address(poolManager));
-        delta = poolManager.currencyDelta(liquidityRouter, poolKey.currency0);
+        delta = poolManager.currencyDelta(deltaHolder, poolKey.currency0);
     }
     function fetchBalancesCurrency1(
         IPoolManager poolManager,
         PoolKey memory poolKey,
-        address liquidityProvider,
-        address liquidityRouter
+        address user,
+        address deltaHolder
     )
         internal
         view
         returns (uint256 userBalance, uint256 poolBalance, int256 delta)
     {
-        userBalance = poolKey.currency1.balanceOf(liquidityProvider);
+        userBalance = poolKey.currency1.balanceOf(user);
         poolBalance = poolKey.currency1.balanceOf(address(poolManager));
-        delta = poolManager.currencyDelta(liquidityRouter, poolKey.currency1);
+        delta = poolManager.currencyDelta(deltaHolder, poolKey.currency1);
     }
 }
