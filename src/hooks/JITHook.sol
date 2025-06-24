@@ -25,7 +25,8 @@ contract JITHook is LiquidityOperator {
                 beforeInitialize: false,
                 afterInitialize: false,
                 beforeAddLiquidity: false,
-                afterAddLiquidity: false,
+                afterAddLiquidity: true, //NOTE: This needs to be enabled to
+                // be delegate callabale by the LiquidityTimeCommitment hook
                 beforeRemoveLiquidity: false,
                 afterRemoveLiquidity: false,
                 beforeSwap: true,
@@ -39,7 +40,8 @@ contract JITHook is LiquidityOperator {
                 // this is applied by the tax controller
                 // to charge the tax over the trading fees
                 //
-                afterAddLiquidityReturnDelta: false,
+                afterAddLiquidityReturnDelta: true, //NOTE: This needs to be enabled to
+                // be conssitent with the LiquidityTimeCommitment hook
                 afterRemoveLiquidityReturnDelta: false
             });
     }

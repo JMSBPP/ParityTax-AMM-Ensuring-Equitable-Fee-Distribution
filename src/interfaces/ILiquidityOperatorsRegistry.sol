@@ -4,26 +4,16 @@ pragma solidity ^0.8.0;
 import "../hooks/interfaces/ILiquidityOperator.sol";
 import "../types/LPTimeCommitment.sol";
 
+error InvalidLiquidityProvider____AddressIsZero();
 interface ILiquidityOperatorsRegistry {
-    function getLPType(
-        address liquidityProvider
-    ) external view returns (LPType lpType);
-
-    function getLiquidityOperator(
-        address liquidityProvider
-    ) external view returns (ILiquidityOperator liquidityOperator);
-
-    function setLiquidityOperator(
-        address liquidityProvider,
-        ILiquidityOperator liquidityOperator
-    ) external;
+    //NOTE: This function ius callled only by the router
 
     function setLPTimeCommitment(
         address liquidityProvider,
-        LPTimeCommitment memory lpTimeCommitment
+        LPTimeCommitment memory lpTypeTimeCommitment
     ) external;
 
     function getLPTimeCommitment(
         address liquidityProvider
-    ) external view returns (LPTimeCommitment memory lpTimeCommitment);
+    ) external view returns (LPTimeCommitment memory);
 }

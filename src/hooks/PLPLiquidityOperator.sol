@@ -67,14 +67,13 @@ contract PLPLiquidityOperator is
         address,
         PoolKey calldata,
         ModifyLiquidityParams calldata,
-        BalanceDelta,
+        BalanceDelta delta,
         BalanceDelta,
         bytes calldata
     ) internal virtual override returns (bytes4, BalanceDelta) {
-        return (
-            IHooks.afterAddLiquidity.selector,
-            BalanceDeltaLibrary.ZERO_DELTA
-        );
+        BalanceDelta plpOperatorDelta = delta;
+        //NOTE:The manager is the caller (a.k.a msg.sender = poolManager)
+        return (IHooks.beforeAddLiquidity.selector, plpOperatorDelta);
     }
 
     function _afterRemoveLiquidity(

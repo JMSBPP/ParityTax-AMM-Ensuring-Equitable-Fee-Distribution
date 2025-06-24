@@ -10,7 +10,7 @@ abstract contract LPTypePositionManager is
     PositionManager,
     ILPTypePositionManager
 {
-    //NOTE: Each liqudiidity position, whic essentially is
+    //NOTE: Each liquidity position, which essentially is
     // a price range on a pool where liquidity will be supplied
     // has amn operator thaat excecutes the way this liquidity is
     // managed depending of the type of LP

@@ -1,49 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test, console} from "forge-std/Test.sol";
-import "./LPTimeCommitmentTest.sol";
-import "./utils/LPTimeCommitmentDeployers.sol";
-
-contract LPTypeCommitmentTest is Test, LPTimeCommitmentDeployers {
-    OperatorAddresses operatorAddresses;
-
-    //=========WRAPPED LIBRARY TO BE TESTED =========
-    LPTimeCommitmentTest public lpTimeCommitmentLibrary;
-    //NOTE At this point all not hook contracts should have
-    // been deployed ...
-    address payable jit = payable(makeAddr("jit"));
-    address payable plp = payable(makeAddr("plp"));
-
-    function setUp() public {
-        operatorAddresses = setOperatorsAddresses();
-        // Deploy WETH hook
-        jitHook = JITHook(operatorAddresses.jitHook);
-
-        deployCodeTo(
-            "JITHook",
-            getOperatorsConstructorArgs(),
-            operatorAddresses.jitHook
-        );
-        plpOperator = PLPLiquidityOperator(operatorAddresses.plpOperator);
-
-        deployCodeTo(
-            "PLPLiquidityOperator",
-            getOperatorsConstructorArgs(),
-            operatorAddresses.plpOperator
-        );
-
-        invalidOperator = InvalidOperator(operatorAddresses.invalidOperator);
-        deployCodeTo(
-            "InvalidOperator",
-            getOperatorsConstructorArgs(),
-            operatorAddresses.invalidOperator
-        );
-
-        //NOTE: ALl hooks and dependencies are deployed ...
-        lpTimeCommitmentLibrary = new LPTimeCommitmentTest();
-    }
-
+import "../utils/LPTimeCommmitmentSetUp.sol";
+contract LPTypeCommitmentTest is LPTimeCommmitmentSetUp {
     function test__Unit__ValidateLPType() external {
         LPTimeCommitment memory invalidTimeCommitment = LPTimeCommitment({
             liquidityOperator: jitHook,
@@ -219,6 +178,35 @@ contract LPTypeCommitmentTest is Test, LPTimeCommitmentDeployers {
                         validatedTimeCommitment.liquidityOperator
                     );
             }
+        }
+        vm.stopPrank();
+    }
+    function test__Fuzz__validateAndSetLPTypeTimeCommitment(
+        uint256 startingBlock,
+        uint256 endingBlock,
+        uint256 blockNumber,
+        bool isJIT
+    ) public returns (LPTimeCommitment memory validatedLPTypeTimeCommitment) {
+        LPTimeCommitment
+            memory _validatedLPTypeTimeCommitment = test__Fuzz__validateLPTypeTimeCommitment(
+                startingBlock,
+                endingBlock,
+                blockNumber,
+                isJIT
+            );
+        vm.startPrank(isJIT ? jit : plp);
+
+        if (validatedLPTypeTimeCommitment.lpType == LPType.NONE) {
+            vm.expectRevert("InvalidLPType___LPTypeMustBePLPOrJIT()");
+            validatedLPTypeTimeCommitment = lpTimeCommitmentLibrary
+                .validateAndSetLPTypeTimeCommitment(
+                    _validatedLPTypeTimeCommitment
+                );
+        } else {
+            validatedLPTypeTimeCommitment = lpTimeCommitmentLibrary
+                .validateAndSetLPTypeTimeCommitment(
+                    _validatedLPTypeTimeCommitment
+                );
         }
         vm.stopPrank();
     }

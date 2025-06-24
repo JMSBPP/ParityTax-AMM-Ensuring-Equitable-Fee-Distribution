@@ -5,6 +5,14 @@ import "../../src/types/LPTimeCommitment.sol";
 
 contract LPTimeCommitmentTest {
     using LPTimeCommitmentLibrary for *;
+
+    function validateAndSetLPTypeTimeCommitment(
+        LPTimeCommitment memory enteredTimeCommitment
+    ) external returns (LPTimeCommitment memory lpTypeTimeCommitment) {
+        lpTypeTimeCommitment = enteredTimeCommitment
+            .validateAndSetLPTypeTimeCommitment();
+    }
+
     function setJITLpTimeCommitment(
         uint256 blockToCommitLiquidity,
         ILiquidityOperator liquidityOperator

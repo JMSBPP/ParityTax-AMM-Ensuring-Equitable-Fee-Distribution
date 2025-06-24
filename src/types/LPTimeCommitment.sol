@@ -10,21 +10,16 @@ bytes32 constant JIT_OPERATOR_PERMISSIONS = keccak256(
             beforeInitialize: false,
             afterInitialize: false,
             beforeAddLiquidity: false,
-            afterAddLiquidity: false,
+            afterAddLiquidity: true,
             beforeRemoveLiquidity: false,
             afterRemoveLiquidity: false,
             beforeSwap: true,
             afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
-            beforeSwapReturnDelta: false, //TODO: This
-            // can be updated to true if the pool has
-            // custom curve
-            afterSwapReturnDelta: true, // TODO:
-            // this is applied by the tax controller
-            // to charge the tax over the trading fees
-            //
-            afterAddLiquidityReturnDelta: false,
+            beforeSwapReturnDelta: false,
+            afterSwapReturnDelta: true,
+            afterAddLiquidityReturnDelta: true,
             afterRemoveLiquidityReturnDelta: false
         })
     )
@@ -47,7 +42,7 @@ bytes32 constant PLP_OPERATOR_PERMISSIONS = keccak256(
             afterDonate: false,
             beforeSwapReturnDelta: false,
             afterSwapReturnDelta: true,
-            afterAddLiquidityReturnDelta: false,
+            afterAddLiquidityReturnDelta: true,
             afterRemoveLiquidityReturnDelta: false
         })
     )
@@ -79,6 +74,27 @@ struct LPTimeCommitment {
 }
 
 library LPTimeCommitmentLibrary {
+    function validateAndSetLPTypeTimeCommitment(
+        LPTimeCommitment memory enteredTimeCommitment
+    ) internal returns (LPTimeCommitment memory lpTypeTimeCommitment) {
+        {
+            validateLPType(enteredTimeCommitment);
+        }
+
+        LPType lpType = enteredTimeCommitment.lpType;
+        if (lpType == LPType.JIT) {
+            lpTypeTimeCommitment = setJITLpTimeCommitment(
+                enteredTimeCommitment.startingBlock,
+                enteredTimeCommitment.liquidityOperator
+            );
+        } else if (lpType == LPType.PLP) {
+            lpTypeTimeCommitment = setPLPLpTimeCommitment(
+                enteredTimeCommitment.startingBlock,
+                enteredTimeCommitment.endingBlock,
+                enteredTimeCommitment.liquidityOperator
+            );
+        }
+    }
     function setJITLpTimeCommitment(
         uint256 blockToCommitLiquidity,
         ILiquidityOperator liquidityOperator

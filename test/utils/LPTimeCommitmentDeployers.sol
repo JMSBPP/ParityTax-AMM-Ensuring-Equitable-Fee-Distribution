@@ -2,13 +2,14 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-import "../../../src/TradingFeeRevenueDB.sol";
-import "../../../src/TaxController.sol";
+import "../../src/TradingFeeRevenueDB.sol";
+import "../../src/TaxController.sol";
 
-import "./LPTimeCommitmentConstants.sol";
+import "../types/utils/LPTimeCommitmentConstants.sol";
 import "@uniswap/v4-core/test/utils/Deployers.sol";
 
 import "v4-periphery/src/utils/HookMiner.sol";
+import "../../src/hooks/LiquidityTimeCommitmentHook.sol";
 
 struct OperatorAddresses {
     address jitHook;
@@ -20,6 +21,7 @@ contract LPTimeCommitmentDeployers is Test, Deployers {
     using HookMiner for address;
     using OperatorsDeployersDataLibrary for OPERATOR_TYPE;
 
+    LiquidityTimeCommitmentHook liquidityTimeCommitmentHook;
     JITHook jitHook;
     PLPLiquidityOperator plpOperator;
     InvalidOperator invalidOperator;
@@ -49,6 +51,18 @@ contract LPTimeCommitmentDeployers is Test, Deployers {
             _operatorType.setOperatorFlags(),
             _operatorType.setOperatorCreationCode(),
             getOperatorsConstructorArgs()
+        );
+    }
+
+    function getLiquidityTimeCommitmentHookAddress()
+        internal
+        view
+        returns (address hookAddress)
+    {
+        (hookAddress, ) = address(this).find(
+            LIQUIDITY_TIME_COMMITMENT_FLAGS,
+            type(LiquidityTimeCommitmentHook).creationCode,
+            abi.encode(manager)
         );
     }
     function setOperatorsAddresses()
