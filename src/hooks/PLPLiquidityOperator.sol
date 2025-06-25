@@ -4,11 +4,10 @@ pragma solidity ^0.8.0;
 import "./LiquidityOperator.sol";
 import "v4-core/types/BeforeSwapDelta.sol";
 import "v4-core/types/BalanceDelta.sol";
-// import {IEthereumVaultConnector} from "ethereum-vault-connector/src/interfaces/IEthereumVaultConnector.sol";
-
 contract PLPLiquidityOperator is
     LiquidityOperator // IEthereumVaultConnector private yieldFarmer;
 {
+    using CurrencySettler for Currency;
     constructor(
         IPoolManager _poolManager,
         ITradingFeeRevenueDB _tradingFeeRevenueDB,
@@ -41,7 +40,7 @@ contract PLPLiquidityOperator is
                 afterDonate: false,
                 beforeSwapReturnDelta: false,
                 afterSwapReturnDelta: true,
-                afterAddLiquidityReturnDelta: false,
+                afterAddLiquidityReturnDelta: true,
                 afterRemoveLiquidityReturnDelta: false
             });
     }
@@ -63,17 +62,24 @@ contract PLPLiquidityOperator is
         return (IHooks.beforeRemoveLiquidity.selector);
     }
 
+    event DebuggingLiquidityOperatorDelta(int128 dx, int128 dy);
     function _afterAddLiquidity(
-        address,
-        PoolKey calldata,
-        ModifyLiquidityParams calldata,
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
         BalanceDelta delta,
-        BalanceDelta,
-        bytes calldata
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
     ) internal virtual override returns (bytes4, BalanceDelta) {
-        BalanceDelta plpOperatorDelta = delta;
+        //NOTE: The debit the poolManager has coming from the added liquidity
+        // by the liqudity provider is known by the liquidityOperator
+        // --> delta = principal + fees
+
         //NOTE:The manager is the caller (a.k.a msg.sender = poolManager)
-        return (IHooks.beforeAddLiquidity.selector, plpOperatorDelta);
+        return (
+            IHooks.beforeAddLiquidity.selector,
+            BalanceDeltaLibrary.ZERO_DELTA
+        );
     }
 
     function _afterRemoveLiquidity(

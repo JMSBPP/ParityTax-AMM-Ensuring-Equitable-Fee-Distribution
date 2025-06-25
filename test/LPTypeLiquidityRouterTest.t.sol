@@ -109,11 +109,11 @@ contract LPTypeLiquidityRouterTest is Test, LPTimeCommmitmentSetUp {
             startingBlock: block.number,
             endingBlock: block.number + 1
         });
-        vm.startPrank(jit);
+        vm.startPrank(plp);
         router.modifyLiquidity(
             key,
             LIQUIDITY_PARAMS,
-            abi.encode(unitTestJitTimeCommitment)
+            abi.encode(unitTestPlpTimeCommitment)
         );
 
         vm.stopPrank();

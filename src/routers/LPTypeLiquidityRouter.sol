@@ -75,7 +75,12 @@ contract LPTypeLiquidityRouter is SafeCallback {
             delta = abi.decode(
                 //                                                 takeClaims
                 poolManager.unlock(
-                    abi.encode(key, liquidityParams, liquidityProvider)
+                    abi.encode(
+                        key,
+                        liquidityParams,
+                        liquidityProvider,
+                        enteredLpTimeCommitment
+                    )
                 ),
                 (BalanceDelta)
             );
@@ -96,7 +101,12 @@ contract LPTypeLiquidityRouter is SafeCallback {
                 delta = abi.decode(
                     //
                     poolManager.unlock(
-                        abi.encode(key, liquidityParams, liquidityProvider)
+                        abi.encode(
+                            key,
+                            liquidityParams,
+                            liquidityProvider,
+                            existingLPTimeCommitment
+                        )
                     ),
                     (BalanceDelta)
                 );
@@ -114,13 +124,17 @@ contract LPTypeLiquidityRouter is SafeCallback {
         (
             PoolKey memory poolKey,
             ModifyLiquidityParams memory params,
-            address liquidityProvider
-        ) = abi.decode(data, (PoolKey, ModifyLiquidityParams, address));
+            address liquidityProvider,
+            LPTimeCommitment memory enteredLpTimeCommitment
+        ) = abi.decode(
+                data,
+                (PoolKey, ModifyLiquidityParams, address, LPTimeCommitment)
+            );
 
         (BalanceDelta liquidityDelta, ) = poolManager.modifyLiquidity(
             poolKey,
             params,
-            Constants.ZERO_BYTES
+            abi.encode(enteredLpTimeCommitment)
         );
 
         if (params.liquidityDelta > 0) {
