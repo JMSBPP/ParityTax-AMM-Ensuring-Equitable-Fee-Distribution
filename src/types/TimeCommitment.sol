@@ -1,120 +1,125 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
-//   8 bits    48 bits      8 bits             160 bits (address)
-// LPType | endingBlock | optimalDuration | liquidityProvider
-// enum LPType {
-//     NONE,
-//     JIT,
-//     PLP
-// }
-// The occupied bits are 224, leaving 192 bits
-// available for modularity implementations,
-// This can be hook upgrades that require the hook data
-// to be larger than 56 bytes
-type TimeCommitment is bytes32;
+// NOTE TimeCommitment is a block.timestamp > currentTimeStamp
+type TimeCommitment is uint256;
+
+uint256 constant JIT = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe;
+uint256 constant NO_EXIST = 0x0;
+
+enum Tag {
+    NO_EXIST,
+    PLP_EXPIPRED,
+    PLP_NOT_EXPIRED,
+    JIT,
+    INVALID
+}
 
 using TimeCommitmentLibrary for TimeCommitment global;
+
+error InvalidTimeCommitment__LPMustSpecifyNonEmptyCommitment();
+error InvalidLiquidityPositionState__LPMsutHaveValidTimeCommitment();
+error InvalidTimeCommitment__IncompatibleTimeCommitmentTags();
 library TimeCommitmentLibrary {
-    uint256 internal constant MAX_ENDING_BLOCK = 0xffffffffffff;
-    uint256 internal constant MAX_LP_TYPE = 0x02;
-
-    //0x   ab     00000001   000000000000000000000000000000000000000000000000000000
-    //   lpType  endingBlock
-
-    // The first two bytes need to be either 1 or 2 to be a valid LPType
-
-    function toTimeCommitment(
-        bytes memory hookData
-    ) internal view returns (TimeCommitment) {
-        return
-            TimeCommitment.wrap(
-                bytes32(
-                    uint256(
-                        (uint56(endingBlock(hookData)) << 8) |
-                            uint56(lpType(hookData))
-                    )
-                )
-            );
-        // we now must put endingBlock to the right of lpType
-        // and pass the resulting bytes7 to bytes32
+    function decodeTagAndReturnTimeCommitment(
+        bytes memory encodedTimeCommitment
+    ) internal view returns (TimeCommitment, Tag) {
+        TimeCommitment timeCommitment = abi.decode(
+            encodedTimeCommitment,
+            (TimeCommitment)
+        );
+        return (timeCommitment, tagTimeCommitment(timeCommitment));
     }
 
-    function toHookData(
-        TimeCommitment self
-    ) internal pure returns (bytes memory) {
-        return abi.encode(TimeCommitment.unwrap(self));
-    }
-
-    function lpType(
-        bytes memory hookData
-    ) internal pure returns (uint8 castedLpType) {
-        //NOTE: We wnat to enforce PLP positions
-        // on the optimal duration, that is why the default value is
-        // 0x02 which amps to PLP
-        assembly ("memory-safe") {
-            let dataPtr := add(hookData, 32)
-
-            let firstByte := shr(248, mload(dataPtr))
-            switch firstByte
-            case 0x01 {
-                castedLpType := 0x01
-            }
-            case 0x02 {
-                castedLpType := 0x02
-            }
-            default {
-                castedLpType := 0x02
-            } // MAX_LP_TYPE is 2
+    function validateTimeCommitmentTags(
+        Tag existingTimeCommitmentTag,
+        Tag enteredTimeCommitmentTag
+    ) internal view returns (bool) {
+        if (enteredTimeCommitmentTag == Tag.NO_EXIST) {
+            revert InvalidTimeCommitment__LPMustSpecifyNonEmptyCommitment();
         }
-    }
 
-    function endingBlock(
-        bytes memory hookData
-    ) internal view returns (uint48 _endingBlock) {
-        // it retreives the uint48 from the 8 bit to the 56 bit
-        // and if its is smaller than the currentc block.number
-        // it assgins the current block.number to _currentBlock
-        // otherwise it returns the extracted 58 bits casted to uint48
+        //2. If the enteredTimeCommitment is invalid then we must verify
+        // what the validity of the currentTimeCommitment and act accordingly
 
-        uint48 extractedEndingBlock;
-        if (hookData.length >= 0x07) {
-            uint8 _lpType = lpType(hookData);
-            assembly ("memory-safe") {
-                let data := mload(add(hookData, 32))
-                extractedEndingBlock := shr(208, shl(8, data))
-            }
-            if (_lpType == 0x01) {
-                _endingBlock = uint48(block.number);
-            } else if (_lpType == 0x02) {
+        if (enteredTimeCommitmentTag == Tag.INVALID) {
+            //2.1 If the existingTimeCommitment is invalid then we
+            // need to custom revert
+            if (existingTimeCommitmentTag == Tag.INVALID) {
+                revert InvalidLiquidityPositionState__LPMsutHaveValidTimeCommitment();
+            } else {
                 if (
-                    extractedEndingBlock <= block.number ||
-                    extractedEndingBlock >= MAX_ENDING_BLOCK
+                    ((existingTimeCommitmentTag == Tag.PLP_EXPIPRED) ||
+                        ((existingTimeCommitmentTag == Tag.PLP_NOT_EXPIRED) &&
+                            (enteredTimeCommitmentTag == Tag.JIT))) ||
+                    (existingTimeCommitmentTag == Tag.JIT &&
+                        ((enteredTimeCommitmentTag == Tag.PLP_EXPIPRED) ||
+                            (enteredTimeCommitmentTag == Tag.PLP_NOT_EXPIRED)))
                 ) {
-                    _endingBlock = uint48(block.number + 1);
-                } else {
-                    _endingBlock = extractedEndingBlock;
+                    revert InvalidTimeCommitment__IncompatibleTimeCommitmentTags();
                 }
             }
-        } else {
-            _endingBlock = uint48(block.number + 1);
         }
+        // If the enteredTimeCommitment is invalid and the existingTimeCommitment
     }
 
-    function setOptimalDuration(
-        TimeCommitment self,
-        uint8 optimalDuration
-    ) internal pure returns (TimeCommitment) {
+    function tagTimeCommitment(
+        TimeCommitment timeCommitment
+    ) internal view returns (Tag) {
+        if (timeCommitment.notExistent()) return Tag.NO_EXIST;
+        if (timeCommitment.isJIT()) return Tag.JIT;
+        if (timeCommitment.isPLPExpired()) return Tag.PLP_EXPIPRED;
+        if (timeCommitment.isPLPNotExpired()) return Tag.PLP_NOT_EXPIRED;
+        return Tag.INVALID;
+    }
+
+    function decodeAndTagTimeCommitment(
+        bytes memory encodedTimeCommitment
+    ) internal view returns (Tag) {
         return
-            TimeCommitment.wrap(
-                bytes32(
-                    uint256(
-                        uint64(
-                            uint256(TimeCommitment.unwrap(self)) &
-                                0x00FFFFFFFFFFFFFF
-                        ) | (uint64(optimalDuration) << 56)
-                    )
-                )
-            );
+            abi
+                .decode(encodedTimeCommitment, (TimeCommitment))
+                .tagTimeCommitment();
+    }
+
+    function notExistent(
+        TimeCommitment timeCommitment
+    ) internal pure returns (bool) {
+        return TimeCommitment.unwrap(timeCommitment) == NO_EXIST;
+    }
+
+    function isPLPNotExpired(
+        TimeCommitment timeCommitment
+    ) internal view returns (bool) {
+        return TimeCommitment.unwrap(timeCommitment) > uint256(block.timestamp);
+    }
+
+    function isPLPExpired(
+        TimeCommitment timeCommitment
+    ) internal view returns (bool) {
+        return ((TimeCommitment.unwrap(timeCommitment) <=
+            uint256(block.timestamp)) && !isJIT(timeCommitment));
+    }
+
+    function isInvalid(
+        TimeCommitment timeCommitment
+    ) internal view returns (bool) {
+        return
+            !(isPLPExpired(timeCommitment) ||
+                isPLPNotExpired(timeCommitment) ||
+                isJIT(timeCommitment) ||
+                notExistent(timeCommitment));
+    }
+
+    function isJIT(TimeCommitment timeCommitment) internal pure returns (bool) {
+        return TimeCommitment.unwrap(timeCommitment) == JIT;
+    }
+
+    // TODO This function is managed by the TimeCommitmentControlled which signals
+    // the optimal timeCommitment where visible liquidity is mostly appreciated by the system
+    function isOptimal(
+        TimeCommitment timeCommitment
+    ) internal pure returns (bool) {
+        return false;
     }
 }

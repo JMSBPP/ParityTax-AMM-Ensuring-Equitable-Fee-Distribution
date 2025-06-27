@@ -1,0 +1,229 @@
+{
+    "state_definitions": {
+        "time_commitment_states": [
+            {
+                "state": "PLP",
+                "condition": "timeCommitment > block.timestamp"
+            },
+            {
+                "state": "invalid",
+                "condition": "!PLP ^ !JIT ^ !Empty"
+            },
+            {
+                "state": "JIT",
+                "condition": "timeCommitment == type(uint256).max"
+            },
+            {
+                "state": "non-existent",
+                "condition": "timeCommitment == 0"
+            }
+        ],
+        "liquidity_states": [
+            {
+                "state": "empty",
+                "condition": "liquidityLevel == 0"
+            },
+            {
+                "state": "non_empty",
+                "condition": "liquidityLevel > 0"
+            }
+        ]
+    },
+    "position_states": [
+        {
+            "name": "PLP Non-empty Position",
+            "time_commitment": "PLP",
+            "liquidity": "non_empty",
+            "notation": "timeCommitment.isPLP() && liquidityLevel > 0",
+            "withdrawable": false
+        },
+        {
+            "name": "PLP Empty Position",
+            "time_commitment": "PLP",
+            "liquidity": "empty",
+            "notation": "timeCommitment.isPLP() && liquidityLevel == 0",
+            "withdrawable": false
+        },
+        {
+            "name": "Expired Withdrawable Position",
+            "time_commitment": "invalid",
+            "liquidity": "empty",
+            "notation": "!timeCommitment.isPLP() && liquidityLevel == 0",
+            "withdrawable": true
+        },
+        {
+            "name": "Committed Empty Position",
+            "time_commitment": "valid",
+            "liquidity": "empty",
+            "notation": "timeCommitment > block.timestamp && liquidityLevel == 0",
+            "withdrawable": false,
+            "status_note": "Inconsistent state - requires resolution"
+        },
+        {
+            "name": "Active JIT Position",
+            "time_commitment": "JIT",
+            "liquidity": "non_empty",
+            "notation": "timeCommitment == type(uint256).max && liquidityLevel > 0",
+            "withdrawable": true
+        },
+        {
+            "name": "Closed JIT Position",
+            "time_commitment": "JIT",
+            "liquidity": "empty",
+            "notation": "timeCommitment == type(uint256).max && liquidityLevel == 0",
+            "withdrawable": true
+        },
+        {
+            "name": "Uncommitted Position",
+            "time_commitment": "uncommitted",
+            "liquidity": "empty",
+            "notation": "timeCommitment == 0 && liquidityLevel == 0",
+            "withdrawable": true
+        }
+    ],
+    "add_liquidity_transitions": [
+        {
+            "current_state": "Active Committed Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Update timeCommitment and increase liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Active Committed Position",
+            "action": "Add liquidity with invalid timeCommitment",
+            "response": "Maintain current timeCommitment, increase liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Expired Locked Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Update timeCommitment and increase liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Expired Locked Position",
+            "action": "Add liquidity with invalid timeCommitment",
+            "response": "Revert with InvalidPLPAddLiquidityRequest___PLPPositionExpiredAndEnteredTimeCOmmitmentIsInvalid",
+            "next_state": "Expired Locked Position",
+            "error_possible": true
+        },
+        {
+            "current_state": "Expired Withdrawable Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Update timeCommitment and set liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Expired Withdrawable Position",
+            "action": "Add liquidity with invalid timeCommitment",
+            "response": "Revert with InvalidPLPAddLiquidityRequest___PLPPositionExpiredAndEnteredTimeCOmmitmentIsInvalid",
+            "next_state": "Expired Withdrawable Position",
+            "error_possible": true
+        },
+        {
+            "current_state": "Committed Empty Position",
+            "action": "Add liquidity with any timeCommitment",
+            "response": "Update timeCommitment if valid, set liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Active JIT Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Convert to time-based position, update commitment",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Active JIT Position",
+            "action": "Add liquidity with invalid/JIT timeCommitment",
+            "response": "Maintain JIT status, increase liquidity",
+            "next_state": "Active JIT Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Closed JIT Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Convert to time-based position, set liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Closed JIT Position",
+            "action": "Add liquidity with invalid/JIT timeCommitment",
+            "response": "Maintain JIT status, set liquidity",
+            "next_state": "Active JIT Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Uncommitted Position",
+            "action": "Add liquidity with valid timeCommitment",
+            "response": "Set initial timeCommitment and liquidity",
+            "next_state": "Active Committed Position",
+            "event": "UpdtatedPLPPosition",
+            "error_possible": false
+        },
+        {
+            "current_state": "Uncommitted Position",
+            "action": "Add liquidity with invalid timeCommitment",
+            "response": "Revert - requires valid commitment for initialization",
+            "next_state": "Uncommitted Position",
+            "error_possible": true
+        }
+    ],
+    "event_specification": {
+        "name": "UpdtatedPLPPosition",
+        "parameters": [
+            {
+                "name": "positionKey",
+                "type": "bytes32",
+                "indexed": true
+            },
+            {
+                "name": "newTimeCommitment",
+                "type": "uint256",
+                "indexed": true
+            },
+            {
+                "name": "timeDeltaWithCurrentTimeStamp",
+                "type": "uint256",
+                "indexed": true
+            },
+            {
+                "name": "timeDeltaWithPreviousTimeCommitment",
+                "type": "int256"
+            },
+            {
+                "name": "liquidityAdded",
+                "type": "uint256"
+            }
+        ],
+        "description": "Emitted when PLP position is updated with new liquidity"
+    },
+    "error_specification": {
+        "name": "InvalidPLPAddLiquidityRequest___PLPPositionExpiredAndEnteredTimeCOmmitmentIsInvalid",
+        "description": "Reverted when expired position receives invalid time commitment"
+    },
+    "position_key_generation": {
+        "algorithm": "keccak256(abi.encode(address(liquidityRouter), tickUpper, tickLower, salt))",
+        "components": [
+            "liquidityRouter address",
+            "tickUpper (int24)",
+            "tickLower (int24)",
+            "salt (uint256)"
+        ]
+    }
+}

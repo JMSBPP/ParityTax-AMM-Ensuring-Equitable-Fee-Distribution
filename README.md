@@ -69,7 +69,14 @@ A more balanced liquidity ecosystem where:
 ## Key-Metrics
 
 ## Setup
+```sh
 
+git clone https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution.git
+cd ParityTax-AMM-Ensuring-Equitable-Fee-Distribution
+git checkout atrium-cohort5-deliverable
+forge install
+forge build
+```
 ### Build
 
 ### Test
