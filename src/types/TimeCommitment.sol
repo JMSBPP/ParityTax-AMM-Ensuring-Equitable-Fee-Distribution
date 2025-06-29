@@ -1,125 +1,71 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// NOTE TimeCommitment is a block.timestamp > currentTimeStamp
-type TimeCommitment is uint256;
+type TimeCommitment is uint96;
+//NOTE Since we need to enforce the order of timeCommitments
+// we define the timeCommitment as
+// (uint48(timeCommitmentValue) | uint48 (block.timeStamp))
+// --> uint48(block.timeStamp) where the timeCommmitment
+// was entered
 
-uint256 constant JIT = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe;
-uint256 constant NO_EXIST = 0x0;
+//NOTE The order of timeCommitments is ONLY important for PLP's
+// timeCommitments, therefore we can define constants for
 
-enum Tag {
-    NO_EXIST,
-    PLP_EXPIPRED,
-    PLP_NOT_EXPIRED,
-    JIT,
-    INVALID
+// UNINITIALIZED_TIME_COMMITMENT
+// JIT
+
+// NOTE: This values need to have block time stamps that are nots
+//realistic in practice.abi
+
+// NOTE: For both we choose thew same first "block.timeStamp" value
+// as type(uint48).max -1
+uint48 constant NOT_PLP_FLAG = 0xfffffffffffe;
+
+// NOTE: For uninitalized timeCommitments we chose the last
+// 48 bytes to be type(uintt48).max -2
+uint48 constant UNINITIALIZED_TIME_COMMITMENT_FLAG = 0xfffffffffffd;
+// NOTE: For uninitalized timeCommitments we chose the last
+// 48 bytes to be type(uintt48).max -3
+uint48 constant JIT_FLAG = 0xfffffffffffc;
+
+// ========== CONSTANTS FOR NOT PLP TIME COMMITMENTS ========================
+uint96 constant UNINITIALIZED_TIME_COMMITMENT = uint96(
+    uint96((NOT_PLP_FLAG << 48)) | uint96(UNINITIALIZED_TIME_COMMITMENT_FLAG)
+);
+
+uint96 constant JIT = uint96(uint96(NOT_PLP_FLAG << 48) | uint96(JIT_FLAG));
+
+
+error InvalidTimeCommitment___TimeCommitmentMustBePLP();
+
+function toTimeCommitment(
+    uint48 blockTimeStamp,
+    uint48 timeCommitmentValue
+) pure returns (TimeCommitment timeCommitment) {
+    timeCommitment = TimeCommitment.wrap(
+        uint96((blockTimeStamp << 48) | timeCommitmentValue)
+    );
 }
-
-using TimeCommitmentLibrary for TimeCommitment global;
-
-error InvalidTimeCommitment__LPMustSpecifyNonEmptyCommitment();
-error InvalidLiquidityPositionState__LPMsutHaveValidTimeCommitment();
-error InvalidTimeCommitment__IncompatibleTimeCommitmentTags();
-library TimeCommitmentLibrary {
-    function decodeTagAndReturnTimeCommitment(
-        bytes memory encodedTimeCommitment
-    ) internal view returns (TimeCommitment, Tag) {
-        TimeCommitment timeCommitment = abi.decode(
-            encodedTimeCommitment,
-            (TimeCommitment)
-        );
-        return (timeCommitment, tagTimeCommitment(timeCommitment));
-    }
-
-    function validateTimeCommitmentTags(
-        Tag existingTimeCommitmentTag,
-        Tag enteredTimeCommitmentTag
-    ) internal view returns (bool) {
-        if (enteredTimeCommitmentTag == Tag.NO_EXIST) {
-            revert InvalidTimeCommitment__LPMustSpecifyNonEmptyCommitment();
-        }
-
-        //2. If the enteredTimeCommitment is invalid then we must verify
-        // what the validity of the currentTimeCommitment and act accordingly
-
-        if (enteredTimeCommitmentTag == Tag.INVALID) {
-            //2.1 If the existingTimeCommitment is invalid then we
-            // need to custom revert
-            if (existingTimeCommitmentTag == Tag.INVALID) {
-                revert InvalidLiquidityPositionState__LPMsutHaveValidTimeCommitment();
-            } else {
-                if (
-                    ((existingTimeCommitmentTag == Tag.PLP_EXPIPRED) ||
-                        ((existingTimeCommitmentTag == Tag.PLP_NOT_EXPIRED) &&
-                            (enteredTimeCommitmentTag == Tag.JIT))) ||
-                    (existingTimeCommitmentTag == Tag.JIT &&
-                        ((enteredTimeCommitmentTag == Tag.PLP_EXPIPRED) ||
-                            (enteredTimeCommitmentTag == Tag.PLP_NOT_EXPIRED)))
-                ) {
-                    revert InvalidTimeCommitment__IncompatibleTimeCommitmentTags();
-                }
-            }
-        }
-        // If the enteredTimeCommitment is invalid and the existingTimeCommitment
-    }
-
-    function tagTimeCommitment(
+library TimeCommitmentlibrary {
+    function isPLP(
         TimeCommitment timeCommitment
-    ) internal view returns (Tag) {
-        if (timeCommitment.notExistent()) return Tag.NO_EXIST;
-        if (timeCommitment.isJIT()) return Tag.JIT;
-        if (timeCommitment.isPLPExpired()) return Tag.PLP_EXPIPRED;
-        if (timeCommitment.isPLPNotExpired()) return Tag.PLP_NOT_EXPIRED;
-        return Tag.INVALID;
-    }
-
-    function decodeAndTagTimeCommitment(
-        bytes memory encodedTimeCommitment
-    ) internal view returns (Tag) {
-        return
-            abi
-                .decode(encodedTimeCommitment, (TimeCommitment))
-                .tagTimeCommitment();
-    }
-
-    function notExistent(
-        TimeCommitment timeCommitment
-    ) internal pure returns (bool) {
-        return TimeCommitment.unwrap(timeCommitment) == NO_EXIST;
-    }
-
-    function isPLPNotExpired(
-        TimeCommitment timeCommitment
-    ) internal view returns (bool) {
-        return TimeCommitment.unwrap(timeCommitment) > uint256(block.timestamp);
+    ) internal pure returns (bool _isPLP) {
+        uint96 unwrappedTimeCommitment = TimeCommitment.unwrap(timeCommitment);
+        _isPLP =
+            unwrappedTimeCommitment != JIT ||
+            unwrappedTimeCommitment != UNINITIALIZED_TIME_COMMITMENT;
     }
 
     function isPLPExpired(
         TimeCommitment timeCommitment
-    ) internal view returns (bool) {
-        return ((TimeCommitment.unwrap(timeCommitment) <=
-            uint256(block.timestamp)) && !isJIT(timeCommitment));
+    )internal view (bool _isPLPExpired) {
+        if (!isPLP(timeCommitment)) revert InvalidTimeCommitment___TimeCommitmentMustBePLP();
+        _isPLPExpired = uint256(TimeCommitment.unwrap(timeCommitment) >> 48) <= block.timeStamp ;
     }
 
-    function isInvalid(
+    function isPLPNotExpired(
         TimeCommitment timeCommitment
-    ) internal view returns (bool) {
-        return
-            !(isPLPExpired(timeCommitment) ||
-                isPLPNotExpired(timeCommitment) ||
-                isJIT(timeCommitment) ||
-                notExistent(timeCommitment));
-    }
-
-    function isJIT(TimeCommitment timeCommitment) internal pure returns (bool) {
-        return TimeCommitment.unwrap(timeCommitment) == JIT;
-    }
-
-    // TODO This function is managed by the TimeCommitmentControlled which signals
-    // the optimal timeCommitment where visible liquidity is mostly appreciated by the system
-    function isOptimal(
-        TimeCommitment timeCommitment
-    ) internal pure returns (bool) {
-        return false;
+    )internal view returns(bool _isPLPNotExpired) {
+        _isPLPNotExpired = !isPLPExpired(timeCommitment);
     }
 }
