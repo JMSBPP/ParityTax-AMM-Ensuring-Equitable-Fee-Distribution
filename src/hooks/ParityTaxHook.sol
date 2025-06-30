@@ -20,7 +20,6 @@ import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
-    using TimeCommitmentLibrary for TimeCommitment;
     using Position for address;
     using CurrencyLibrary for Currency;
     using CurrencySettler for Currency;
