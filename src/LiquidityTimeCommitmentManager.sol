@@ -9,7 +9,7 @@ contract LiquidityTimeCommitmentManager is
 {
     using StateLibrary for IPoolManager;
 
-    mapping(bytes32 positionKey => TimeCommitment timeCommitment)
+    mapping(PoolId poolId => mapping(bytes32 positionKey => TimeCommitment timeCommitment))
         private positionTimeCommitment;
 
     constructor(IPoolManager _manager) ImmutableState(_manager) {}
@@ -20,13 +20,13 @@ contract LiquidityTimeCommitmentManager is
         TimeCommitment enteredTimeCommitment
     ) external {
         TimeCommitment existingTimeCommitment = positionTimeCommitment[
-            positionKey
-        ];
+            poolKey.toId()
+        ][positionKey];
         if (UNINITIALIZED(existingTimeCommitment)) {
             existingTimeCommitment = toTimeCommitment(UNINITIALIZED_FLAG);
         }
 
-        positionTimeCommitment[positionKey] = add(
+        positionTimeCommitment[poolKey.toId()][positionKey] = add(
             existingTimeCommitment,
             enteredTimeCommitment
         );
@@ -38,8 +38,17 @@ contract LiquidityTimeCommitmentManager is
         emit PositionTimeCommitmentUpdated(
             poolKey.toId(),
             positionKey,
-            timeCommitmentValue(positionTimeCommitment[positionKey]),
+            timeCommitmentValue(
+                positionTimeCommitment[poolKey.toId()][positionKey]
+            ),
             liquidity
         );
+    }
+
+    function getTimeCommitment(
+        PoolId poolId,
+        bytes32 positionKey
+    ) external view returns (TimeCommitment) {
+        return positionTimeCommitment[poolId][positionKey];
     }
 }

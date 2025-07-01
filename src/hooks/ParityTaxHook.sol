@@ -19,7 +19,7 @@ import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
-import "../interfaces/ILiquidityTimeCommitmentManager.sol";
+import "../interfaces/ITaxController.sol";
 
 contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     using Position for address;
@@ -44,14 +44,50 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     // The PLP request is handled by a positionmanager with special services and
     // checks for locking liquiity removal actions based on the passed timeCommitment
     IAllowanceTransfer public immutable permit2;
-    ILiquidityTimeCommitmentManager private timeCommitmentManager;
+    ITaxController private taxController;
     constructor(
         IPoolManager _manager,
         IAllowanceTransfer _permit2,
-        ILiquidityTimeCommitmentManager _timeCommitmentManager
+        ITaxController _taxController
     ) HookCallableBaseHook(_manager) {
         permit2 = _permit2;
-        timeCommitmentManager = _timeCommitmentManager;
+        taxController = _taxController;
+    }
+
+    function _afterAddLiquidity(
+        address liquidityRouter,
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata addLiquidityParams,
+        BalanceDelta,
+        BalanceDelta feeDelta,
+        bytes calldata enteredEncodedTimeCommitment
+    ) internal virtual override returns (bytes4, BalanceDelta) {
+        (bytes32 positionKey, TimeCommitment enteredTimeCommitment) = (
+            liquidityRouter.calculatePositionKey(
+                addLiquidityParams.tickLower,
+                addLiquidityParams.tickUpper,
+                addLiquidityParams.salt
+            ),
+            abi.decode(enteredEncodedTimeCommitment, (TimeCommitment))
+        );
+        {
+            //NOTE: This code chunk updates poolLiquidityTimeCommitments
+            // accordingly
+
+            taxController.updateTaxAccount(
+                positionKey,
+                poolKey,
+                feeDelta,
+                enteredTimeCommitment
+            );
+        }
+        {
+            //NOTE: This code chunck is in charge of collectiong taxRevenue if the liquidity
+            //provider is an LP
+            try
+                taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
+            {} catch (bytes memory reason) {}
+        }
     }
     function getHookPermissions()
         public
@@ -63,8 +99,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
             Hooks.Permissions({
                 beforeInitialize: false,
                 afterInitialize: false,
-                beforeAddLiquidity: true, // NOTE: If the timeCommitment sis invalid
-                // then is a JIT and can only provide liquidity on beforeSwap/afterSwap
+                beforeAddLiquidity: false,
                 afterAddLiquidity: true, //NOTE: This is to enforce deadlines on committed
                 //positions,
                 beforeRemoveLiquidity: true, //NOTE: This allows us to revert it the PLP has not
@@ -85,66 +120,5 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 afterRemoveLiquidityReturnDelta: true // NOTE: This allows the hook to gather revenue from
                 // tax Controller to alter hookDeltas
             });
-    }
-    function _beforeAddLiquidity(
-        address router, //NOTE: A router is also a position manager
-        PoolKey calldata poolKey,
-        ModifyLiquidityParams calldata liquidityParams,
-        bytes calldata timeCommitment
-    ) internal override returns (bytes4) {
-        (bytes32 positionKey, TimeCommitment enteredTimeCommitment) = (
-            router.calculatePositionKey(
-                liquidityParams.tickLower,
-                liquidityParams.tickUpper,
-                liquidityParams.salt
-            ),
-            abi.decode(timeCommitment, (TimeCommitment))
-        );
-        timeCommitmentManager.updatePositionTimeCommitment(
-            positionKey,
-            poolKey,
-            enteredTimeCommitment
-        );
-        return IHooks.beforeAddLiquidity.selector;
-    }
-
-    function _afterAddLiquidity(
-        address liquidityRouter,
-        PoolKey calldata poolKey,
-        ModifyLiquidityParams calldata addLiquidityParams,
-        BalanceDelta,
-        BalanceDelta,
-        bytes calldata enteredEncodedTimeCommitment
-    ) internal virtual override returns (bytes4, BalanceDelta) {
-        //NOTE:
-    }
-
-    // function _settleAddedLiquidityDebt(PoolKey memory key) internal {
-    //     _settle(key.currency0, address(this), _getFullDebt(key.currency0));
-    //     _settle(key.currency1, address(this), _getFullDebt(key.currency1));
-    // }
-
-    // function _transferDeltaFromRouterToThis(
-    //     PoolKey memory key,
-    //     BalanceDelta liquidityDelta
-    // ) internal {
-    //     _accountDelta(key.currency0, liquidityDelta.amount0(), address(this));
-    //     _accountDelta(key.currency1, liquidityDelta.amount1(), address(this));
-    // }
-
-    function _accountDelta(
-        Currency currency,
-        int128 delta,
-        address target
-    ) internal {
-        if (delta == 0) return;
-
-        (int256 previous, int256 next) = currency.applyDelta(target, delta);
-
-        if (next == 0) {
-            NonzeroDeltaCount.decrement();
-        } else if (previous == 0) {
-            NonzeroDeltaCount.increment();
-        }
     }
 }

@@ -18,4 +18,9 @@ interface ILiquidityTimeCommitmentManager {
         PoolKey memory poolKey,
         TimeCommitment enteredTimeCommitment
     ) external;
+
+    function getTimeCommitment(
+        PoolId poolId,
+        bytes32 positionKey
+    ) external view returns (TimeCommitment);
 }

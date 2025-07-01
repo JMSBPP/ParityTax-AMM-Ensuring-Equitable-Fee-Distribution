@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test, console2} from "forge-std/Test.sol";
 import "../src/LiquidityTimeCommitmentManager.sol";
-import "@uniswap/test/utils/Deployers.sol";
+import "@uniswap/v4-core/test/utils/Deployers.sol";
 import "v4-core/libraries/Position.sol";
 contract TimeCommitmentTest is Test, Deployers {
     using Position for address;
@@ -25,5 +25,5 @@ contract TimeCommitmentTest is Test, Deployers {
 
     //NOTE: To test without the hook we need to set a timeCommitment here,
     // In practice timeCommitments will be set on the hook
-    function test__updatePositionTimeCommitment() external {}
+    // function test__updatePositionTimeCommitment() external {}
 }
