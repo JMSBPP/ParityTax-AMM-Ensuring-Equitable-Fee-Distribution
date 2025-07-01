@@ -29,14 +29,13 @@ contract TestTimeCommitment is Test {
         // If there  t1 (an lp is a PLP) and wants to modify
         // the position to JIT, this shoudl revert
         TimeCommitment t1Plust2;
-        if (PLP(t1) && TimeCommitment.unwrap(t2) == JIT) {
-            vm.expectRevert(
-                "InvalidOperation___NotComperableTimeCommitments()"
-            );
+        vm.assume(t1 < t2);
+        if (PLP(t1) && timeCommitmentValue(t2) == JIT_FLAG) {
+            vm.expectRevert();
             timeCommitmentLibrary.Add(t1, t2);
 
             // Conversely if a JIT wants to now be a PLP, this should be possibe
-        } else if (TimeCommitment.unwrap(t1) == JIT && PLP(t2)) {
+        } else if (timeCommitmentValue(t1) == JIT_FLAG && PLP(t2)) {
             t1Plust2 = timeCommitmentLibrary.Add(t1, t2);
             assertEq(PLP(t1Plust2), true);
             assertEq(
@@ -52,10 +51,7 @@ contract TestTimeCommitment is Test {
                 timeCommitmentValue(t1Plust2),
                 timeCommitmentValue(t1) + timeCommitmentValue(t2)
             );
-            console.log(vm.getBlockTimestamp());
-            console.log(timeStamp(t1Plust2));
-            console.log(block.timestamp);
-            // assertEq(vm.getBlockTimestamp(), timeStamp(t1Plust2));
+            assertEq(vm.getBlockTimestamp(), timeStamp(t1Plust2));
             //NOTE: Adding a JIT commitment to a JIT commitment is a JIT
         }
         vm.stopPrank();

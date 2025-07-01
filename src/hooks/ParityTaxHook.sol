@@ -19,6 +19,8 @@ import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
+import "../interfaces/ILiquidityTimeCommitmentManager.sol";
+
 contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     using Position for address;
     using CurrencyLibrary for Currency;
@@ -42,11 +44,14 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     // The PLP request is handled by a positionmanager with special services and
     // checks for locking liquiity removal actions based on the passed timeCommitment
     IAllowanceTransfer public immutable permit2;
+    ILiquidityTimeCommitmentManager private timeCommitmentManager;
     constructor(
         IPoolManager _manager,
-        IAllowanceTransfer _permit2
+        IAllowanceTransfer _permit2,
+        ILiquidityTimeCommitmentManager _timeCommitmentManager
     ) HookCallableBaseHook(_manager) {
         permit2 = _permit2;
+        timeCommitmentManager = _timeCommitmentManager;
     }
     function getHookPermissions()
         public
@@ -82,11 +87,26 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
             });
     }
     function _beforeAddLiquidity(
-        address router, //NOTE: A router is also a position manager. Then we have
-        PoolKey calldata,
-        ModifyLiquidityParams calldata,
+        address router, //NOTE: A router is also a position manager
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata liquidityParams,
         bytes calldata timeCommitment
-    ) internal override returns (bytes4) {}
+    ) internal override returns (bytes4) {
+        (bytes32 positionKey, TimeCommitment enteredTimeCommitment) = (
+            router.calculatePositionKey(
+                liquidityParams.tickLower,
+                liquidityParams.tickUpper,
+                liquidityParams.salt
+            ),
+            abi.decode(timeCommitment, (TimeCommitment))
+        );
+        timeCommitmentManager.updatePositionTimeCommitment(
+            positionKey,
+            poolKey,
+            enteredTimeCommitment
+        );
+        return IHooks.beforeAddLiquidity.selector;
+    }
 
     function _afterAddLiquidity(
         address liquidityRouter,

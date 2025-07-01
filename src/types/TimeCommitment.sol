@@ -12,8 +12,8 @@ type TimeCommitment is uint96;
 using {lt as <, gt as >} for TimeCommitment global;
 using SafeCast for uint96;
 
-error NotComparableTimeCommitments___TimeCommitmentsMustBePLP();
 error InvalidOperation___NotComperableTimeCommitments();
+
 /*
 uint48(block.timeStamp) | uint48(timeCommitmentValue)
 */
@@ -25,17 +25,29 @@ this is type(uint48).max-1
 @dev The last 48 bytes are unRealistic timeCommitment
 this is type(uint48).max -2 
 */
-// -------------------------->    NO_PLP_FLAG |  UNINIT_FLAG
-uint96 constant UNINITIALIZED = 0xfffffffffffefffffffffffd;
-// ----------------->    NO_PLP_FLAG |  JIT_FLAG
-uint96 constant JIT = 0xfffffffffffefffffffffffe;
+// -------------------------->    UNINIT_FLAG
+uint48 constant UNINITIALIZED_FLAG = 0x00;
+// ----------------->      JIT_FLAG
+uint48 constant JIT_FLAG = 0xfffffffffffe;
 // NOTE We define < as only being valid for non uninitialized  or JIT'S
 // time Commitment values, these are PLP's possible timeCommitment values
 // and we have:
 //
 
 function PLP(TimeCommitment timeCommitment) pure returns (bool plp) {
-    plp = TimeCommitment.unwrap(timeCommitment) < UNINITIALIZED;
+    plp =
+        timeCommitmentValue(timeCommitment) > UNINITIALIZED_FLAG &&
+        timeCommitmentValue(timeCommitment) < JIT_FLAG;
+}
+
+function JIT(TimeCommitment timeCommitment) pure returns (bool jit) {
+    jit = timeCommitmentValue(timeCommitment) == JIT_FLAG;
+}
+
+function UNINITIALIZED(
+    TimeCommitment timeCommitment
+) pure returns (bool uninitialized) {
+    uninitialized = timeCommitmentValue(timeCommitment) == UNINITIALIZED_FLAG;
 }
 
 function PLP_EXPIRED(
@@ -75,23 +87,11 @@ function timeCommitmentValue(
 }
 
 function lt(TimeCommitment t1, TimeCommitment t2) pure returns (bool _lt) {
-    if (PLP(t1) && PLP(t2)) {
-        _lt =
-            timeStamp(t1) < timeStamp(t2) &&
-            timeCommitmentValue(t1) < timeCommitmentValue(t2);
-    } else {
-        revert NotComparableTimeCommitments___TimeCommitmentsMustBePLP();
-    }
+    _lt = timeStamp(t1) < timeStamp(t2);
 }
 
 function gt(TimeCommitment t1, TimeCommitment t2) pure returns (bool _gt) {
-    if (PLP(t1) && PLP(t2)) {
-        _gt =
-            timeStamp(t1) > timeStamp(t2) &&
-            timeCommitmentValue(t1) > timeCommitmentValue(t2);
-    } else {
-        revert NotComparableTimeCommitments___TimeCommitmentsMustBePLP();
-    }
+    _gt = timeStamp(t1) > timeStamp(t2);
 }
 
 function toTimeCommitment(uint48 timeCommitment) view returns (TimeCommitment) {
@@ -111,13 +111,13 @@ function add(
     if (lt(t1, t2)) {
         // NOTE: Not having any position allows to specify the lpType freely
         if (
-            TimeCommitment.unwrap(t1) == UNINITIALIZED &&
-            (TimeCommitment.unwrap(t2) == JIT || PLP(t2))
+            timeCommitmentValue(t1) == UNINITIALIZED_FLAG &&
+            (timeCommitmentValue(t2) == JIT_FLAG || PLP(t2))
         ) {
             t1Plust2 = t2;
             // NOTE: Setting uninitialized when there is already a commitment, results
             // in ignoring the entered commitment
-        } else if (TimeCommitment.unwrap(t2) == UNINITIALIZED) {
+        } else if (timeCommitmentValue(t2) == UNINITIALIZED_FLAG) {
             t1Plust2 = t1;
             //NOTE: Adding  a PLP commitment to a PLP commitment is a PLP and follows
             // summing the timeCommitmentValues, NOT THE blockTimeStamps,
@@ -138,16 +138,17 @@ function add(
             );
             //NOTE: Adding  a JIT commitment to a JIT commitment is a JIT
         } else if (
-            TimeCommitment.unwrap(t1) == JIT && TimeCommitment.unwrap(t2) == JIT
+            timeCommitmentValue(t1) == JIT_FLAG &&
+            timeCommitmentValue(t2) == JIT_FLAG
         ) {
-            t1Plust2 = TimeCommitment.wrap(JIT);
+            t1Plust2 = toTimeCommitment(JIT_FLAG);
             //NOTE: PLP's specifying JIT is equivalent to overriding the withdrawal lock
             // which would make the commitment useless, this needs to be avoided.
-        } else if ((PLP(t1) && TimeCommitment.unwrap(t2) == JIT)) {
+        } else if ((PLP(t1) && timeCommitmentValue(t2) == JIT_FLAG)) {
             revert InvalidOperation___NotComperableTimeCommitments();
             //NOTE: Since it's encouraged to be a PLP, then we should allow JIT's
             // to transition to a PLP
-        } else if (TimeCommitment.unwrap(t1) == JIT && PLP(t2)) {
+        } else if (timeCommitmentValue(t1) == JIT_FLAG && PLP(t2)) {
             t1Plust2 = t2;
         }
     } else if (lt(t2, t1)) {
