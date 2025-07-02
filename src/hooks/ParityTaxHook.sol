@@ -86,7 +86,10 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
             //provider is an LP
             try
                 taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
-            {} catch (bytes memory reason) {}
+            {} catch (bytes memory reason) {
+                //NOTE: The revert reason needs to equal the error
+                //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
+            }
         }
     }
     function getHookPermissions()
@@ -109,7 +112,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 // income or charge it, depending on the lpType
                 beforeSwap: true, // NOTE This are the the JIT guarded add liquidity
                 // requests
-                afterSwap: false, // NOTE This are the the JIT guarded add liquidity
+                afterSwap: true, // NOTE This are the the JIT guarded add liquidity
                 // requests
                 beforeDonate: false,
                 afterDonate: false,
