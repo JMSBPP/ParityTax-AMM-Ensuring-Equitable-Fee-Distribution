@@ -6,7 +6,7 @@ import "../src/LiquidityTimeCommitmentManager.sol";
 import "@uniswap/v4-core/test/utils/Deployers.sol";
 import "v4-core/libraries/Position.sol";
 import "../src/TaxController.sol";
-import "permit2/src/AllowanceTransfer.sol";
+import "../src/hooks/ParityTaxHook.sol";
 
 contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
     using Position for address;
@@ -14,7 +14,6 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
     LiquidityTimeCommitmentManager liquidityTimeCommitmentManager;
     TaxController taxController;
     ParityTaxHook parityTaxHook;
-    AllowanceTransfer permit2;
 
     bytes32 positionKey;
 
@@ -38,7 +37,6 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
                 manager,
                 liquidityTimeCommitmentManager
             );
-            permit2 = new AllowanceTransfer();
             parityTaxHook = ParityTaxHook(
                 payable(
                     address(
@@ -49,15 +47,16 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
                                 Hooks.BEFORE_SWAP_FLAG |
                                 Hooks.AFTER_SWAP_FLAG |
                                 Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG |
-                                Hooks.AFTER_ADD_LIQUIDITY_RETURN_DELTA_FLAG |
-                                Hooks.AFTER_REMOVE_LIQUIDITY_RETURN_DELTA_FLAG
+                                Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG |
+                                Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG
                         )
                     )
                 )
             );
+
             deployCodeTo(
-                type(ParityTaxHook).creationCode,
-                abi.encode(manager, permit2, taxController),
+                "ParityTaxHook.sol",
+                abi.encode(manager, taxController),
                 address(parityTaxHook)
             );
         }

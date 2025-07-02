@@ -2,9 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/IParityTaxHook.sol";
-import "permit2/src/interfaces/IAllowanceTransfer.sol";
 import "./base/HookCallableBaseHook.sol";
-
 import "../types/TimeCommitment.sol";
 
 import "v4-core/libraries/Position.sol";
@@ -43,14 +41,11 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
 
     // The PLP request is handled by a positionmanager with special services and
     // checks for locking liquiity removal actions based on the passed timeCommitment
-    IAllowanceTransfer public immutable permit2;
     ITaxController private taxController;
     constructor(
         IPoolManager _manager,
-        IAllowanceTransfer _permit2,
         ITaxController _taxController
     ) HookCallableBaseHook(_manager) {
-        permit2 = _permit2;
         taxController = _taxController;
     }
 
