@@ -62,7 +62,4 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
         }
     }
 
-    //NOTE: To test without the hook we need to set a timeCommitment here,
-    // In practice timeCommitments will be set on the hook
-    // function test__updatePositionTimeCommitment() external {}
 }
