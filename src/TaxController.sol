@@ -152,6 +152,7 @@ contract TaxController is ITaxController, ImmutableState {
         BalanceDelta feeDelta,
         TimeCommitment enteredTimeCommitment
     ) external {
+        
         {
             liquidityTimeCommitmentManager.updatePositionTimeCommitment(
                 positionKey,

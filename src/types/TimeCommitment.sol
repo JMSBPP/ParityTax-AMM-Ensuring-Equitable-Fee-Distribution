@@ -9,8 +9,12 @@ the actual time commitment value
 */
 
 type TimeCommitment is uint96;
+
 using {lt as <, gt as >} for TimeCommitment global;
+using TimeCommitmentLibrary for TimeCommitment global;
+
 using SafeCast for uint96;
+
 
 error InvalidOperation___NotComperableTimeCommitments();
 
@@ -20,15 +24,13 @@ uint48(block.timeStamp) | uint48(timeCommitmentValue)
 
 /*
 @dev The first 48 bytes are a unrealistic timeStamp
-this is type(uint48).max-1
+this is type(uint48).max
 
-@dev The last 48 bytes are unRealistic timeCommitment
-this is type(uint48).max -2 
 */
 // -------------------------->    UNINIT_FLAG
 uint48 constant UNINITIALIZED_FLAG = 0x00;
 // ----------------->      JIT_FLAG
-uint48 constant JIT_FLAG = 0xfffffffffffe;
+uint48 constant JIT_FLAG = 0xffffffffffff;
 // NOTE We define < as only being valid for non uninitialized  or JIT'S
 // time Commitment values, these are PLP's possible timeCommitment values
 // and we have:
@@ -47,7 +49,7 @@ function JIT(TimeCommitment timeCommitment) pure returns (bool jit) {
 function UNINITIALIZED(
     TimeCommitment timeCommitment
 ) pure returns (bool uninitialized) {
-    uninitialized = timeCommitmentValue(timeCommitment) == UNINITIALIZED_FLAG;
+    uninitialized = timeCommitmentValue(timeCommitment) == UNINITIALIZED_FLAG || timeStamp(timeCommitment) == 0x00;
 }
 
 function PLP_EXPIRED(
@@ -78,10 +80,10 @@ function timeStamp(TimeCommitment timeCommitment) pure returns (uint48) {
 function timeCommitmentValue(
     TimeCommitment timeCommitment
 ) pure returns (uint48) {
+    uint96 timeCommitmentX96 = TimeCommitment.unwrap(timeCommitment);
     uint48 _timeCommitmentValue;
     assembly ("memory-safe") {
-        let tv := shl(48, timeCommitment)
-        _timeCommitmentValue := tv
+        _timeCommitmentValue := and(timeCommitmentX96, 0xFFFFFFFFFFFF)
     }
     return _timeCommitmentValue;
 }
@@ -103,11 +105,10 @@ function toTimeCommitment(uint48 timeCommitment) view returns (TimeCommitment) {
 }
 //NOTE This function does not check for expiry PLP possitions but instead
 // optimistically adds them regardless of their expirty status.
-
 function add(
     TimeCommitment t1,
     TimeCommitment t2
-) view returns (TimeCommitment t1Plust2) {
+) returns (TimeCommitment t1Plust2) {
     if (lt(t1, t2)) {
         // NOTE: Not having any position allows to specify the lpType freely
         if (
@@ -154,4 +155,10 @@ function add(
     } else if (lt(t2, t1)) {
         t1Plust2 = add(t2, t1);
     }
+}
+
+library TimeCommitmentLibrary{
+    function set(TimeCommitment self) internal view returns(TimeCommitment timeCommitment){
+        timeCommitment = toTimeCommitment(timeCommitmentValue(self));
+    }    
 }

@@ -48,7 +48,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     ) HookCallableBaseHook(_manager) {
         taxController = _taxController;
     }
-
+    event TimeCommitments(uint48 existing, uint48 newTimeCommitment);
     function _afterAddLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -57,13 +57,18 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         BalanceDelta feeDelta,
         bytes calldata enteredEncodedTimeCommitment
     ) internal virtual override returns (bytes4, BalanceDelta) {
-        (bytes32 positionKey, TimeCommitment enteredTimeCommitment) = (
-            liquidityRouter.calculatePositionKey(
-                addLiquidityParams.tickLower,
-                addLiquidityParams.tickUpper,
-                addLiquidityParams.salt
-            ),
-            abi.decode(enteredEncodedTimeCommitment, (TimeCommitment))
+        TimeCommitment enteredTimeCommitment = TimeCommitment.wrap(
+            abi.decode(enteredEncodedTimeCommitment, (uint96))
+        );
+
+        emit TimeCommitments(
+            timeCommitmentValue(toTimeCommitment(UNINITIALIZED_FLAG)),
+            timeCommitmentValue(enteredTimeCommitment)
+        );
+        bytes32 positionKey = liquidityRouter.calculatePositionKey(
+            addLiquidityParams.tickLower,
+            addLiquidityParams.tickUpper,
+            addLiquidityParams.salt
         );
         {
             //NOTE: This code chunk updates poolLiquidityTimeCommitments
@@ -76,16 +81,20 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 enteredTimeCommitment
             );
         }
-        {
-            //NOTE: This code chunck is in charge of collectiong taxRevenue if the liquidity
-            //provider is an LP
-            try
-                taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
-            {} catch (bytes memory reason) {
-                //NOTE: The revert reason needs to equal the error
-                //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
-            }
-        }
+        // {
+        //     //NOTE: This code chunck is in charge of collectiong taxRevenue if the liquidity
+        //     //provider is an LP
+        //     try
+        //         taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
+        //     {} catch (bytes memory reason) {
+        //         //NOTE: The revert reason needs to equal the error
+        //         //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
+        //     }
+        // }
+        return (
+            IHooks.afterAddLiquidity.selector,
+            BalanceDeltaLibrary.ZERO_DELTA
+        );
     }
     function getHookPermissions()
         public
@@ -103,7 +112,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 beforeRemoveLiquidity: true, //NOTE: This allows us to revert it the PLP has not
                 // completed its deadline, we do not wat to use the
                 // posm deadlienas it also restricts adding liquidity actions
-                afterRemoveLiquidity: false, //NOTE This allows us to re-distribute tax
+                afterRemoveLiquidity: true, //NOTE This allows us to re-distribute tax
                 // income or charge it, depending on the lpType
                 beforeSwap: true, // NOTE This are the the JIT guarded add liquidity
                 // requests

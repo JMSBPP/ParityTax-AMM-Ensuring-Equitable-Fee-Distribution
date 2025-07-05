@@ -22,6 +22,7 @@ contract LiquidityTimeCommitmentManager is
         TimeCommitment existingTimeCommitment = positionTimeCommitment[
             poolKey.toId()
         ][positionKey];
+
         if (UNINITIALIZED(existingTimeCommitment)) {
             existingTimeCommitment = toTimeCommitment(UNINITIALIZED_FLAG);
         }
