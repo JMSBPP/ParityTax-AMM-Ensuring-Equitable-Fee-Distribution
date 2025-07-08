@@ -5,7 +5,6 @@ pragma solidity ^0.8.24;
 // and other for distributing ree revenue to PLP's
 
 import "./interfaces/ITaxController.sol";
-
 contract TaxController is ITaxController, ImmutableState {
     using CurrencySettler for Currency;
     // NOTE: The contract has a reference to the LiquidityTimeCommitmentManager
@@ -145,14 +144,12 @@ contract TaxController is ITaxController, ImmutableState {
     ) internal view returns (BalanceDelta) {
         return _withheldFees[poolId][positionKey];
     }
-
     function updateTaxAccount(
         bytes32 positionKey,
         PoolKey memory poolKey,
         BalanceDelta feeDelta,
         TimeCommitment enteredTimeCommitment
     ) external {
-        
         {
             liquidityTimeCommitmentManager.updatePositionTimeCommitment(
                 positionKey,

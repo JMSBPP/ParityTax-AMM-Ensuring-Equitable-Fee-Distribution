@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
+import {console} from "forge-std/Test.sol";
 /*
 @dev Two uint48, one representing, the blockTimeStamp where
 the value was entered and the other one respresenting
@@ -14,7 +15,6 @@ using {lt as <, gt as >} for TimeCommitment global;
 using TimeCommitmentLibrary for TimeCommitment global;
 
 using SafeCast for uint96;
-
 
 error InvalidOperation___NotComperableTimeCommitments();
 
@@ -49,7 +49,9 @@ function JIT(TimeCommitment timeCommitment) pure returns (bool jit) {
 function UNINITIALIZED(
     TimeCommitment timeCommitment
 ) pure returns (bool uninitialized) {
-    uninitialized = timeCommitmentValue(timeCommitment) == UNINITIALIZED_FLAG || timeStamp(timeCommitment) == 0x00;
+    uninitialized =
+        timeCommitmentValue(timeCommitment) == UNINITIALIZED_FLAG ||
+        timeStamp(timeCommitment) == 0x00;
 }
 
 function PLP_EXPIRED(
@@ -89,11 +91,11 @@ function timeCommitmentValue(
 }
 
 function lt(TimeCommitment t1, TimeCommitment t2) pure returns (bool _lt) {
-    _lt = timeStamp(t1) < timeStamp(t2);
+    _lt = timeStamp(t1) <= timeStamp(t2);
 }
 
 function gt(TimeCommitment t1, TimeCommitment t2) pure returns (bool _gt) {
-    _gt = timeStamp(t1) > timeStamp(t2);
+    _gt = timeStamp(t1) >= timeStamp(t2);
 }
 
 function toTimeCommitment(uint48 timeCommitment) view returns (TimeCommitment) {
@@ -157,8 +159,10 @@ function add(
     }
 }
 
-library TimeCommitmentLibrary{
-    function set(TimeCommitment self) internal view returns(TimeCommitment timeCommitment){
+library TimeCommitmentLibrary {
+    function set(
+        TimeCommitment self
+    ) internal view returns (TimeCommitment timeCommitment) {
         timeCommitment = toTimeCommitment(timeCommitmentValue(self));
-    }    
+    }
 }

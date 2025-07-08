@@ -8,6 +8,7 @@ import "v4-core/libraries/Position.sol";
 import "../src/TaxController.sol";
 import "../src/hooks/ParityTaxHook.sol";
 
+uint256 constant JULY_8TH_TIMESTAMP = 1752012003;
 contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
     using Position for address;
 
@@ -24,9 +25,9 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
     // afterSwapReturnDelta: true
     // afterAddLiquidityReturnDelta: true,
     // afterRemoveLiquidityReturnDelta: true
-    address jit = makeAddr("jit");
-    address plp = makeAddr("plp");
+
     function setUp() public {
+        vm.warp(JULY_8TH_TIMESTAMP);
         {
             deployFreshManagerAndRouters();
             deployMintAndApprove2Currencies();
@@ -76,33 +77,24 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
 
     function test__AddLiquidityTimeCommiment() external {
         //NOTE: Let's start with a jit adding liquidity
-        vm.startPrank(jit);
-        //NOTE: It is going to call the modifyLiquidityRouter
-        // to add Liquidity with a valid jitCommitment
+        vm.warp(JULY_8TH_TIMESTAMP + 1);
         TimeCommitment jitTimeCommitment = toTimeCommitment(JIT_FLAG);
-        console2.log(uint256(TimeCommitment.unwrap(jitTimeCommitment)));
         {
             modifyLiquidityRouter.modifyLiquidity(
                 key,
                 LIQUIDITY_PARAMS,
                 abi.encode(jitTimeCommitment)
             );
-            // NOTE: The call will:
-            // router.modifyLiquidity()
-            //   -> manager.unlock() -> router.unlockCallback()
-            //   -> manager.modifyLiquidity()
-            //   - (event ModifyLiquidity)
-            //   -> ParityTaxHook.afterAddLiqudity()
-            //    -> TaxController.updateTaxAccount()
-            //     -> liquidityTimeCommitmentManager.updateTaxAccount()
-            //      -> (event PositionTimeCommitmentUpdated(
-            //                        poolId,
-            //                        positionKey,
-            //                        JIT_FLAG
-            //                        liquidity
-            //                        ))
-            // Liquidity will be added to the pool
-            //
+        }
+        TimeCommitment plpTimeCommitment = toTimeCommitment(
+            uint48(JULY_8TH_TIMESTAMP + 100)
+        );
+        {
+            modifyLiquidityRouter.modifyLiquidity(
+                key,
+                LIQUIDITY_PARAMS,
+                abi.encode(plpTimeCommitment)
+            );
         }
     }
 }

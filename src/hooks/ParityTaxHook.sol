@@ -7,6 +7,7 @@ import "../types/TimeCommitment.sol";
 
 import "v4-core/libraries/Position.sol";
 import "v4-core/types/BalanceDelta.sol";
+import "v4-core/types/BeforeSwapDelta.sol";
 import "v4-periphery/src/base/DeltaResolver.sol";
 import "v4-core/libraries/CurrencyReserves.sol";
 import {CurrencyLibrary} from "v4-core/types/Currency.sol";
@@ -18,7 +19,7 @@ import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import "../interfaces/ITaxController.sol";
-
+import {console} from "forge-std/Test.sol";
 contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     using Position for address;
     using CurrencyLibrary for Currency;
@@ -48,7 +49,6 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     ) HookCallableBaseHook(_manager) {
         taxController = _taxController;
     }
-    event TimeCommitments(uint48 existing, uint48 newTimeCommitment);
     function _afterAddLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -61,10 +61,6 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
             abi.decode(enteredEncodedTimeCommitment, (uint96))
         );
 
-        emit TimeCommitments(
-            timeCommitmentValue(toTimeCommitment(UNINITIALIZED_FLAG)),
-            timeCommitmentValue(enteredTimeCommitment)
-        );
         bytes32 positionKey = liquidityRouter.calculatePositionKey(
             addLiquidityParams.tickLower,
             addLiquidityParams.tickUpper,
@@ -81,20 +77,96 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 enteredTimeCommitment
             );
         }
-        // {
-        //     //NOTE: This code chunck is in charge of collectiong taxRevenue if the liquidity
-        //     //provider is an LP
-        //     try
-        //         taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
-        //     {} catch (bytes memory reason) {
-        //         //NOTE: The revert reason needs to equal the error
-        //         //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
-        //     }
-        // }
+
+        //NOTE: This code chunck is in charge of
+        // collecting taxRevenue if the liquidity
+        // provider is an JIT
+        try
+            taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
+        {} catch (bytes memory reason) {
+            console.logBytes(reason);
+            //NOTE: The revert reason needs to equal the error
+            //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
+            bytes4 expectedSelector = ITaxController
+                .InvalidTimeCommitment___ActionOnlyAvailableToJIT
+                .selector;
+            bool isJIT;
+            assembly ("memory-safe") {
+                let actualSelector := mload(add(reason, 32))
+                actualSelector := shr(224, actualSelector)
+                isJIT := eq(actualSelector, expectedSelector)
+            }
+            console.log(isJIT);
+            // TODO: Here the taxController handles fee revenue collection
+            // subject to the isJIT result
+        }
+
         return (
             IHooks.afterAddLiquidity.selector,
             BalanceDeltaLibrary.ZERO_DELTA
         );
+    }
+    function _beforeSwap(
+        address,
+        PoolKey calldata,
+        SwapParams calldata,
+        bytes calldata
+    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+        //TODO: This function is in charge to append the swap analytics to detect
+        // order flow toxicity and the JIT lp's that are willing to provide
+        // liqudity to this trade based on those anayltics
+        // consider integration with LP_HUB
+        // This function needs to call a JITHub, which returns the the lp's
+        // and the wight of liquidity that are willing to provide based on
+        // the analytics
+        //
+        // NOTE This is all must be stored on transient storage since at this point we do not know
+        // if the trade will be fulfilled or not
+        //
+        // IJITHub.TransientAddSwapOrder(
+        //                           Analytics data logic
+        //                           PoolKey poolKey
+        //                           SwapParams swapParams);
+        //
+        return (
+            IHooks.beforeSwap.selector,
+            toBeforeSwapDelta(int128(0), int128(0)),
+            0
+        );
+    }
+
+    function _afterSwap(
+        address,
+        PoolKey calldata,
+        SwapParams calldata,
+        BalanceDelta,
+        bytes calldata
+    ) internal override returns (bytes4, int128) {
+        // NOTE: On transient storage now we can retrieve the JIT lp's and their respective
+        // ModifyLiquidityParams for adding liquidity to the pool
+        {
+            // ================================SWAP FULLLMENT===================
+            // TODO With this data this function adds the liquidity of each lp until either
+            // fulfillment or running out of JIT's willing to fulfill the trade
+            // TODO: In the latest the remaining swap amount to be fulfilled needs to be fulfilled
+            // by PLP's
+        }
+        {
+            // =====================TAX REVENUE COLLECTION=====================
+            // TODO: Here the taxController handles fee revenue collection for the JIT lp's
+            // that fulfilled the trade subject to Analytics data and optimal tax setting
+        }
+        {
+            //============LIQUIDITY TIME COMMITMENT MANAGEMENT================
+            // TODO: We update the liquidity time commitments subject to the lp's that
+            // ran out of money, or other cases ...
+        }
+        {
+            //====================DELTA RESOLVERS ACCOUNTING =======================
+            //TODO: At this point we make sure we settle all balances owed/owned to/from
+            // the poolManager
+        }
+        return (IHooks.afterSwap.selector, int128(0));
     }
     function getHookPermissions()
         public

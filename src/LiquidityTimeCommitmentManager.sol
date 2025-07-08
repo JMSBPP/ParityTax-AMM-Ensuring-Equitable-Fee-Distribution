@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/ILiquidityTimeCommitmentManager.sol";
+import {console} from "forge-std/Test.sol";
 
 contract LiquidityTimeCommitmentManager is
     ImmutableState,
@@ -23,13 +24,27 @@ contract LiquidityTimeCommitmentManager is
             poolKey.toId()
         ][positionKey];
 
+        console.log(
+            "Entered Time Commitment:",
+            timeCommitmentValue(enteredTimeCommitment)
+        );
         if (UNINITIALIZED(existingTimeCommitment)) {
             existingTimeCommitment = toTimeCommitment(UNINITIALIZED_FLAG);
         }
-
+        console.log(
+            "Existing Time Commitment:",
+            timeCommitmentValue(existingTimeCommitment)
+        );
         positionTimeCommitment[poolKey.toId()][positionKey] = add(
             existingTimeCommitment,
             enteredTimeCommitment
+        );
+
+        console.log(
+            "New Time Commitment:",
+            timeCommitmentValue(
+                positionTimeCommitment[poolKey.toId()][positionKey]
+            )
         );
         (uint128 liquidity, , ) = poolManager.getPositionInfo(
             poolKey.toId(),
