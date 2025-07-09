@@ -122,7 +122,10 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         //
         // NOTE This is all must be stored on transient storage since at this point we do not know
         // if the trade will be fulfilled or not
-        //
+        {
+            //======== ADDING LIQUIDITY TO THE POOL =============
+            // 1.
+        }
         // IJITHub.TransientAddSwapOrder(
         //                           Analytics data logic
         //                           PoolKey poolKey
@@ -145,7 +148,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         // NOTE: On transient storage now we can retrieve the JIT lp's and their respective
         // ModifyLiquidityParams for adding liquidity to the pool
         {
-            // ================================SWAP FULLLMENT===================
+            // ================================LIQUIDITY REMOVAL FULLLMENT===================
             // TODO With this data this function adds the liquidity of each lp until either
             // fulfillment or running out of JIT's willing to fulfill the trade
             // TODO: In the latest the remaining swap amount to be fulfilled needs to be fulfilled

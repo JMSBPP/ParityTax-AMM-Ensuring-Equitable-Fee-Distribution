@@ -10,3 +10,6 @@
 [submodule "lib/ethereum-vault-connector"]
 	path = lib/ethereum-vault-connector
 	url = https://github.com/euler-xyz/ethereum-vault-connector
+[submodule "lib/bunni-v2"]
+	path = lib/bunni-v2
+	url = https://github.com/timeless-fi/bunni-v2

@@ -35,8 +35,7 @@ $\partial_{\mathcal{L}^{\text{\texttt{JIT}}}} C^{\text{\texttt{slippage}}} \leq 
                 "2*fee > slippage"
             }
         },
-        
-    ]
+        ]
 }
 {
     "beforeSwap.postConditions": [
