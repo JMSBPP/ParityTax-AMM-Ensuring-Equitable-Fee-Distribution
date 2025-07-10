@@ -10,51 +10,20 @@ total trading volume.__)
 - **JIT transactions are only profitable
 when the swap in the middle is large enough, and large trades are much more
 concentrated in the top pools**
+
+
 ### Questions
 - How to incentivize JIT on volatile pools?
   - **Hint:**  pairs in large
 pools have greater liquidity on centralized exchange venues, making the hedging
 transaction much easier and cheaper to complete. $\to$ Create alternative relaibale hedging mechanism for volatile pools.
+
+
 ## Advantages:
-- With Hooks JIT's save the cost of paying miners, because their liquidity is guranteed on `afterSwap`
--    
-$\partial_{\mathcal{L}^{\text{\texttt{JIT}}}} C^{\text{\texttt{slippage}}} \leq 2\cdot \phi^M$
-- $\mathcal{L}^{\text{\texttt{JIT}}} \bigg ( \big [i^{\text{\texttt{swap}}}_{l}, i^{\text{\texttt{swap}}}_{u} \big ] \bigg ) + \text{\texttt{hedging}}$
-- Integration with `flashbots`
 
 ## `beforeSwap`
 
-```json
-{
-    "beforeSwap.preConditions":[
-        {
-            "name":"expectedProfit is positive",
-            "description": {
-                "liquidityDelta*fee - addRemoveLiquidityGasCost
-                >= swapDelta*(slippage - fee) - swapGasCost",
-                "2*fee > slippage"
-            }
-        },
-        ]
-}
-{
-    "beforeSwap.postConditions": [
-        {
-            "description:": "addLiquidity.blockNumber==removeLiquidity.blockNumber"
-        },
-        {
-            "description": "removeLiquidity.nonce == swap.nonce + addLiquidity.nonce"
-        }
-    ],
-    "beforeSwap.logic":[
-        {
-            "name": "computeDifference",
-            "description": {
-                "1": "uint256 quoteTokenProfit =addedLiquidityDelta.amount0() - removedLiquidityDelta.amount0()",
-
-            }
-
-        }
-    ]
-}
-```
+- Calculate revenue:
+$$
+Y^{LP} \bigg ( \phi^M, \Delta \big (\big [ i_{k}, i_{k+\varepsilon}\big ]\big ) \bigg) = \mathcal{L} \bigg ( \big [ i_{k}, i_{k+\varepsilon}\big ] \bigg) \cdot \phi \bigg ( \Delta \big (\big [ i_{k}, i_{k+\varepsilon}\big ]\big) \bigg) + \mathcal{p} \bigg ( P_{Y/X} \big ( \Delta \big ), P_{Y/X} \big (0\big)\bigg)
+$$

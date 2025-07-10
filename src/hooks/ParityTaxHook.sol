@@ -112,13 +112,14 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         SwapParams calldata,
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        //TODO: This function is in charge to append the swap analytics to detect
-        // order flow toxicity and the JIT lp's that are willing to provide
-        // liqudity to this trade based on those anayltics
-        // consider integration with LP_HUB
-        // This function needs to call a JITHub, which returns the the lp's
-        // and the wight of liquidity that are willing to provide based on
-        // the analytics
+        {
+            //========
+            // 1. Here we ask the revenueManager what is the
+            // optimal trading fee to be charged
+            // --> f(d)
+            // 2. We ask the JTTHub to calculate the expected slippage
+            // --> s(d)
+        }
         //
         // NOTE This is all must be stored on transient storage since at this point we do not know
         // if the trade will be fulfilled or not
