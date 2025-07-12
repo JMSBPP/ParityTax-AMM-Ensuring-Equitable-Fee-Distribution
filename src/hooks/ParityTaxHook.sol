@@ -18,7 +18,8 @@ import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
-import "../interfaces/ITaxController.sol";
+import {ITaxController} from "../interfaces/ITaxController.sol";
+import {IJITHub, JITLiquidityResult} from "../JITUtils/interfaces/IJITHub.sol";
 import {console} from "forge-std/Test.sol";
 contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     using Position for address;
@@ -43,11 +44,14 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
     // The PLP request is handled by a positionmanager with special services and
     // checks for locking liquiity removal actions based on the passed timeCommitment
     ITaxController private taxController;
+    IJITHub private jitHub;
     constructor(
         IPoolManager _manager,
-        ITaxController _taxController
+        ITaxController _taxController,
+        IJITHub _jitHub
     ) HookCallableBaseHook(_manager) {
         taxController = _taxController;
+        jitHub = _jitHub;
     }
     function _afterAddLiquidity(
         address liquidityRouter,
@@ -107,19 +111,25 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         );
     }
     function _beforeSwap(
-        address,
-        PoolKey calldata,
-        SwapParams calldata,
+        address routerSender,
+        PoolKey calldata poolKey,
+        SwapParams calldata swapParams,
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        {
-            //========
-            // 1. Here we ask the revenueManager what is the
-            // optimal trading fee to be charged
-            // --> f(d)
-            // 2. We ask the JTTHub to calculate the expected slippage
-            // --> s(d)
-        }
+        // NOTE: We return the JITLiquidityDelta if LP were to provide the
+        // liquidity
+        JITLiquidityResult memory jitLiquidityResult = jitHub
+            .calculateJITLiquidityParamsForSwap(
+                routerSender,
+                poolKey,
+                swapParams
+            );
+
+        poolManager.modifyLiquidity(
+            poolKey,
+            jitLiquidityResult.jitLiquidityParams,
+            abi.encode(toTimeCommitment(JIT_FLAG))
+        );
         //
         // NOTE This is all must be stored on transient storage since at this point we do not know
         // if the trade will be fulfilled or not

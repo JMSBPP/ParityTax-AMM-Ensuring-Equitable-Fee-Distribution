@@ -7,6 +7,7 @@ import "@uniswap/v4-core/test/utils/Deployers.sol";
 import "v4-core/libraries/Position.sol";
 import "../src/TaxController.sol";
 import "../src/hooks/ParityTaxHook.sol";
+import {JITHub} from "../src/JITUtils/JITHub.sol";
 
 uint256 constant JULY_8TH_TIMESTAMP = 1752012003;
 contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
@@ -15,6 +16,7 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
     LiquidityTimeCommitmentManager liquidityTimeCommitmentManager;
     TaxController taxController;
     ParityTaxHook parityTaxHook;
+    JITHub jitHub;
 
     bytes32 positionKey;
 
@@ -40,6 +42,7 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
                 manager,
                 liquidityTimeCommitmentManager
             );
+            jitHub = new JITHub(manager);
             parityTaxHook = ParityTaxHook(
                 address(
                     uint160(
@@ -58,7 +61,7 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
 
             deployCodeTo(
                 "ParityTaxHook",
-                abi.encode(manager, taxController),
+                abi.encode(manager, taxController, jitHub),
                 address(parityTaxHook)
             );
         }
