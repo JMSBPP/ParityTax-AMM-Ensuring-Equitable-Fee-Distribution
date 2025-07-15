@@ -73,22 +73,6 @@ contract JITHub is IJITHub, ImmutableState {
             uint24 swapFeeBeforeSwap
         ) = poolManager.getSlot0(poolId);
 
-        // NOTE: Since we can now the swap result in advance we perform a simulation
-        // Since the ModifyLiquidityParams from the SwapSimulationLibrary
-        // takes Pool.ModifyLiquidityParams
-        // Pool.ModifyLiquidityParams
-        //     memory jitSimulationAdaptedLiquidityParams = Pool
-        //         .ModifyLiquidityParams({
-        //             owner: routerSender,
-        //             tickLower: jitLiquidityParams.tickLower,
-        //             tickUpper: jitLiquidityParams.tickUpper,
-        //             liquidityDelta: jitLiquidityParams
-        //                 .liquidityDelta
-        //                 .toInt128(),
-        //             tickSpacing: poolKey.tickSpacing,
-        //             salt: jitLiquidityParams.salt
-        //         });
-        //NOTE: Same happens for SwapParams
         Pool.SwapParams memory simulationSwapParams = Pool.SwapParams({
             amountSpecified: swapParams.amountSpecified,
             tickSpacing: poolKey.tickSpacing,
@@ -109,23 +93,7 @@ contract JITHub is IJITHub, ImmutableState {
             Pool.SwapResult memory result
         ) = simulation.simulateSwapPLPLiquidity();
         // // Tracks the state of a pool throughout a swap, and returns these values at the end of the swap
-        // struct SwapResult {
-        // // the current sqrt(price)
-        // uint160 sqrtPriceX96;
-        // // the tick associated with the current price
-        // int24 tick;
-        // // the current liquidity in range
-        // uint128 liquidity;
-        // }
-        // struct ModifyLiquidityParams {
-        //     // the lower and upper tick of the position
-        //     int24 tickLower;
-        //     int24 tickUpper;
-        //     // how to modify the liquidity
-        //     int256 liquidityDelta;
-        //     // a value to set if you want unique liquidity positions at the same range
-        //     bytes32 salt;
-        // }
+        // struct SwapResult
         uint160 priceAfterSwapX96 = result.sqrtPriceX96;
 
         uint256 priceImpact = priceAfterSwapX96.absDiff(priceBeforeSwapX96);

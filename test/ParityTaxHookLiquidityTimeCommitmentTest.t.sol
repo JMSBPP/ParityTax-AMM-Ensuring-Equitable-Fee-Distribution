@@ -9,62 +9,19 @@ import "../src/TaxController.sol";
 import "../src/hooks/ParityTaxHook.sol";
 import {JITHub} from "../src/JITUtils/JITHub.sol";
 
+import {SharedStateSetUp} from "./shared/SharedStateSetUp.sol";
 uint256 constant JULY_8TH_TIMESTAMP = 1752012003;
-contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
+contract ParityTaxHookLiquidityTimeCommitmentTest is
+    Test,
+    Deployers,
+    SharedStateSetUp
+{
     using Position for address;
-
-    LiquidityTimeCommitmentManager liquidityTimeCommitmentManager;
-    TaxController taxController;
-    ParityTaxHook parityTaxHook;
-    JITHub jitHub;
 
     bytes32 positionKey;
 
-    // afterAddLiquidity: true
-    // beforeRemoveLiquidity: true,
-    // beforeSwap: true,
-    // afterSwap: true
-    // afterSwapReturnDelta: true
-    // afterAddLiquidityReturnDelta: true,
-    // afterRemoveLiquidityReturnDelta: true
-
     function setUp() public {
-        vm.warp(JULY_8TH_TIMESTAMP);
-        {
-            deployFreshManagerAndRouters();
-            deployMintAndApprove2Currencies();
-        }
-        {
-            liquidityTimeCommitmentManager = new LiquidityTimeCommitmentManager(
-                manager
-            );
-            taxController = new TaxController(
-                manager,
-                liquidityTimeCommitmentManager
-            );
-            jitHub = new JITHub(manager);
-            parityTaxHook = ParityTaxHook(
-                address(
-                    uint160(
-                        Hooks.AFTER_ADD_LIQUIDITY_FLAG |
-                            Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG |
-                            Hooks.BEFORE_SWAP_FLAG |
-                            Hooks.AFTER_SWAP_FLAG |
-                            Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG |
-                            Hooks.AFTER_ADD_LIQUIDITY_FLAG |
-                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG |
-                            Hooks.AFTER_REMOVE_LIQUIDITY_FLAG |
-                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG
-                    )
-                )
-            );
-
-            deployCodeTo(
-                "ParityTaxHook",
-                abi.encode(manager, taxController, jitHub),
-                address(parityTaxHook)
-            );
-        }
+        deployBaseProtocol(JULY_8TH_TIMESTAMP);
         {
             //NOTE: This code chunk starts a pool with empty liquidity
             (key, ) = initPool(
@@ -100,4 +57,6 @@ contract ParityTaxHookLiquidityTimeCommitmentTest is Test, Deployers {
             );
         }
     }
+
+    function test__beforeSwapJITLiquidity() external {}
 }
