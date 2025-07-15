@@ -21,7 +21,7 @@ contract SharedStateSetUp is Test, Deployers {
         vm.warp(blockTimeStamp);
         {
             deployFreshManagerAndRouters();
-            deployMintAndApprove2Currencies();
+            (currency0, currency1) = deployMintAndApprove2Currencies();
         }
         {
             liquidityTimeCommitmentManager = new LiquidityTimeCommitmentManager(

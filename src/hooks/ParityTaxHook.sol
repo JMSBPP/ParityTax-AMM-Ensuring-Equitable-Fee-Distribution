@@ -88,7 +88,6 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         try
             taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
         {} catch (bytes memory reason) {
-            console.logBytes(reason);
             //NOTE: The revert reason needs to equal the error
             //InvalidTimeCommitment___ActionOnlyAvailableToJIT();
             bytes4 expectedSelector = ITaxController
@@ -100,7 +99,6 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
                 actualSelector := shr(224, actualSelector)
                 isJIT := eq(actualSelector, expectedSelector)
             }
-            console.log(isJIT);
             // TODO: Here the taxController handles fee revenue collection
             // subject to the isJIT result
         }
