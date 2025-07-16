@@ -12,6 +12,9 @@
   <img src="assets/logo.png" alt="Description" width="300"/>
 </p>
 
+> Explore the full protocol design, mechanism details, and usage instructions in the [ParityTax-AMM Documentation](https://parity-tax-amm.gitbook.io/parity-tax-amm-docs)
+
+
 ## Table of Contents
 - [ParityTax-AMM-Ensuring-Equitable-Fee-Distribution](#paritytax-amm-ensuring-equitable-fee-distribution)
   - [Table of Contents](#table-of-contents)

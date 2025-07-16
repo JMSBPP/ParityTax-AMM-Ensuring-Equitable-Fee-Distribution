@@ -1,18 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// NOTE This contract needs to have two references one for collecting the taxes on feeDeltas for JIT's
-// and other for distributing ree revenue to PLP's
-
 import "./interfaces/ITaxController.sol";
+
+/**
+ * @title TaxController
+ * @author j-money-11
+ * @notice This contract manages the collection of fees from JIT providers and the distribution
+ * of that revenue to PLPs.
+ * @dev It uses the `LiquidityTimeCommitmentManager` to differentiate between JIT and PLP positions
+ * and enforce the corresponding rules.
+ */
 contract TaxController is ITaxController, ImmutableState {
     using CurrencySettler for Currency;
-    // NOTE: The contract has a reference to the LiquidityTimeCommitmentManager
-    // that tells it the timeCommitment of the position per pool
+
+    /// @dev A reference to the LiquidityTimeCommitmentManager.
     ILiquidityTimeCommitmentManager private liquidityTimeCommitmentManager;
 
+    /// @dev Mapping to store fees withheld from JIT providers.
     mapping(PoolId => mapping(bytes32 => BalanceDelta)) private _withheldFees;
 
+    /**
+     * @dev Modifier to restrict a function to be called only by PLPs.
+     */
     modifier onlyPLP(PoolId poolId, bytes32 positionKey) {
         if (
             !PLP(
@@ -27,6 +37,9 @@ contract TaxController is ITaxController, ImmutableState {
         _;
     }
 
+    /**
+     * @dev Modifier to restrict a function to be called only by PLPs whose time commitment has expired.
+     */
     modifier onlyPLPExpired(PoolId poolId, bytes32 positionKey) {
         if (
             !PLP_EXPIRED(
@@ -41,6 +54,9 @@ contract TaxController is ITaxController, ImmutableState {
         _;
     }
 
+    /**
+     * @dev Modifier to restrict a function to be called only by JIT providers.
+     */
     modifier onlyJIT(PoolId poolId, bytes32 positionKey) {
         if (
             !JIT(
@@ -54,6 +70,7 @@ contract TaxController is ITaxController, ImmutableState {
         }
         _;
     }
+
     constructor(
         IPoolManager _manager,
         ILiquidityTimeCommitmentManager _liquidityTimeCommitmentManager
@@ -61,11 +78,14 @@ contract TaxController is ITaxController, ImmutableState {
         liquidityTimeCommitmentManager = _liquidityTimeCommitmentManager;
     }
 
+    /**
+     * @inheritdoc ITaxController
+     */
     function collectFeeRevenue(
         PoolKey calldata key,
         bytes32 positionKey,
         BalanceDelta feeDelta
-    ) external virtual onlyJIT(key.toId(), positionKey) {
+    ) external virtual override onlyJIT(key.toId(), positionKey) {
         PoolId poolId = key.toId();
 
         _withheldFees[poolId][positionKey] =
@@ -93,27 +113,24 @@ contract TaxController is ITaxController, ImmutableState {
         );
     }
 
+    /**
+     * @inheritdoc ITaxController
+     */
     function distributeFeeRevenue(
         PoolKey calldata key,
         bytes32 positionKey
     )
         external
         virtual
+        override
         onlyPLPExpired(key.toId(), positionKey)
-        returns (BalanceDelta withheldFees)
+        returns (BalanceDelta memory withheldFees)
     {
         PoolId poolId = key.toId();
-        // NOTE: This collects the fee revenue associated with the PLP. In practice
-        // we have to aggregat the fee revenue and distribute the corresponding portion to the PLP
-        // maiking hte withdrawal request.
-
-        // Therefore this is only for tsting purposes
         withheldFees = _getFeeRevenueCollected(poolId, positionKey);
 
-        // NOTE: This is also for testing pruposes, see above note
         _withheldFees[poolId][positionKey] = BalanceDeltaLibrary.ZERO_DELTA;
 
-        // Settle the `withheldFees` for the liquidity position.
         if (withheldFees.amount0() > 0) {
             key.currency0.settle(
                 poolManager,
@@ -138,24 +155,32 @@ contract TaxController is ITaxController, ImmutableState {
         );
     }
 
+    /**
+     * @notice Retrieves the fee revenue collected for a specific position.
+     * @param poolId The ID of the pool.
+     * @param positionKey The key of the position.
+     * @return BalanceDelta The collected fee revenue.
+     */
     function _getFeeRevenueCollected(
         PoolId poolId,
         bytes32 positionKey
-    ) internal view returns (BalanceDelta) {
+    ) internal view returns (BalanceDelta memory) {
         return _withheldFees[poolId][positionKey];
     }
+
+    /**
+     * @inheritdoc ITaxController
+     */
     function updateTaxAccount(
         bytes32 positionKey,
         PoolKey memory poolKey,
         BalanceDelta feeDelta,
         TimeCommitment enteredTimeCommitment
-    ) external {
-        {
-            liquidityTimeCommitmentManager.updatePositionTimeCommitment(
-                positionKey,
-                poolKey,
-                enteredTimeCommitment
-            );
-        }
+    ) external override {
+        liquidityTimeCommitmentManager.updatePositionTimeCommitment(
+            positionKey,
+            poolKey,
+            enteredTimeCommitment
+        );
     }
 }

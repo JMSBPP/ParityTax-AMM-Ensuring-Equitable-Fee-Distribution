@@ -16,17 +16,26 @@ import {LiquidityMath} from "v4-core/libraries/LiquidityMath.sol";
 import {LiquidityAmounts} from "v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {LiquidityOperations} from "v4-periphery/test/shared/LiquidityOperations.sol";
 
-//NOTE We probably need to import more types here
-
 import {Pool} from "v4-core/libraries/Pool.sol";
 
-//==============BUNNI-IMPORTS ======================
 import {ILiquidityDensityFunction} from "bunni-v2/src/interfaces/ILiquidityDensityFunction.sol";
+
+/**
+ * @title JITLiquidityDistributionOnSwap
+ * @author j-money-11
+ * @notice A struct to represent the distribution of JIT liquidity on a swap.
+ */
 struct JITLiquidityDistributionOnSwap {
     SwapParams swapParams;
     ModifyLiquidityParams jitLiquidityParamsOnSwap;
 }
 
+/**
+ * @title JITLiquidityDistributionOnSwapLibrary
+ * @author j-money-11
+ * @notice A library for handling operations related to JIT liquidity distribution.
+ * @dev This library is currently a placeholder for future functionality.
+ */
 library JITLiquidityDistributionOnSwapLibrary {
     using LiquidityAmounts for uint160;
     using SqrtPriceMath for uint160;
@@ -37,19 +46,7 @@ library JITLiquidityDistributionOnSwapLibrary {
     using StateLibrary for IPoolManager;
     using TransientStateLibrary for IPoolManager;
 
-    // TODO: This is we are finding
-    // [i_l,i_s](SwapParams, PoolState)
-
     function getPositionTickRange(
         JITLiquidityDistributionOnSwap memory jitLiquidityDistributionOnSwap
     ) internal view returns (PositionConfig memory) {}
-
-    //TODO: a0([i_l,i_s]),a1([i_l,i_s])
-    // This integrates with StepComputations
-    // amountIn, amountOut
-    // This ressembles what was defined on Bunni for
-    // Liquidity distributions
-
-    // TODO: Get the swap slippage associated with the
-    // swap
 }

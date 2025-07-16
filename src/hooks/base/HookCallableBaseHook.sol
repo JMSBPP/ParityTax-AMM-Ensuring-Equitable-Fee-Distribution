@@ -3,10 +3,13 @@ pragma solidity ^0.8.0;
 
 import "v4-periphery/src/utils/BaseHook.sol";
 
-//NOTE: This is a base contract for allowing
-// external calls coming from other hooks
-// not only the poolManager as enforced by the
-// BaseHook
+/**
+ * @title HookCallableBaseHook
+ * @author j-money-11
+ * @notice This is a base contract that allows for external calls to hooks from sources
+ * other than the PoolManager, which is the default behavior of the BaseHook.
+ * @dev This provides more flexibility for complex interactions between hooks and other contracts.
+ */
 abstract contract HookCallableBaseHook is IHooks, ImmutableState {
     error HookNotImplemented();
 
@@ -14,30 +17,35 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         validateHookAddress(this);
     }
 
-    /// @notice Returns a struct of permissions to signal which hook functions are to be implemented
-    /// @dev Used at deployment to validate the address correctly represents the expected permissions
-    /// @return Permissions struct
+    /**
+     * @notice Returns a struct of permissions to signal which hook functions are to be implemented.
+     * @dev Used at deployment to validate the address correctly represents the expected permissions.
+     * @return Permissions struct
+     */
     function getHookPermissions()
         public
         pure
         virtual
         returns (Hooks.Permissions memory);
 
-    /// @notice Validates the deployed hook address agrees with the expected permissions of the hook
-    /// @dev this function is virtual so that we can override it during testing,
-    /// which allows us to deploy an implementation to any address
-    /// and then etch the bytecode into the correct address
+    /**
+     * @notice Validates the deployed hook address agrees with the expected permissions of the hook.
+     * @dev this function is virtual so that we can override it during testing,
+     * which allows us to deploy an implementation to any address
+     * and then etch the bytecode into the correct address
+     */
     function validateHookAddress(
         HookCallableBaseHook _this
     ) internal pure virtual {
         Hooks.validateHookPermissions(_this, getHookPermissions());
     }
+
     /// @inheritdoc IHooks
     function beforeInitialize(
         address sender,
         PoolKey calldata key,
         uint160 sqrtPriceX96
-    ) external onlyPoolManager returns (bytes4) {
+    ) external virtual onlyPoolManager returns (bytes4) {
         return _beforeInitialize(sender, key, sqrtPriceX96);
     }
 
@@ -55,7 +63,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         PoolKey calldata key,
         uint160 sqrtPriceX96,
         int24 tick
-    ) external onlyPoolManager returns (bytes4) {
+    ) external virtual onlyPoolManager returns (bytes4) {
         return _afterInitialize(sender, key, sqrtPriceX96, tick);
     }
 
@@ -74,7 +82,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
-    ) external onlyPoolManager returns (bytes4) {
+    ) external virtual onlyPoolManager returns (bytes4) {
         return _beforeAddLiquidity(sender, key, params, hookData);
     }
 
@@ -86,13 +94,14 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
     ) internal virtual returns (bytes4) {
         revert HookNotImplemented();
     }
+
     /// @inheritdoc IHooks
     function beforeRemoveLiquidity(
         address sender,
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata hookData
-    ) external returns (bytes4) {
+    ) external virtual returns (bytes4) {
         return _beforeRemoveLiquidity(sender, key, params, hookData);
     }
 
@@ -113,7 +122,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         BalanceDelta delta,
         BalanceDelta feesAccrued,
         bytes calldata hookData
-    ) external returns (bytes4, BalanceDelta) {
+    ) external virtual returns (bytes4, BalanceDelta memory) {
         return
             _afterAddLiquidity(
                 sender,
@@ -132,7 +141,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         BalanceDelta,
         BalanceDelta,
         bytes calldata
-    ) internal virtual returns (bytes4, BalanceDelta) {
+    ) internal virtual returns (bytes4, BalanceDelta memory) {
         revert HookNotImplemented();
     }
 
@@ -144,7 +153,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         BalanceDelta delta,
         BalanceDelta feesAccrued,
         bytes calldata hookData
-    ) external returns (bytes4, BalanceDelta) {
+    ) external virtual returns (bytes4, BalanceDelta memory) {
         return
             _afterRemoveLiquidity(
                 sender,
@@ -163,7 +172,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         BalanceDelta,
         BalanceDelta,
         bytes calldata
-    ) internal virtual returns (bytes4, BalanceDelta) {
+    ) internal virtual returns (bytes4, BalanceDelta memory) {
         revert HookNotImplemented();
     }
 
@@ -173,7 +182,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         PoolKey calldata key,
         SwapParams calldata params,
         bytes calldata hookData
-    ) external returns (bytes4, BeforeSwapDelta, uint24) {
+    ) external virtual returns (bytes4, BeforeSwapDelta, uint24) {
         return _beforeSwap(sender, key, params, hookData);
     }
 
@@ -193,7 +202,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata hookData
-    ) external returns (bytes4, int128) {
+    ) external virtual returns (bytes4, int128) {
         return _afterSwap(sender, key, params, delta, hookData);
     }
 
@@ -214,7 +223,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         uint256 amount0,
         uint256 amount1,
         bytes calldata hookData
-    ) external onlyPoolManager returns (bytes4) {
+    ) external virtual onlyPoolManager returns (bytes4) {
         return _beforeDonate(sender, key, amount0, amount1, hookData);
     }
 
@@ -235,7 +244,7 @@ abstract contract HookCallableBaseHook is IHooks, ImmutableState {
         uint256 amount0,
         uint256 amount1,
         bytes calldata hookData
-    ) external onlyPoolManager returns (bytes4) {
+    ) external virtual onlyPoolManager returns (bytes4) {
         return _afterDonate(sender, key, amount0, amount1, hookData);
     }
 
