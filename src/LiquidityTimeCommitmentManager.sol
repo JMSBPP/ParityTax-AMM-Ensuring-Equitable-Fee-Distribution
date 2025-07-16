@@ -4,13 +4,11 @@ pragma solidity ^0.8.24;
 import "./interfaces/ILiquidityTimeCommitmentManager.sol";
 import {console} from "forge-std/Test.sol";
 
-/**
- * @title LiquidityTimeCommitmentManager
- * @author j-money-11
- * @notice This contract manages the time commitments of liquidity positions in Uniswap V4 pools.
- * @dev It tracks the `TimeCommitment` for each position, allowing the system to differentiate
- * between PLPs and JITs and enforce time-based rules.
- */
+/// @title LiquidityTimeCommitmentManager
+/// @author j-money-11
+/// @notice This contract manages the time commitments of liquidity positions in Uniswap V4 pools.
+/// @dev It tracks the `TimeCommitment` for each position, allowing the system to differentiate
+/// between PLPs and JITs and enforce time-based rules.
 contract LiquidityTimeCommitmentManager is
     ImmutableState,
     ILiquidityTimeCommitmentManager
@@ -23,9 +21,7 @@ contract LiquidityTimeCommitmentManager is
 
     constructor(IPoolManager _manager) ImmutableState(_manager) {}
 
-    /**
-     * @inheritdoc ILiquidityTimeCommitmentManager
-     */
+    /// @inheritdoc ILiquidityTimeCommitmentManager
     function updatePositionTimeCommitment(
         bytes32 positionKey,
         PoolKey memory poolKey,
@@ -59,9 +55,7 @@ contract LiquidityTimeCommitmentManager is
         );
     }
 
-    /**
-     * @inheritdoc ILiquidityTimeCommitmentManager
-     */
+    /// @inheritdoc ILiquidityTimeCommitmentManager
     function getTimeCommitment(
         PoolId poolId,
         bytes32 positionKey

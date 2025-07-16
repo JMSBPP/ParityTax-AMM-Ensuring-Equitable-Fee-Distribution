@@ -26,12 +26,10 @@ import {SwapSimulation, SwapSimulationLibrary} from "./types/SwapSimulation.sol"
 import {SqrtPriceMath} from "v4-core/libraries/SqrtPriceMath.sol";
 import {LiquidityAmounts} from "v4-periphery/src/libraries/LiquidityAmounts.sol";
 
-/**
- * @title JITHub
- * @author j-money-11
- * @notice This contract is responsible for calculating the optimal parameters for JIT liquidity provision.
- * @dev It simulates swaps to determine profitability and the required liquidity parameters.
- */
+/// @title JITHub
+/// @author j-money-11
+/// @notice This contract is responsible for calculating the optimal parameters for JIT liquidity provision.
+/// @dev It simulates swaps to determine profitability and the required liquidity parameters.
 contract JITHub is IJITHub, ImmutableState {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
@@ -52,9 +50,7 @@ contract JITHub is IJITHub, ImmutableState {
 
     constructor(IPoolManager _manager) ImmutableState(_manager) {}
 
-    /**
-     * @inheritdoc IJITHub
-     */
+    /// @inheritdoc IJITHub
     function calculateJITLiquidityParamsForSwap(
         address routerSender,
         PoolKey memory poolKey,
@@ -82,7 +78,7 @@ contract JITHub is IJITHub, ImmutableState {
         });
 
         (
-            BalanceDelta memory swapDelta,
+            BalanceDelta swapDelta,
             ,
             uint24 swapFee,
             Pool.SwapResult memory result
@@ -133,11 +129,9 @@ contract JITHub is IJITHub, ImmutableState {
         }
     }
 
-    /**
-     * @notice Pushes new swap data to the trading volume history.
-     * @param poolId The ID of the pool.
-     * @param enteredSwapParams The parameters of the swap to record.
-     */
+    /// @notice Pushes new swap data to the trading volume history.
+    /// @param poolId The ID of the pool.
+    /// @param enteredSwapParams The parameters of the swap to record.
     function pushSwapData(
         PoolId poolId,
         SwapParams memory enteredSwapParams

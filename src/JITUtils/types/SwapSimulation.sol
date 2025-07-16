@@ -7,24 +7,20 @@ import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {BitMath} from "v4-core/libraries/BitMath.sol";
 
-/**
- * @title SwapSimulation
- * @author j-money-11
- * @notice A struct to hold the parameters for simulating a swap.
- */
+/// @title SwapSimulation
+/// @author j-money-11
+/// @notice A struct to hold the parameters for simulating a swap.
 struct SwapSimulation {
     IPoolManager manager;
     PoolId poolId;
     Pool.SwapParams swapParams;
 }
 
-/**
- * @title SwapSimulationLibrary
- * @author j-money-11
- * @notice A library for simulating swaps in a Uniswap V4 pool.
- * @dev This library is crucial for the JITHub to predict the outcome of a swap
- * and determine if providing JIT liquidity would be profitable.
- */
+/// @title SwapSimulationLibrary
+/// @author j-money-11
+/// @notice A library for simulating swaps in a Uniswap V4 pool.
+/// @dev This library is crucial for the JITHub to predict the outcome of a swap
+/// and determine if providing JIT liquidity would be profitable.
 library SwapSimulationLibrary {
     using SafeCast for *;
     using TickBitmap for *;
@@ -36,21 +32,19 @@ library SwapSimulationLibrary {
     using CustomRevert for bytes4;
     using SwapSimulationLibrary for SwapSimulation;
 
-    /**
-     * @notice Simulates a swap with the current passive liquidity in the pool.
-     * @param simulation The SwapSimulation struct containing the simulation parameters.
-     * @return swapDelta The change in balances resulting from the swap.
-     * @return amountToProtocol The amount of fees paid to the protocol.
-     * @return swapFee The swap fee.
-     * @return result The result of the swap simulation.
-     */
+    /// @notice Simulates a swap with the current passive liquidity in the pool.
+    /// @param simulation The SwapSimulation struct containing the simulation parameters.
+    /// @return swapDelta The change in balances resulting from the swap.
+    /// @return amountToProtocol The amount of fees paid to the protocol.
+    /// @return swapFee The swap fee.
+    /// @return result The result of the swap simulation.
     function simulateSwapPLPLiquidity(
         SwapSimulation memory simulation
     )
         internal
         view
         returns (
-            BalanceDelta memory swapDelta,
+            BalanceDelta swapDelta,
             uint256 amountToProtocol,
             uint24 swapFee,
             Pool.SwapResult memory result

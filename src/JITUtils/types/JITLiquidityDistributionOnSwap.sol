@@ -20,22 +20,18 @@ import {Pool} from "v4-core/libraries/Pool.sol";
 
 import {ILiquidityDensityFunction} from "bunni-v2/src/interfaces/ILiquidityDensityFunction.sol";
 
-/**
- * @title JITLiquidityDistributionOnSwap
- * @author j-money-11
- * @notice A struct to represent the distribution of JIT liquidity on a swap.
- */
+/// @title JITLiquidityDistributionOnSwap
+/// @author j-money-11
+/// @notice A struct to represent the distribution of JIT liquidity on a swap.
 struct JITLiquidityDistributionOnSwap {
     SwapParams swapParams;
     ModifyLiquidityParams jitLiquidityParamsOnSwap;
 }
 
-/**
- * @title JITLiquidityDistributionOnSwapLibrary
- * @author j-money-11
- * @notice A library for handling operations related to JIT liquidity distribution.
- * @dev This library is currently a placeholder for future functionality.
- */
+/// @title JITLiquidityDistributionOnSwapLibrary
+/// @author j-money-11
+/// @notice A library for handling operations related to JIT liquidity distribution.
+/// @dev This library is currently a placeholder for future functionality.
 library JITLiquidityDistributionOnSwapLibrary {
     using LiquidityAmounts for uint160;
     using SqrtPriceMath for uint160;

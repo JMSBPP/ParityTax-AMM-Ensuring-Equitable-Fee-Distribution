@@ -3,14 +3,12 @@ pragma solidity ^0.8.24;
 
 import "./interfaces/ITaxController.sol";
 
-/**
- * @title TaxController
- * @author j-money-11
- * @notice This contract manages the collection of fees from JIT providers and the distribution
- * of that revenue to PLPs.
- * @dev It uses the `LiquidityTimeCommitmentManager` to differentiate between JIT and PLP positions
- * and enforce the corresponding rules.
- */
+/// @title TaxController
+/// @author j-money-11
+/// @notice This contract manages the collection of fees from JIT providers and the distribution
+/// of that revenue to PLPs.
+/// @dev It uses the `LiquidityTimeCommitmentManager` to differentiate between JIT and PLP positions
+/// and enforce the corresponding rules.
 contract TaxController is ITaxController, ImmutableState {
     using CurrencySettler for Currency;
 
@@ -20,9 +18,7 @@ contract TaxController is ITaxController, ImmutableState {
     /// @dev Mapping to store fees withheld from JIT providers.
     mapping(PoolId => mapping(bytes32 => BalanceDelta)) private _withheldFees;
 
-    /**
-     * @dev Modifier to restrict a function to be called only by PLPs.
-     */
+    /// @dev Modifier to restrict a function to be called only by PLPs.
     modifier onlyPLP(PoolId poolId, bytes32 positionKey) {
         if (
             !PLP(
@@ -37,9 +33,7 @@ contract TaxController is ITaxController, ImmutableState {
         _;
     }
 
-    /**
-     * @dev Modifier to restrict a function to be called only by PLPs whose time commitment has expired.
-     */
+    /// @dev Modifier to restrict a function to be called only by PLPs whose time commitment has expired.
     modifier onlyPLPExpired(PoolId poolId, bytes32 positionKey) {
         if (
             !PLP_EXPIRED(
@@ -54,9 +48,7 @@ contract TaxController is ITaxController, ImmutableState {
         _;
     }
 
-    /**
-     * @dev Modifier to restrict a function to be called only by JIT providers.
-     */
+    /// @dev Modifier to restrict a function to be called only by JIT providers.
     modifier onlyJIT(PoolId poolId, bytes32 positionKey) {
         if (
             !JIT(
@@ -78,9 +70,7 @@ contract TaxController is ITaxController, ImmutableState {
         liquidityTimeCommitmentManager = _liquidityTimeCommitmentManager;
     }
 
-    /**
-     * @inheritdoc ITaxController
-     */
+    /// @inheritdoc ITaxController
     function collectFeeRevenue(
         PoolKey calldata key,
         bytes32 positionKey,
@@ -113,9 +103,7 @@ contract TaxController is ITaxController, ImmutableState {
         );
     }
 
-    /**
-     * @inheritdoc ITaxController
-     */
+    /// @inheritdoc ITaxController
     function distributeFeeRevenue(
         PoolKey calldata key,
         bytes32 positionKey
@@ -124,7 +112,7 @@ contract TaxController is ITaxController, ImmutableState {
         virtual
         override
         onlyPLPExpired(key.toId(), positionKey)
-        returns (BalanceDelta memory withheldFees)
+        returns (BalanceDelta withheldFees)
     {
         PoolId poolId = key.toId();
         withheldFees = _getFeeRevenueCollected(poolId, positionKey);
@@ -155,22 +143,18 @@ contract TaxController is ITaxController, ImmutableState {
         );
     }
 
-    /**
-     * @notice Retrieves the fee revenue collected for a specific position.
-     * @param poolId The ID of the pool.
-     * @param positionKey The key of the position.
-     * @return BalanceDelta The collected fee revenue.
-     */
+    /// @notice Retrieves the fee revenue collected for a specific position.
+    /// @param poolId The ID of the pool.
+    /// @param positionKey The key of the position.
+    /// @return BalanceDelta The collected fee revenue.
     function _getFeeRevenueCollected(
         PoolId poolId,
         bytes32 positionKey
-    ) internal view returns (BalanceDelta memory) {
+    ) internal view returns (BalanceDelta) {
         return _withheldFees[poolId][positionKey];
     }
 
-    /**
-     * @inheritdoc ITaxController
-     */
+    /// @inheritdoc ITaxController
     function updateTaxAccount(
         bytes32 positionKey,
         PoolKey memory poolKey,

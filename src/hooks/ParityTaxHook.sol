@@ -2,9 +2,9 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/IParityTaxHook.sol";
-import "./base/HookCallableBaseHook.sol";
 import "../types/TimeCommitment.sol";
-
+import {Hooks} from "v4-core/libraries/Hooks.sol";
+import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import "v4-core/libraries/Position.sol";
 import "v4-core/types/BalanceDelta.sol";
 import "v4-core/types/BeforeSwapDelta.sol";
@@ -22,13 +22,11 @@ import {ITaxController} from "../interfaces/ITaxController.sol";
 import {IJITHub, JITLiquidityResult} from "../JITUtils/interfaces/IJITHub.sol";
 import {console} from "forge-std/Test.sol";
 
-/**
- * @title ParityTaxHook
- * @author j-money-11
- * @notice This hook manages liquidity provision from different sources (JIT and PLP),
- * and orchestrates the ParityTax system of taxing JIT providers and rewarding PLPs.
- */
-contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
+/// @title ParityTaxHook
+/// @author j-money-11
+/// @notice This hook manages liquidity provision from different sources (JIT and PLP),
+/// and orchestrates the ParityTax system of taxing JIT providers and rewarding PLPs.
+contract ParityTaxHook is BaseHook, IParityTaxHook {
     using Position for address;
     using CurrencyLibrary for Currency;
     using CurrencySettler for Currency;
@@ -46,14 +44,12 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         IPoolManager _manager,
         ITaxController _taxController,
         IJITHub _jitHub
-    ) HookCallableBaseHook(_manager) {
+    ) BaseHook(_manager) {
         taxController = _taxController;
         jitHub = _jitHub;
     }
 
-    /**
-     * @inheritdoc HookCallableBaseHook
-     */
+    /// @inheritdoc BaseHook
     function _afterAddLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -61,7 +57,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         BalanceDelta,
         BalanceDelta feeDelta,
         bytes calldata enteredEncodedTimeCommitment
-    ) internal virtual override returns (bytes4, BalanceDelta memory) {
+    ) internal virtual override returns (bytes4, BalanceDelta) {
         TimeCommitment enteredTimeCommitment = TimeCommitment.wrap(
             abi.decode(enteredEncodedTimeCommitment, (uint96))
         );
@@ -99,9 +95,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         );
     }
 
-    /**
-     * @inheritdoc HookCallableBaseHook
-     */
+    /// @inheritdoc BaseHook
     function _beforeSwap(
         address routerSender,
         PoolKey calldata poolKey,
@@ -128,9 +122,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         );
     }
 
-    /**
-     * @inheritdoc HookCallableBaseHook
-     */
+    /// @inheritdoc BaseHook
     function _afterSwap(
         address,
         PoolKey calldata,
@@ -141,9 +133,7 @@ contract ParityTaxHook is HookCallableBaseHook, IParityTaxHook {
         return (IHooks.afterSwap.selector, int128(0));
     }
 
-    /**
-     * @inheritdoc HookCallableBaseHook
-     */
+    /// @inheritdoc BaseHook
     function getHookPermissions()
         public
         pure
