@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import "./interfaces/IParityTaxHook.sol";
-import "../types/TimeCommitment.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import "v4-core/libraries/Position.sol";
@@ -18,15 +17,10 @@ import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 import {NonzeroDeltaCount} from "v4-core/libraries/NonzeroDeltaCount.sol";
 
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
-import {ITaxController} from "../interfaces/ITaxController.sol";
-import {IJITHub, JITLiquidityResult} from "../JITUtils/interfaces/IJITHub.sol";
 import {console} from "forge-std/Test.sol";
-
-/// @title ParityTaxHook
-/// @author j-money-11
-/// @notice This hook manages liquidity provision from different sources (JIT and PLP),
-/// and orchestrates the ParityTax system of taxing JIT providers and rewarding PLPs.
-contract ParityTaxHook is BaseHook, IParityTaxHook {
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+abstract contract ParityTaxHook is BaseHook, IParityTaxHook, TimelockController {
     using Position for address;
     using CurrencyLibrary for Currency;
     using CurrencySettler for Currency;
@@ -34,103 +28,39 @@ contract ParityTaxHook is BaseHook, IParityTaxHook {
     using BalanceDeltaLibrary for BalanceDelta;
     using SafeCast for *;
     using StateLibrary for IPoolManager;
+    bytes32 public constant JIT = keccak256("JIT");
+    bytes32 public constant PLP = keccak256("PLP");
 
-    /// @dev A reference to the TaxController.
-    ITaxController private taxController;
-    /// @dev A reference to the JITHub.
-    IJITHub private jitHub;
+
+    modifier onlyJIT(address sender){
+        _checkRole(JIT, sender);
+        _;    
+    }
+
+
+    struct PLPPayload{
+        address excecutor;
+        uint256 delay;
+    }
 
     constructor(
-        IPoolManager _manager,
-        ITaxController _taxController,
-        IJITHub _jitHub
+        IPoolManager _manager
     ) BaseHook(_manager) {
-        taxController = _taxController;
-        jitHub = _jitHub;
+        _setupRole(PROPOSER_ROLE, poolManager);
     }
 
-    /// @inheritdoc BaseHook
-    function _afterAddLiquidity(
-        address liquidityRouter,
-        PoolKey calldata poolKey,
-        ModifyLiquidityParams calldata addLiquidityParams,
-        BalanceDelta,
-        BalanceDelta feeDelta,
-        bytes calldata enteredEncodedTimeCommitment
-    ) internal virtual override returns (bytes4, BalanceDelta) {
-        TimeCommitment enteredTimeCommitment = TimeCommitment.wrap(
-            abi.decode(enteredEncodedTimeCommitment, (uint96))
-        );
-
-        bytes32 positionKey = liquidityRouter.calculatePositionKey(
-            addLiquidityParams.tickLower,
-            addLiquidityParams.tickUpper,
-            addLiquidityParams.salt
-        );
-
-        taxController.updateTaxAccount(
-            positionKey,
-            poolKey,
-            feeDelta,
-            enteredTimeCommitment
-        );
-
-        try
-            taxController.collectFeeRevenue(poolKey, positionKey, feeDelta)
-        {} catch (bytes memory reason) {
-            bytes4 expectedSelector = ITaxController
-                .InvalidTimeCommitment___ActionOnlyAvailableToJIT
-                .selector;
-            bool isJIT;
-            assembly ("memory-safe") {
-                let actualSelector := mload(add(reason, 32))
-                actualSelector := shr(224, actualSelector)
-                isJIT := eq(actualSelector, expectedSelector)
-            }
-        }
-
-        return (
-            IHooks.afterAddLiquidity.selector,
-            BalanceDeltaLibrary.ZERO_DELTA
-        );
-    }
-
-    /// @inheritdoc BaseHook
-    function _beforeSwap(
-        address routerSender,
-        PoolKey calldata poolKey,
-        SwapParams calldata swapParams,
-        bytes calldata
-    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        JITLiquidityResult memory jitLiquidityResult = jitHub
-            .calculateJITLiquidityParamsForSwap(
-                routerSender,
-                poolKey,
-                swapParams
-            );
-
-        poolManager.modifyLiquidity(
-            poolKey,
-            jitLiquidityResult.jitLiquidityParams,
-            abi.encode(toTimeCommitment(JIT_FLAG))
-        );
-
-        return (
-            IHooks.beforeSwap.selector,
-            toBeforeSwapDelta(int128(0), int128(0)),
-            0
-        );
-    }
-
-    /// @inheritdoc BaseHook
-    function _afterSwap(
+    function _beforeAddLiquidity(
         address,
         PoolKey calldata,
-        SwapParams calldata,
-        BalanceDelta,
-        bytes calldata
-    ) internal override returns (bytes4, int128) {
-        return (IHooks.afterSwap.selector, int128(0));
+        ModifyLiquidityParams calldata,
+        bytes calldata hookData
+    ) internal virtual returns (bytes4){
+
+
+        // This method is shared among all LP'S
+        // thus here we need to clasify PLP's and JIT's
+        //1. We ask the LP 
+
     }
 
     /// @inheritdoc BaseHook
@@ -142,20 +72,20 @@ contract ParityTaxHook is BaseHook, IParityTaxHook {
     {
         return
             Hooks.Permissions({
-                beforeInitialize: false,
+                beforeInitialize: fa;e,
                 afterInitialize: false,
-                beforeAddLiquidity: false,
-                afterAddLiquidity: true,
-                beforeRemoveLiquidity: true,
-                afterRemoveLiquidity: true,
-                beforeSwap: true,
-                afterSwap: true,
+                beforeAddLiquidity: true,
+                afterAddLiquidity: false,
+                beforeRemoveLiquidity: false,
+                afterRemoveLiquidity: false,
+                beforeSwap: false,
+                afterSwap: false,
                 beforeDonate: false,
                 afterDonate: false,
                 beforeSwapReturnDelta: false,
-                afterSwapReturnDelta: true,
-                afterAddLiquidityReturnDelta: true,
-                afterRemoveLiquidityReturnDelta: true
+                afterSwapReturnDelta: false,
+                afterAddLiquidityReturnDelta: false,
+                afterRemoveLiquidityReturnDelta: false
             });
     }
 }

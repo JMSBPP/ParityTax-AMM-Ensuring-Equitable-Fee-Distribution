@@ -1,15 +1,9 @@
-[submodule "contracts/lib/forge-std"]
-	path = contracts/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
 [submodule "lib/v4-periphery"]
 	path = lib/v4-periphery
 	url = https://github.com/Uniswap/v4-periphery
-[submodule "lib/ethereum-vault-connector"]
-	path = lib/ethereum-vault-connector
-	url = https://github.com/euler-xyz/ethereum-vault-connector
-[submodule "lib/bunni-v2"]
-	path = lib/bunni-v2
-	url = https://github.com/timeless-fi/bunni-v2
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
