@@ -10,7 +10,7 @@ import {BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta
 // and control on afterAddLiqudity for identifying if the
 // LP is PLP or JIT and beforeDonate    
 
-abstract contract PairtyTaxHook is BaseHook{
+abstract contract ParityTaxHook is BaseHook{
     function getHookPermissions() public pure override virtual returns (Hooks.Permissions memory){
         return Hooks.Permissions({
             beforeInitialize: true, // Uses price oracle to 

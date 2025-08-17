@@ -16,7 +16,8 @@ remappings = [
     "@openzeppelin/uniswap-hooks/=lib/uniswap-hooks/src/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@euler-swap/=lib/euler-swap/",
-    "@openzeppelin-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/"
+    "@openzeppelin-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "solmate/src/=lib/solmate/src/"
 ]
 
 [profile.rpc-endpoints]

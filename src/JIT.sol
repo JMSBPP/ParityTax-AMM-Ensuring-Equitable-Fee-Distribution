@@ -10,10 +10,14 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {Pool} from "@uniswap/v4-core/src/libraries/Pool.sol";
 import {PoolId,PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Slot0, Slot0Library} from "@uniswap/v4-core/src/types/Slot0.sol";
-
-abstract contract JIT is Initializable {
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ContextUpgradeable} from "@openzeppelin-upgradeable/contracts/utils/ContextUpgradeable.sol";
+import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+contract JIT is Initializable {
     using PoolIdLibrary for PoolKey;
     using Slot0Library for Slot0;
+    using Address for address;
+    using BalanceDeltaLibrary for BalanceDelta;
     /// @custom:storage-location erc7201:openzeppelin.storage.JIT    
     struct JITStorage{
         IPoolManager _poolManager;
@@ -55,13 +59,8 @@ abstract contract JIT is Initializable {
         $._stateView = viewer;
     }
 
-    function _buildPoolState() private{
-        PoolId poolId = poolKey().toId();
-        (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) = stateView().getSlot0(poolId);
-        Slot0 _slot0 = Slot0.wrap(bytes32(uint256(0x00))).setSqrtPriceX96(sqrtPriceX96).setTick(tick).setProtocolFee(protocolFee).setLpFee(lpFee);
-        (uint256 feeGrowthGlobal0, uint256 feeGrowthGlobal1) = stateView().getFeeGrowthGlobals(poolId);
-    } 
 
+    event DeltaAmounts(int128 amount0, int128 amount1);
     /// @notice Defines the amount of tokens to be used in the JIT position
     /// @dev No tokens should be transferred into the PoolManager by this function. The afterSwap implementation, will handle token flows
     /// @param params the swap params passed in during swap
@@ -72,51 +71,32 @@ abstract contract JIT is Initializable {
         PoolKey calldata key,
         SwapParams calldata params,
         bytes memory data
-    ) internal virtual returns (uint128, uint128)
+    ) internal virtual returns (int128, int128)
         {
-            
-            uint256 amountOut;
-            uint256 amountIn;
-            bool isExactInput = params.amountSpecified < 0;
-            if (isExactInput) {
-                amountIn = uint256(-params.amountSpecified);
-                // NOTE: Here it allows for custom quoting by the bytes memory data param
-                if (data.length > 0){
-                    // NOTE: It allows the excecution of custom logic
-                    
-                }else {
+            if (data.length >0){
+               // NOTE: It allows the excecution of custom logic
+                return (0, 0);
 
-                }
-
-                // amountOut = QuoteLib.computeQuote(evc, p, params.zeroForOne, amountIn, true);
             } else {
-                amountOut = uint256(params.amountSpecified);
-                // amountIn = QuoteLib.computeQuote(evc, p, params.zeroForOne, amountOut, false);
+                bytes memory encodedSwapDelta = address(poolManager()).functionStaticCall(
+                    abi.encodeCall(IPoolManager.swap, (key, params, bytes("")))
+                );
+                BalanceDelta swapDelta = BalanceDelta.wrap(
+                    abi.decode(
+                        encodedSwapDelta,
+                        (int256)
+                    )
+                );
+                (int128 traderAmount0, int128 traderAmount1) = (
+                    swapDelta.amount0(),
+                    swapDelta.amount1()
+                );
+
+                emit DeltaAmounts(traderAmount0, traderAmount1);
+                return (traderAmount0, traderAmount1);
+                 
             }
-
-            // return the delta to the PoolManager, so it can process the accounting
-            // exact input:
-            //   specifiedDelta = positive, to offset the input token taken by the hook (negative delta)
-            //   unspecifiedDelta = negative, to offset the credit of the output token paid by the hook (positive delta)
-            // exact output:
-            //   specifiedDelta = negative, to offset the output token paid by the hook (positive delta)
-            //   unspecifiedDelta = positive, to offset the input token taken by the hook (negative delta)
-            // returnDelta = isExactInput
-            //    ? toBeforeSwapDelta(amountIn.toInt128(), -(amountOut.toInt128()))
-            //    : toBeforeSwapDelta(-(amountOut.toInt128()), amountIn.toInt128());
-
-            // take the input token, from the PoolManager to the Euler vault
-            // the debt will be paid by the swapper via the swap router
-            poolManager().take(params.zeroForOne ? key.currency0 : key.currency1, address(this), amountIn);
-            // amountInWithoutFee = FundsLib.depositAssets(evc, p, params.zeroForOne ? p.vault0 : p.vault1);
-
-            // pay the output token, to the PoolManager from an Euler vault
-            // the credit will be forwarded to the swap router, which then forwards it to the swapper
-            poolManager().sync(params.zeroForOne ? key.currency1 : key.currency0);
-            // FundsLib.withdrawAssets(evc, p, params.zeroForOne ? p.vault1 : p.vault0, amountOut, address(poolManager));
-            poolManager().settle();
-        
+                
         }
-
 
 }

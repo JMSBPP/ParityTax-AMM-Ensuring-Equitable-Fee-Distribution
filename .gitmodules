@@ -25,3 +25,6 @@
 [submodule "lib/euler-swap"]
 	path = lib/euler-swap
 	url = https://github.com/euler-xyz/euler-swap
+[submodule "lib/solmate"]
+	path = lib/solmate
+	url = https://github.com/transmissions11/solmate
