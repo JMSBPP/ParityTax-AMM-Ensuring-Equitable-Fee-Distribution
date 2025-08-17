@@ -14,8 +14,9 @@ remappings = [
     "bunni-v2/=lib/bunni-v2/",
     "@jit-sample/=lib/jitterbug/",
     "@openzeppelin/uniswap-hooks/=lib/uniswap-hooks/src/",
-    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
-
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "@euler-swap/=lib/euler-swap/",
+    "@openzeppelin-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/"
 ]
 
 [profile.rpc-endpoints]
