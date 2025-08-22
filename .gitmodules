@@ -28,3 +28,6 @@
 [submodule "lib/solmate"]
 	path = lib/solmate
 	url = https://github.com/transmissions11/solmate
+[submodule "lib/balancer-v3-monorepo"]
+	path = lib/balancer-v3-monorepo
+	url = https://github.com/balancer/balancer-v3-monorepo

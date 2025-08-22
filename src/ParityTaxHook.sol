@@ -1,57 +1,486 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.0;
+
+import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BalanceDelta,BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+
+import {Address} from "@openzeppelin/utils/Address.sol";
+import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
+
+import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
+import {IJITOperator} from "./interfaces/IJITOperator.sol";
+import {ILPOracle} from "./interfaces/ILPOracle.sol";
+import {ITaxController} from "./interfaces/ITaxController.sol";
 
 
-import "@uniswap/v4-periphery/src/utils/BaseHook.sol";
-import {BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {PositionInfoLibrary, PositionInfo} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
+import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
+import{
+    Currency,
+    CurrencySettler
+} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 
-//NOTE: This Hook aims to povide JITHook on beforeSWap and
-// aftyeerSwap and apply  time commitmeent liquidity tracking
-// and control on afterAddLiqudity for identifying if the
-// LP is PLP or JIT and beforeDonate    
 
-abstract contract ParityTaxHook is BaseHook{
-    function getHookPermissions() public pure override virtual returns (Hooks.Permissions memory){
-        return Hooks.Permissions({
-            beforeInitialize: true, // Uses price oracle to 
-            afterInitialize: false,
-            beforeAddLiquidity: false,  
-            afterAddLiquidity: true, //
-            beforeRemoveLiquidity:true,
-            afterRemoveLiquidity:true,
-            beforeSwap:true,
-            afterSwap:true,
-            beforeDonate:false,
-            afterDonate:false,
-            beforeSwapReturnDelta:false,
-            afterSwapReturnDelta:false,
-            afterAddLiquidityReturnDelta:false,
-            afterRemoveLiquidityReturnDelta:false
+abstract contract ParityTaxHook is BaseHook {
+    using Position for address;
+    using Address for address;
+    using SafeCast for *;
+    using StateLibrary for IPoolManager;
+    using TransientStateLibrary for IPoolManager;
+    using SqrtPriceMath for uint160;
+    using LiquidityAmounts for uint160;
+    using TickMath for uint160;
+    using TickMath for int24;
+    using PoolIdLibrary for PoolKey;
+    using PositionInfoLibrary for PoolKey;
+    using PositionInfoLibrary for PositionInfo;
+    using BalanceDeltaLibrary for BalanceDelta;
+    using CurrencySettler for Currency;
+    
+    /// @custom:transient-storage-location erc7201:openzeppelin.transient-storage.JIT_TRANSIENT
+    struct JIT_Transient_Metrics{
+        //slot1 
+        uint128 addedLiquidity;
+        uint128 jitProfit;
+        // slot2 
+        PositionInfo jitPositionInfo;
+        // slot3 
+        bytes32 positionKey;
+        // slot4 
+        BalanceDelta withheldFees;
+        // slot5
+
+        
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
+
+    function _jitTransientMetrics() private view returns(JIT_Transient_Metrics memory){
+        bytes32 slot1;
+        bytes32 slot2;
+        bytes32 slot3;
+        bytes32 slot4;
+        assembly("memory-safe"){
+            slot1 := tload(JIT_Transient_MetricsLocation)
+            slot2 := tload(add(JIT_Transient_MetricsLocation, 0x01))
+            slot3 := tload(add(JIT_Transient_MetricsLocation, 0x02))
+            slot4 := tload(add(JIT_Transient_MetricsLocation, 0x03))
+        }
+        // Unpack the struct
+        return JIT_Transient_Metrics({
+            addedLiquidity: uint128(uint256(slot1)),
+            jitProfit: uint128(uint256(slot1 >> 128)),
+            jitPositionInfo: PositionInfo.wrap(uint256(slot2)),
+            positionKey: slot3,
+            withheldFees : BalanceDelta.wrap(uint256(slot4).toInt256())
         });
     }
 
-    constructor(IPoolManager _manager) BaseHook(_manager){}
+    function _addedLiquidity() private view returns(uint128){
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        return jitTransientMetrics.addedLiquidity;
+    }
 
-    function _beforeSwap(
-        address, 
-        PoolKey calldata, 
-        SwapParams calldata,
-        bytes calldata
-        ) internal virtual override returns (bytes4, BeforeSwapDelta, uint24)
-    {        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+    function _jitProfit() private view returns(uint128){
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        return jitTransientMetrics.jitProfit;
+    }
 
+    function _jitPositionInfo() private view returns(PositionInfo){
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        return jitTransientMetrics.jitPositionInfo;
+    }
+
+    function _jitPositionKey() private view returns(bytes32){
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        return jitTransientMetrics.positionKey;
+    }
+
+    function _withheldFees() private view returns(BalanceDelta){
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        return jitTransientMetrics.withheldFees;
+    }
+
+    /// @custom:storage-location erc7201:openzeppelin.storage.JIT_Aggregate_Metrics
+    struct JIT_Aggregate_Metrics{
+        uint256 cummAddedLiquidity;
+        uint256 cummProfit;
+    }
+
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.JIT_AGGREGATE")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant JIT_Aggregate_MetricsLocation = 0xe0cf99b8cd0560d8640e62178018c84af9084dd2b92a0b03d3120e8fa0633800;
+
+    function _getJITAggregateMetrics() private pure returns (JIT_Aggregate_Metrics storage $){
+        assembly{
+            $.slot := JIT_Aggregate_MetricsLocation
+        }
     }
 
 
 
 
-    function _afterSwap(address, PoolKey calldata, SwapParams calldata, BalanceDelta, bytes calldata)
-        internal
-        virtual
-        override
-        returns (bytes4, int128)
+    IV4Quoter v4Quoter;
+    IJITOperator jitOperator;
+    IPLPOperator plpOperator;
+    ILPOracle lpOracle;
+    ITaxController taxController;
+
+    error NotEnoughLiquidity(PoolId poolId);
+    error NotWithdrawableLiquidity__LiquidityIsCommitted(uint256 remainingCommitedBlocks);
+    error NoLiquidityToReceiveTaxRevenue();
+
+
+    constructor(
+        IPoolManager _manager,
+        address _v4Quoter,
+        address _jitOperator,
+        address _plpOperator,
+        address _lpOracle,
+        address _taxController
+    ) BaseHook(_manager){
+        v4Quoter = IV4Quoter(_v4Quoter);
+        jitOperator = IJITOperator(_jitOperator);
+        plpOperator = IPLPOperator(_plpOperator);
+        lpOracle = ILPOracle(_lpOracle);
+        taxController = ITaxController(_taxController);
+    }
+
+    modifier onlyUncommitedLiquidity(
+        PoolId poolId,
+        uint256 plpTokenId
+    ){
+        uint48 plpCommitment = plpOperator.getPLPCommitment(
+            poolId,
+            bytes32(plpTokenId)
+        );
+        if (plpCommitment !=0 && block.number < plpCommitment ) revert NotWithdrawableLiquidity__LiquidityIsCommitted(uint256(plpCommitment)-block.number);   
+        _;
+    }
+
+
+    function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory){
+        return Hooks.Permissions({
+            beforeInitialize: true, // This permission is to sync the internal price with the external one
+            afterInitialize: false,  
+            beforeAddLiquidity: true, // Handles the commitment of PLP's and JIT's 
+            afterAddLiquidity: true,
+            beforeRemoveLiquidity: true,
+            afterRemoveLiquidity: true,
+            beforeSwap: true,
+            afterSwap: true,
+            beforeDonate: false,
+            afterDonate: false,
+            beforeSwapReturnDelta:false,
+            afterSwapReturnDelta: false,
+            afterAddLiquidityReturnDelta: false,
+            afterRemoveLiquidityReturnDelta: false
+        });
+    }
+
+
+    // NOTE: For this Hook the bytes hookData is to implement further calls
+
+    // before the transaction ends
+
+    function _beforeSwap(
+        address,
+        PoolKey calldata poolKey, 
+        SwapParams calldata swapParams,
+        bytes calldata hookData
+    ) internal virtual override returns (bytes4, BeforeSwapDelta, uint24)
+    {   
+        // NOTE: store the price before the swap
+        (uint160 beforeSwapSqrtPriceX96,int24 beforeSwapTick,,uint24 lpFee) = poolManager.getSlot0(poolKey.toId());
+        uint160 expectedSqrtPriceImpactX96;
+        int256 jitLiquidityDelta;
+        int24 expectedAfterSwapTick;
+        // NOTE: This is to get the expectedPrice Impact and also calculate a good 
+        // bound for the tick range where liquidity will be provided
         {
+            bool isIn = swapParams.amountSpecified <0;
+            bool zeroForOne = swapParams.zeroForOne;
+            IV4Quoter.QuoteExactSingleParams memory quoteParams = 
+            IV4Quoter.QuoteExactSingleParams({
+                poolKey: poolKey,
+                zeroForOne: swapParams.zeroForOne,
+                exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
+                hookData: Constants.ZERO_BYTES
+            });
+            (uint256 amountSpecified, uint256 gasCost) = isIn ? v4Quoter.quoteExactInputSingle(
+                quoteParams
+            ): v4Quoter.quoteExactOutputSingle(
+                quoteParams
+            );
+            uint128 plpLiquidity = poolManager.getLiquidity(poolKey.toId());
+            
+            uint160 expectedAfterSwapSqrtPriceX96 = isIn ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
+                plpLiquidity,
+                amountSpecified,
+                zeroForOne
+            ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
+                plpLiquidity,
+                amountSpecified,
+                zeroForOne
+            );
+            expectedSqrtPriceImpactX96 = beforeSwapSqrtPriceX96 > expectedAfterSwapSqrtPriceX96 ? beforeSwapSqrtPriceX96 - expectedAfterSwapSqrtPriceX96 : expectedAfterSwapSqrtPriceX96 - beforeSwapSqrtPriceX96;  
+            expectedAfterSwapTick = expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice();
+        }
+        //NOTE: This is to determine the jitLiquidityDelta to provide at such price range
+        // based on the expected (simulated trade)
+        {
+            BalanceDelta swapDelta = BalanceDelta.wrap(
+                abi.decode(
+                    address(poolManager).functionStaticCall(
+                        abi.encodeCall(
+                            IPoolManager.swap,
+                            (
+                                poolKey,
+                                swapParams,
+                                Constants.ZERO_BYTES
+                            )
+                        )
+                    ),
+                    (int256)
+                )
+            );
+
+            jitLiquidityDelta = int128(
+                beforeSwapSqrtPriceX96.getLiquidityForAmounts(
+                    beforeSwapSqrtPriceX96,
+                    expectedAfterSwapTick.getSqrtPriceAtTick(),
+                    uint256(swapDelta.amount0().toUint128()),
+                    uint256(swapDelta.amount1().toUint128())
+            ).toInt256());
+        }
+        
+
+        //TODO: This can is to be potentially modified by sophisticated checkings, 
+        // but initially based on the JIT paper
+        if (uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96){
+            // TODO: This is to be improved using the positionManager
+            jitOperator.addJITLiquidity(
+                poolKey,
+                beforeSwapTick,
+                expectedAfterSwapTick,
+                jitLiquidityDelta.toInt128().toUint128(),
+                address(taxController),
+                hookData
+            );
+            {
+                JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+                jitTransientMetrics.addedLiquidity = jitLiquidityDelta.toInt128().toUint128();
+                jitTransientMetrics.jitPositionInfo = poolKey.initialize(
+                    beforeSwapTick,
+                    expectedAfterSwapTick
+                );
+
+                assembly{
+                    tstore(JIT_Transient_MetricsLocation, jitTransientMetrics)
+                }
+            }
+        } 
+        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, uint24(0x00));
+    }
+
+
+
+    // NOTE: For this Hook the bytes hookData is to implement further calls
+
+    // before the transaction ends
+
+    function _afterSwap(
+        address,
+        PoolKey calldata poolKey,
+        SwapParams calldata,
+        BalanceDelta,
+        bytes calldata hookData
+    ) internal virtual override returns (bytes4, int128)
+    {
+        bytes32 jitPositionKey = _jitPositionKey();
+        
+        jitOperator.removeJITLiquidity(
+            jitPositionKey,
+            hookData
+        );
+
+        return (IHooks.afterSwap.selector, int128(0x00));
+    }
+
+    function _beforeAddLiquidity(
+        address,
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata,
+        bytes calldata hookData
+    ) internal virtual override returns (bytes4)
+    {
+        {
+            //============PLP==============
+            address(plpOperator).functionCall(hookData);
+            //If success the PLP commits its liquidity
+        }
+        return IHooks.beforeAddLiquidity.selector;
+    }
+
+    function _afterAddLiquidity(
+        address sender, //This needs to be the posm associated with the liquidity operator
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata liquidityParams,
+        BalanceDelta,
+        BalanceDelta feeDelta,
+        bytes calldata
+    ) internal virtual override returns (bytes4, BalanceDelta) {
+        
+        PositionInfo jitPositionInfo = _jitPositionInfo();
+        bytes32 lpPositionKey = sender.calculatePositionKey(
+                liquidityParams.tickLower,
+                liquidityParams.tickUpper,
+                liquidityParams.salt            
+            );
+        uint128 jitLiquidity = _addedLiquidity();
+        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+        {
+            // =====================JIT=======================
+            if (jitLiquidity > 0){
+                jitTransientMetrics.positionKey = lpPositionKey;
+                jitTransientMetrics.withheldFees = _withheldFees() + feeDelta;
+                poolKey.currency0.take(
+                    poolManager, 
+                    address(this),
+                    uint256(uint128(feeDelta.amount0())),
+                    true
+                );
+                poolKey.currency1.take(
+                    poolManager,
+                    address(this),
+                    uint256(uint128(feeDelta.amount1())),
+                    true
+                );
+
+            }else {
+                jitTransientMetrics.positionKey = bytes32(uint256(0x00));
+            }
 
         }
+        {
+
+            //===================PLP=================
+            // NOTE: The owners
+        }
+
+        return (IHooks.afterAddLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
+    }
+
+    function _beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata liquidityParams,
+        bytes calldata
+    )
+    internal
+    virtual 
+    override 
+    onlyUncommitedLiquidity
+    (
+        poolKey.toId(),
+        uint256(sender.calculatePositionKey(
+                liquidityParams.tickLower,
+                liquidityParams.tickUpper,
+                liquidityParams.salt            
+            ))
+    ) returns (bytes4)
+    {
+        return IHooks.beforeRemoveLiquidity.selector;
+    }
+
+
+    function _afterRemoveLiquidity(
+        address,
+        PoolKey calldata poolKey,
+        ModifyLiquidityParams calldata,
+        BalanceDelta,
+        BalanceDelta feeRevenueDelta,
+        bytes calldata
+    ) internal virtual override returns (bytes4, BalanceDelta) {
+        PoolId poolId = poolKey.toId();
+        bytes32 jitPositionKey = _jitPositionKey();
+        {
+            //===================JIT========================
+            if (jitPositionKey != bytes32(uint256(0x00))){
+                BalanceDelta initialFeeDelta = _withheldFees();
+                if (initialFeeDelta.amount0() > 0){
+                    poolKey.currency0.settle(
+                        poolManager,
+                        address(this),
+                        uint256(uint128(initialFeeDelta.amount0())),
+                        true
+                    );
+                }
+
+                if (initialFeeDelta.amount1() > 0){
+                    poolKey.currency1.settle(
+                        poolManager,
+                        address(this),
+                        uint256(uint128(initialFeeDelta.amount1())),
+                        true
+                    );
+                }
+
+                BalanceDelta totalFees = feeRevenueDelta + initialFeeDelta;
+                if (
+                    totalFees != BalanceDeltaLibrary.ZERO_DELTA
+                )
+                {
+                    BalanceDelta taxedDelta = taxController.taxJITFeeRevenue(
+                        totalFees
+                    );
+                    if (poolManager.getLiquidity(poolId) == 0) revert NoLiquidityToReceiveTaxRevenue();
+
+                    poolManager.donate(
+                        poolKey, 
+                        uint256(int256(taxedDelta.amount0())), 
+                        uint256(int256(taxedDelta.amount1())),
+                        Constants.ZERO_BYTES
+                    );
+                    
+                }
+
+            }
+            // TODO: Here we calculate the JIT lp profit and store it on the tsMetrics
+            // then any other calls on the same transaction are governed by the hookData
+            // TODO: Here also we must calculate the JIT cummProfit
+        }
+        return (IHooks.afterRemoveLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
+ 
+    }
+
+
+    // function getSqrtPriceImpactX96() public view returns(uint160[] memory){
+    //     return metrics.sqrtPriceImpactX96;
+    // }
+
+
+    //TODO: This is a place holder, to be implemented
+    function getCurrentPrice() public view returns(uint256){
+        return 1;
+    }
 
 }
+
+

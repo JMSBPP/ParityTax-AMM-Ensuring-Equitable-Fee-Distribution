@@ -4,20 +4,13 @@ out = "out"
 libs = ["lib"]
 solc_version = "0.8.26"
 evm_version = "cancun"
-viaIR = true
-optimizer = true
-optimizer_runs = 3000
 remappings = [
-    "forge-std/=lib/forge-std/src/",
-    "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
     "@uniswap/v4-periphery/=lib/v4-periphery/",
-    "bunni-v2/=lib/bunni-v2/",
-    "@jit-sample/=lib/jitterbug/",
-    "@openzeppelin/uniswap-hooks/=lib/uniswap-hooks/src/",
-    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
-    "@euler-swap/=lib/euler-swap/",
-    "@openzeppelin-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "solmate/src/=lib/solmate/src/"
+    "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
+    "@openzeppelin/=lib/openzeppelin-contracts/contracts/",
+    "@solmate/=lib/solmate/src/",
+    "@balancer-labs/v3-interfaces/=lib/balancer-v3-monorepo/pkg/interfaces/",
+    "forge-std/=lib/forge-std/src"
 ]
 
 [profile.rpc-endpoints]
