@@ -17,7 +17,7 @@ import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientSta
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
 
-import {Address} from "@openzeppelin/utils/Address.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
@@ -63,7 +63,7 @@ abstract contract ParityTaxHook is BaseHook {
         bytes32 positionKey;
         // slot4 
         BalanceDelta withheldFees;
-        // slot5
+          // slot5
 
         
     }
@@ -211,9 +211,9 @@ abstract contract ParityTaxHook is BaseHook {
         uint160 expectedSqrtPriceImpactX96;
         int256 jitLiquidityDelta;
         int24 expectedAfterSwapTick;
+        {
         // NOTE: This is to get the expectedPrice Impact and also calculate a good 
         // bound for the tick range where liquidity will be provided
-        {
             bool isIn = swapParams.amountSpecified <0;
             bool zeroForOne = swapParams.zeroForOne;
             IV4Quoter.QuoteExactSingleParams memory quoteParams = 
@@ -451,13 +451,15 @@ abstract contract ParityTaxHook is BaseHook {
                         totalFees
                     );
                     if (poolManager.getLiquidity(poolId) == 0) revert NoLiquidityToReceiveTaxRevenue();
-
-                    poolManager.donate(
-                        poolKey, 
-                        uint256(int256(taxedDelta.amount0())), 
-                        uint256(int256(taxedDelta.amount1())),
-                        Constants.ZERO_BYTES
-                    );
+                
+                    // TODO: taxedDelta is to be taked by the taxController
+                
+                    // poolManager.donate(
+                    //     poolKey, 
+                    //     uint256(int256(taxedDelta.amount0())), 
+                    //     uint256(int256(taxedDelta.amount1())),
+                    //     Constants.ZERO_BYTES
+                    // );
                     
                 }
 
