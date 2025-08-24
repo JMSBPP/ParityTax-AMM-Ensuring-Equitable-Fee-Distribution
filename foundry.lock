@@ -5,23 +5,20 @@
       "rev": "e59fe72c110c3862eec9b332530dce49ca506bbb"
     }
   },
-  "lib/openzeppelin-contracts": {
-    "tag": {
-      "name": "v5.4.0",
-      "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
-    }
-  },
-  "lib/solmate": {
-    "rev": "89365b880c4f3c786bdd453d4b8e8fe410344a69"
-  },
-  "lib/jitterbug": {
-    "rev": "94e176790f0be1eecf88bc7b3ae468ad40bce0fa"
-  },
   "lib/bunni-v2": {
     "rev": "000f79a38bdd3fb2b314dc8c108b2a3d1ca1d440"
   },
   "lib/v4-periphery": {
     "rev": "ad04c9f24a170accf5ea1b2836bbafd514537ca6"
+  },
+  "lib/balancer-v3-monorepo": {
+    "rev": "dc841dbde2707c6dd156decab48c667fa604f559"
+  },
+  "lib/solmate": {
+    "rev": "89365b880c4f3c786bdd453d4b8e8fe410344a69"
+  },
+  "lib/euler-swap": {
+    "rev": "be4f1d50018da4dafbaffe19f77faa9dc883ade6"
   },
   "lib/openzeppelin-contracts-upgradeable": {
     "tag": {
@@ -29,14 +26,17 @@
       "rev": "e725abddf1e01cf05ace496e950fc8e243cc7cab"
     }
   },
-  "lib/balancer-v3-monorepo": {
-    "rev": "dc841dbde2707c6dd156decab48c667fa604f559"
-  },
-  "lib/euler-swap": {
-    "rev": "be4f1d50018da4dafbaffe19f77faa9dc883ade6"
+  "lib/jitterbug": {
+    "rev": "94e176790f0be1eecf88bc7b3ae468ad40bce0fa"
   },
   "lib/forge-std": {
     "rev": "77041d2ce690e692d6e03cc812b57d1ddaa4d505"
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.4.0",
+      "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+    }
   },
   "lib/ethereum-vault-connector": {
     "rev": "34bb788288a0eb0fbba06bc370cb8ca3dd42614e"
