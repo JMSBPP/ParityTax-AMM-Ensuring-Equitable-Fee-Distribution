@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ParityTaxHook} from "../src/ParityTaxHook.sol";
-
-
+import {
+    ParityTaxHook,
+    IPoolManager,
+    IPositionManager
+} from "../src/ParityTaxHook.sol";
+import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
+import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+
+import {
+    BalanceDelta,
+    BalanceDeltaLibrary
+} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+
+import {
+    SwapParams,
+    ModifyLiquidityParams
+} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
@@ -13,7 +28,12 @@ import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/Bala
 
 import {HookTest} from "@uniswap-hooks/test/utils/HookTest.sol";
 import {BalanceDeltaAssertions} from "@uniswap-hooks/test/utils/BalanceDeltaAssertions.sol";
-import {PosmTestSetup} from "@uniswap/v4-periphery/test/shared/PosmTestSetup.sol";
+import {
+    PosmTestSetup,
+    IWETH9,
+    IAllowanceTransfer
+} from "@uniswap/v4-periphery/test/shared/PosmTestSetup.sol";
+import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {MockJITOperator} from "./mocks/MockJITOperator.sol";
@@ -22,15 +42,14 @@ import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
 
 
-
+import {console2} from "forge-std/Test.sol";
 
 contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
-    
+    using BalanceDeltaLibrary for BalanceDelta;
+
     PoolKey noHookKey;    
     ParityTaxHook parityTax;
 
-
-    
     
     MockJITOperator jitOperator;
     MockPLPOperator plpOperator;
@@ -41,7 +60,10 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     function setUp() public {
         deployFreshManagerAndRouters();
         deployMintAndApprove2Currencies();
+
         deployPosm(manager);
+
+
         jitOperator = new MockJITOperator(
             address(lpm)
         );
@@ -59,18 +81,18 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         parityTax = ParityTaxHook(
             address(
                 uint160(
-                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG |
-                    Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
-                    Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG |
-                    Hooks.AFTER_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG | 
-                    Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG
+                    Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
+                    Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG| 
+                    Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG | 
+                    Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG | Hooks.BEFORE_SWAP_FLAG | 
+                    Hooks.AFTER_SWAP_FLAG 
                 )
 
             )
             
         );
         deployCodeTo(
-            "src/ParityTaxHook.sol:ParityTax",
+            "ParityTaxHook.sol:ParityTaxHook",
             abi.encode(
                 manager,
                 address(v4Quoter),
@@ -109,7 +131,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
     }
 
-    function test_noSwaps() public {
+    function test__Unit__noSwapsEquivalentBehavior() public {
         // add liquidity
         modifyPoolLiquidity(key, -600, 600, 1e18, 0);
         modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
@@ -121,9 +143,57 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }
 
+    function test__Unit_JITSingleLP() public {
+        
+        {
+            //=============  beforeSwap PLP Liquidity ==========
+            modifyPoolLiquidity(key, -600, 600, 1e18, 0);
+            modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
+        }
+
+        {
+            //==================LARGE SWAP===================
+            PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
+                takeClaims: false, 
+                settleUsingBurn: false  
+            });
+
+            SwapParams memory largeSwapParams = SwapParams({
+                zeroForOne: true,
+                amountSpecified: -1e15, // exact input
+                sqrtPriceLimitX96: MIN_PRICE_LIMIT 
+            });
+
+            (BalanceDelta noHookDelta) = swapRouter.swap(
+                noHookKey, 
+                largeSwapParams, 
+                testSettings, 
+                Constants.ZERO_BYTES
+            );
+            console2.log("amount0 with no Hook:", noHookDelta.amount0());
+            console2.log("amount1 with no Hook:", noHookDelta.amount1());
+            
+            (BalanceDelta hookDelta) = swapRouter.swap(
+                key, // Pool with Hook
+                largeSwapParams,
+                testSettings,
+                Constants.ZERO_BYTES
+            );
+
+            console2.log("amount0 with Hook:", hookDelta.amount0());
+            console2.log("amount1 with Hook:", hookDelta.amount1());
+            
+
+
+        }
+
+
+
+    }
+
+
+
+
 
 }
-
-
-
 

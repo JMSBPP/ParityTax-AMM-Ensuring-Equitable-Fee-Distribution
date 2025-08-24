@@ -35,8 +35,11 @@ import{
     CurrencySettler
 } from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 
+//logging-Debugging
 
-abstract contract ParityTaxHook is BaseHook {
+import {console2} from "forge-std/Test.sol";
+
+contract ParityTaxHook is BaseHook {
     using Position for address;
     using Address for address;
     using SafeCast for *;
@@ -189,12 +192,42 @@ abstract contract ParityTaxHook is BaseHook {
             afterDonate: false,
             beforeSwapReturnDelta:false,
             afterSwapReturnDelta: false,
-            afterAddLiquidityReturnDelta: false,
-            afterRemoveLiquidityReturnDelta: false
+            afterAddLiquidityReturnDelta: true,
+            afterRemoveLiquidityReturnDelta: true
         });
     }
 
+    function _beforeInitialize(
+        address,
+        PoolKey calldata,
+        uint160) internal virtual override returns (bytes4) {
+            return IHooks.beforeInitialize.selector;
+    }
 
+
+
+    // ============================DEBUGGING LOGS (EVENTS) ====================
+
+    event ImportantMetricsLog(
+        int24 beforeSwapTick,
+        int24 expectedAfterSwapTick, //This is to be compared with the actualAfterSwapTick to asses the 
+        // accuracy of the calculation
+        uint160 expectedSqrtPriceImpactX96,
+        BalanceDelta expectedSwapDelta, // This is to be comparaed with the actualSwapDelta on afterSwap
+        // to asses the accuracy of the calculation
+        uint128 plpLiquidityBeforeSwap,
+        uint128 plpLiquidityAfterSwap,
+        int256 jitLiquidityUsedOnTrade
+    );
+
+    event HypotheticalProfitabilityConditions(
+        uint24 lpFee,
+        uint160 expectedSqrtPriceImpactX96,
+        bool isProfitable,
+        uint160 feeTimes2
+    );
+
+    //       =========================================================
     // NOTE: For this Hook the bytes hookData is to implement further calls
 
     // before the transaction ends
@@ -214,7 +247,7 @@ abstract contract ParityTaxHook is BaseHook {
         {
         // NOTE: This is to get the expectedPrice Impact and also calculate a good 
         // bound for the tick range where liquidity will be provided
-            bool isIn = swapParams.amountSpecified <0;
+            bool isExactInput = swapParams.amountSpecified <0;
             bool zeroForOne = swapParams.zeroForOne;
             IV4Quoter.QuoteExactSingleParams memory quoteParams = 
             IV4Quoter.QuoteExactSingleParams({
@@ -223,14 +256,21 @@ abstract contract ParityTaxHook is BaseHook {
                 exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
                 hookData: Constants.ZERO_BYTES
             });
-            (uint256 amountSpecified, uint256 gasCost) = isIn ? v4Quoter.quoteExactInputSingle(
+            
+            (uint256 amountSpecified, uint256 gasCost) = isExactInput ? v4Quoter.quoteExactInputSingle(
                 quoteParams
             ): v4Quoter.quoteExactOutputSingle(
                 quoteParams
             );
+            
+            {
+                console2.log("Expected Trade Output: ", amountSpecified);
+                console2.log("Expected Gas Cost:", gasCost);
+            }
+
             uint128 plpLiquidity = poolManager.getLiquidity(poolKey.toId());
             
-            uint160 expectedAfterSwapSqrtPriceX96 = isIn ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
+            uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
                 plpLiquidity,
                 amountSpecified,
                 zeroForOne
@@ -268,11 +308,28 @@ abstract contract ParityTaxHook is BaseHook {
                     uint256(swapDelta.amount0().toUint128()),
                     uint256(swapDelta.amount1().toUint128())
             ).toInt256());
+        //=================FOR DEBUGGING =============
+            emit ImportantMetricsLog(
+                beforeSwapTick,
+                expectedAfterSwapTick,
+                expectedSqrtPriceImpactX96,
+                swapDelta,
+                poolManager.getLiquidity(poolKey.toId()),
+                uint128(0x00), // This is to be used on afterSwap
+                jitLiquidityDelta
+            );
         }
-        
 
+        emit HypotheticalProfitabilityConditions(
+            lpFee,
+            expectedSqrtPriceImpactX96,
+            uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96,
+            uint160(0x02)*uint160(lpFee)
+        );
+        // ===================================================
         //TODO: This can is to be potentially modified by sophisticated checkings, 
         // but initially based on the JIT paper
+        
         if (uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96){
             // TODO: This is to be improved using the positionManager
             jitOperator.addJITLiquidity(
@@ -330,11 +387,17 @@ abstract contract ParityTaxHook is BaseHook {
         bytes calldata hookData
     ) internal virtual override returns (bytes4)
     {
+        if (hookData.length >0)
         {
-            //============PLP==============
-            address(plpOperator).functionCall(hookData);
-            //If success the PLP commits its liquidity
+            
+            {
+                //============PLP==============
+            
+                address(plpOperator).functionCall(hookData);
+                //If success the PLP commits its liquidity
+            }
         }
+        
         return IHooks.beforeAddLiquidity.selector;
     }
 

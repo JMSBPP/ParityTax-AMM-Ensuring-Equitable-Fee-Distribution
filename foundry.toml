@@ -1,9 +1,16 @@
 [profile.default]
 src = "src"
-out = "out"
+out = "foundry-out"
 libs = ["node_modules","lib"]
 solc_version = "0.8.26"
 evm_version = "cancun"
+via_ir = true
+ffi = true
+fs_permissions = [
+    { access = "read-write", path = ".forge-snapshots/" }, 
+    { access = "read", path = "foundry-out/" }
+]
+
 remappings = [
     "@uniswap/v4-periphery/=lib/v4-periphery/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",

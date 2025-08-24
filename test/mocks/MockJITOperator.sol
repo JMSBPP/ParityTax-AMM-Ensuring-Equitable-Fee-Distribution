@@ -10,10 +10,11 @@ import {
     PositionInfoLibrary
 } from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 
 contract MockJITOperator is LiquidityOperations, IJITOperator{
     using PositionInfoLibrary for PositionInfo;
+    using PoolIdLibrary for PoolKey;
 
 
     using Planner for Plan;
@@ -42,6 +43,14 @@ contract MockJITOperator is LiquidityOperations, IJITOperator{
             uint256(addLiquidityDelta),
             recipient,
             hookData
+        );
+
+        emit AddJITLiquidity(
+            poolKey.toId(),
+            recipient,
+            tickLower,
+            tickUpper,
+            addLiquidityDelta
         );
     }
 
