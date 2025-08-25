@@ -182,9 +182,6 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
             console2.log("amount0 with Hook:", hookDelta.amount0());
             console2.log("amount1 with Hook:", hookDelta.amount1());
-            
-
-
         }
 
 

@@ -21,12 +21,13 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
+import {QuoterRevert} from "@uniswap/v4-periphery/src/libraries/QuoterRevert.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
 import {IJITOperator} from "./interfaces/IJITOperator.sol";
 import {ILPOracle} from "./interfaces/ILPOracle.sol";
 import {ITaxController} from "./interfaces/ITaxController.sol";
-
+import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 
 import {PositionInfoLibrary, PositionInfo} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
@@ -42,6 +43,7 @@ import {console2} from "forge-std/Test.sol";
 contract ParityTaxHook is BaseHook {
     using Position for address;
     using Address for address;
+    using QuoterRevert for bytes;
     using SafeCast for *;
     using StateLibrary for IPoolManager;
     using TransientStateLibrary for IPoolManager;
@@ -245,27 +247,36 @@ contract ParityTaxHook is BaseHook {
         int256 jitLiquidityDelta;
         int24 expectedAfterSwapTick;
         {
-        // NOTE: This is to get the expectedPrice Impact and also calculate a good 
-        // bound for the tick range where liquidity will be provided
+            // NOTE: This is to get the expectedPrice Impact and also calculate a good 
+            // bound for the tick range where liquidity will be provided
             bool isExactInput = swapParams.amountSpecified <0;
             bool zeroForOne = swapParams.zeroForOne;
-            IV4Quoter.QuoteExactSingleParams memory quoteParams = 
-            IV4Quoter.QuoteExactSingleParams({
-                poolKey: poolKey,
-                zeroForOne: swapParams.zeroForOne,
-                exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
-                hookData: Constants.ZERO_BYTES
-            });
+            //NOTE: THE IV4Quoter.quoteExact<Input/Output>Single tries to unlock the poolManager
+            // which is already unlocked at this point. Then we need to do low-level call
             
-            (uint256 amountSpecified, uint256 gasCost) = isExactInput ? v4Quoter.quoteExactInputSingle(
-                quoteParams
-            ): v4Quoter.quoteExactOutputSingle(
-                quoteParams
+            // However the quoter requreis that the _quoteExact<Input/Output>Single can only 
+            // by called by himselff
+            // Then we need to replicate the function here:
+            BalanceDelta swapDelta = BalanceDelta.wrap(
+                abi.decode(
+                    address(poolManager).functionCall(
+                        abi.encodeCall(
+                            IPoolManager.swap,
+                            (
+                                poolKey,
+                                swapParams,
+                                Constants.ZERO_BYTES
+                            )
+                        )
+                    ),
+                    (int256)
+                )
             );
+            
+            uint256 amountSpecified = isExactInput ? zeroForOne ? uint128(swapDelta.amount1()) : uint128(swapDelta.amount0()) : zeroForOne ? uint128(-swapDelta.amount0()) : uint128(-swapDelta.amount1());
             
             {
                 console2.log("Expected Trade Output: ", amountSpecified);
-                console2.log("Expected Gas Cost:", gasCost);
             }
 
             uint128 plpLiquidity = poolManager.getLiquidity(poolKey.toId());
@@ -281,51 +292,41 @@ contract ParityTaxHook is BaseHook {
             );
             expectedSqrtPriceImpactX96 = beforeSwapSqrtPriceX96 > expectedAfterSwapSqrtPriceX96 ? beforeSwapSqrtPriceX96 - expectedAfterSwapSqrtPriceX96 : expectedAfterSwapSqrtPriceX96 - beforeSwapSqrtPriceX96;  
             expectedAfterSwapTick = expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice();
-        }
-        //NOTE: This is to determine the jitLiquidityDelta to provide at such price range
-        // based on the expected (simulated trade)
-        {
-            BalanceDelta swapDelta = BalanceDelta.wrap(
-                abi.decode(
-                    address(poolManager).functionStaticCall(
-                        abi.encodeCall(
-                            IPoolManager.swap,
-                            (
-                                poolKey,
-                                swapParams,
-                                Constants.ZERO_BYTES
-                            )
-                        )
-                    ),
-                    (int256)
-                )
-            );
+        
+            //NOTE: This is to determine the jitLiquidityDelta to provide at such price range
+            // based on the expected (simulated trade)
 
-            jitLiquidityDelta = int128(
+            {
+                jitLiquidityDelta = int128(
                 beforeSwapSqrtPriceX96.getLiquidityForAmounts(
                     beforeSwapSqrtPriceX96,
                     expectedAfterSwapTick.getSqrtPriceAtTick(),
                     uint256(swapDelta.amount0().toUint128()),
                     uint256(swapDelta.amount1().toUint128())
-            ).toInt256());
-        //=================FOR DEBUGGING =============
-            emit ImportantMetricsLog(
-                beforeSwapTick,
-                expectedAfterSwapTick,
+                ).toInt256());
+            //=================FOR DEBUGGING =============
+                emit ImportantMetricsLog(
+                    beforeSwapTick,
+                    expectedAfterSwapTick,
+                    expectedSqrtPriceImpactX96,
+                    swapDelta,
+                    poolManager.getLiquidity(poolKey.toId()),
+                    uint128(0x00), // This is to be used on afterSwap
+                    jitLiquidityDelta
+                );
+            }
+
+            emit HypotheticalProfitabilityConditions(
+                lpFee,
                 expectedSqrtPriceImpactX96,
-                swapDelta,
-                poolManager.getLiquidity(poolKey.toId()),
-                uint128(0x00), // This is to be used on afterSwap
-                jitLiquidityDelta
+                uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96,
+                uint160(0x02)*uint160(lpFee)
             );
         }
 
-        emit HypotheticalProfitabilityConditions(
-            lpFee,
-            expectedSqrtPriceImpactX96,
-            uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96,
-            uint160(0x02)*uint160(lpFee)
-        );
+        
+
+
         // ===================================================
         //TODO: This can is to be potentially modified by sophisticated checkings, 
         // but initially based on the JIT paper
