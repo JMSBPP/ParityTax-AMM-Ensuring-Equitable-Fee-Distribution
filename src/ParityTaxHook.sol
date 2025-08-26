@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
@@ -11,6 +11,7 @@ import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/Pool
 import {BalanceDelta,BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {TickBitmap} from "@uniswap/v4-core/src/libraries/TickBitmap.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
@@ -23,9 +24,11 @@ import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
 import {QuoterRevert} from "@uniswap/v4-periphery/src/libraries/QuoterRevert.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
 import {IJITOperator} from "./interfaces/IJITOperator.sol";
 import {ILPOracle} from "./interfaces/ILPOracle.sol";
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {ITaxController} from "./interfaces/ITaxController.sol";
 import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 
@@ -35,6 +38,8 @@ import{
     Currency,
     CurrencySettler
 } from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
+
+
 
 //logging-Debugging
 
@@ -51,6 +56,7 @@ contract ParityTaxHook is BaseHook {
     using LiquidityAmounts for uint160;
     using TickMath for uint160;
     using TickMath for int24;
+    using TickBitmap for int24;
     using PoolIdLibrary for PoolKey;
     using PositionInfoLibrary for PoolKey;
     using PositionInfoLibrary for PositionInfo;
@@ -243,6 +249,7 @@ contract ParityTaxHook is BaseHook {
     {   
         // NOTE: store the price before the swap
         (uint160 beforeSwapSqrtPriceX96,int24 beforeSwapTick,,uint24 lpFee) = poolManager.getSlot0(poolKey.toId());
+ 
         uint160 expectedSqrtPriceImpactX96;
         int256 jitLiquidityDelta;
         int24 expectedAfterSwapTick;
@@ -273,25 +280,27 @@ contract ParityTaxHook is BaseHook {
                 )
             );
             
-            uint256 amountSpecified = isExactInput ? zeroForOne ? uint128(swapDelta.amount1()) : uint128(swapDelta.amount0()) : zeroForOne ? uint128(-swapDelta.amount0()) : uint128(-swapDelta.amount1());
+            uint256 amountUnspecified = isExactInput ? zeroForOne ? uint128(swapDelta.amount1()) : uint128(swapDelta.amount0()) : zeroForOne ? uint128(-swapDelta.amount0()) : uint128(-swapDelta.amount1());
             
-            {
-                console2.log("Expected Trade Output: ", amountSpecified);
-            }
+            
+            console2.log("Amount Calculated by the CFMM: ", amountUnspecified);
+            
 
             uint128 plpLiquidity = poolManager.getLiquidity(poolKey.toId());
             
             uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
                 plpLiquidity,
-                amountSpecified,
+                amountUnspecified,
                 zeroForOne
             ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
                 plpLiquidity,
-                amountSpecified,
+                amountUnspecified,
                 zeroForOne
             );
+
             expectedSqrtPriceImpactX96 = beforeSwapSqrtPriceX96 > expectedAfterSwapSqrtPriceX96 ? beforeSwapSqrtPriceX96 - expectedAfterSwapSqrtPriceX96 : expectedAfterSwapSqrtPriceX96 - beforeSwapSqrtPriceX96;  
-            expectedAfterSwapTick = expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice();
+            //TODO: Given this tick I need to get the next valid tick for the poolTickSpacing
+            expectedAfterSwapTick = (expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice().compress(poolKey.tickSpacing))*int24(poolKey.tickSpacing);
         
             //NOTE: This is to determine the jitLiquidityDelta to provide at such price range
             // based on the expected (simulated trade)
@@ -301,7 +310,9 @@ contract ParityTaxHook is BaseHook {
                 beforeSwapSqrtPriceX96.getLiquidityForAmounts(
                     beforeSwapSqrtPriceX96,
                     expectedAfterSwapTick.getSqrtPriceAtTick(),
-                    uint256(swapDelta.amount0().toUint128()),
+                    // TODO: This worked on testing but is broken
+                    // when other swap set ups are done ...
+                    uint256((-swapDelta.amount0()).toUint128()),
                     uint256(swapDelta.amount1().toUint128())
                 ).toInt256());
             //=================FOR DEBUGGING =============
@@ -309,7 +320,7 @@ contract ParityTaxHook is BaseHook {
                     beforeSwapTick,
                     expectedAfterSwapTick,
                     expectedSqrtPriceImpactX96,
-                    swapDelta,
+                        swapDelta,
                     poolManager.getLiquidity(poolKey.toId()),
                     uint128(0x00), // This is to be used on afterSwap
                     jitLiquidityDelta
@@ -328,31 +339,45 @@ contract ParityTaxHook is BaseHook {
 
 
         // ===================================================
-        //TODO: This can is to be potentially modified by sophisticated checkings, 
-        // but initially based on the JIT paper
         
-        if (uint160(0x02)*uint160(lpFee) >= expectedSqrtPriceImpactX96){
-            // TODO: This is to be improved using the positionManager
-            jitOperator.addJITLiquidity(
-                poolKey,
-                beforeSwapTick,
-                expectedAfterSwapTick,
-                jitLiquidityDelta.toInt128().toUint128(),
-                address(taxController),
-                hookData
-            );
-            {
-                JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-                jitTransientMetrics.addedLiquidity = jitLiquidityDelta.toInt128().toUint128();
-                jitTransientMetrics.jitPositionInfo = poolKey.initialize(
-                    beforeSwapTick,
-                    expectedAfterSwapTick
-                );
+        // TODO: This is to be improved using the positionManager
+        // NOTE: We are approving for both but this should be done only for the currency where
+        // amountSPecified amount falls into 
+        
+        uint128 addLiquidityDelta = jitLiquidityDelta.toInt128().toUint128();
+        approvePosmCurrency(
+            poolKey.currency0,
+            uint256(addLiquidityDelta),
+            uint48(block.timestamp + uint48(0x01))
+        );
 
-                assembly{
-                    tstore(JIT_Transient_MetricsLocation, jitTransientMetrics)
-                }
+        approvePosmCurrency(
+            poolKey.currency1,
+            uint256(addLiquidityDelta),
+            uint48(block.timestamp + uint48(0x01))
+        );
+
+        
+        jitOperator.addJITLiquidity(
+            poolKey,    
+            beforeSwapTick,
+            expectedAfterSwapTick,
+            addLiquidityDelta,
+            address(taxController),
+            hookData
+        );
+        {
+            JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
+            jitTransientMetrics.addedLiquidity = addLiquidityDelta;
+            jitTransientMetrics.jitPositionInfo = poolKey.initialize(
+                beforeSwapTick,
+                expectedAfterSwapTick
+            );
+
+            assembly{
+                tstore(JIT_Transient_MetricsLocation, jitTransientMetrics)
             }
+            // }
         } 
         return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, uint24(0x00));
     }
@@ -397,7 +422,7 @@ contract ParityTaxHook is BaseHook {
                 address(plpOperator).functionCall(hookData);
                 //If success the PLP commits its liquidity
             }
-        }
+        }   
         
         return IHooks.beforeAddLiquidity.selector;
     }
@@ -546,6 +571,22 @@ contract ParityTaxHook is BaseHook {
     function getCurrentPrice() public view returns(uint256){
         return 1;
     }
+
+    function approvePosmCurrency(
+        Currency currency,
+        uint256 amount, 
+        uint48 expiration
+    ) internal {
+        // Because POSM uses permit2, we must execute 2 permits/approvals.
+        // 1. First, the caller must approve permit2 on the token.
+        address permit2 = jitOperator.permit2();
+        IERC20(Currency.unwrap(currency)).approve(permit2, type(uint256).max);
+        // 2. Then, the caller must approve POSM as a spender of permit2. TODO: This could also be a signature.
+        IAllowanceTransfer(permit2).approve(Currency.unwrap(currency), address(jitOperator.positionManager()), type(uint160).max, type(uint48).max);
+    }
+
+
+
 
 }
 

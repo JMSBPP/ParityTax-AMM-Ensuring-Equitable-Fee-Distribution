@@ -4,8 +4,13 @@ pragma solidity ^0.8.0;
 import {
     ParityTaxHook,
     IPoolManager,
+    PoolId,
+    PoolIdLibrary,
+    PoolKey,
+    StateLibrary,
     IPositionManager
 } from "../src/ParityTaxHook.sol";
+
 import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -40,13 +45,18 @@ import {MockJITOperator} from "./mocks/MockJITOperator.sol";
 import {MockPLPOperator} from "./mocks/MockPLPOperator.sol";
 import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
-
+import {StateView} from "@uniswap/v4-periphery/src/lens/StateView.sol";
 
 import {console2} from "forge-std/Test.sol";
 
-contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
-    using BalanceDeltaLibrary for BalanceDelta;
+// Add missing constants
+uint160 constant MIN_PRICE_LIMIT = 4295128739 + 1; // TickMath.MIN_SQRT_PRICE + 1
+uint160 constant MAX_PRICE_LIMIT = 1461446703485210103287273052203988822378723970342 - 1; // TickMath.MAX_SQRT_PRICE - 1
 
+contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
+    using StateLibrary for IPoolManager;
+    using BalanceDeltaLibrary for BalanceDelta;
+    using PoolIdLibrary for PoolKey;
     PoolKey noHookKey;    
     ParityTaxHook parityTax;
 
@@ -55,6 +65,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     MockPLPOperator plpOperator;
     LumpSumTaxController taxController;
     V4Quoter v4Quoter;
+    StateView stateView;
 
 
     function setUp() public {
@@ -65,8 +76,10 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
 
         jitOperator = new MockJITOperator(
-            address(lpm)
+            address(lpm),
+            address(permit2)
         );
+        
         plpOperator = new MockPLPOperator(
             manager
         );
@@ -77,6 +90,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         v4Quoter = new V4Quoter(
             manager
         );
+
+        stateView = new StateView(manager);
 
         parityTax = ParityTaxHook(
             address(
@@ -112,7 +127,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                 address(parityTax)
             ),
             Constants.FEE_MEDIUM,
-            SQRT_PRICE_1_2
+            SQRT_PRICE_1_1
         );
 
         (noHookKey, ) = initPool(
@@ -120,9 +135,9 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             currency1,
             IHooks(
                 address(0x00)
-            ),
+    ),
             Constants.FEE_MEDIUM,
-            SQRT_PRICE_1_2
+            SQRT_PRICE_1_1
         );
 
 
@@ -141,49 +156,45 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         BalanceDelta noHookDelta = modifyPoolLiquidity(noHookKey, -600, 600, -1e17, 0);
 
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
-    }
+    }               
 
     function test__Unit_JITSingleLP() public {
         
-        {
-            //=============  beforeSwap PLP Liquidity ==========
-            modifyPoolLiquidity(key, -600, 600, 1e18, 0);
-            modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
-        }
+        
+        //=============  beforeSwap PLP Liquidity ==========
+        modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
+        modifyPoolLiquidity(key, -600, 600, 1e18, 0);
+        
+        //==================LARGE SWAP===================
+        PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
+            takeClaims: false, 
+            settleUsingBurn: false  
+        });
 
-        {
-            //==================LARGE SWAP===================
-            PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
-                takeClaims: false, 
-                settleUsingBurn: false  
-            });
+        SwapParams memory largeSwapParams = SwapParams({
+            zeroForOne: true,
+            amountSpecified: -1e15, // exact input
+            sqrtPriceLimitX96: MIN_PRICE_LIMIT 
+        });
 
-            SwapParams memory largeSwapParams = SwapParams({
-                zeroForOne: true,
-                amountSpecified: -1e15, // exact input
-                sqrtPriceLimitX96: MIN_PRICE_LIMIT 
-            });
+        (BalanceDelta noHookDelta) = swapRouter.swap(
+            noHookKey, 
+            largeSwapParams, 
+            testSettings, 
+            Constants.ZERO_BYTES
+        );
+        console2.log("amount0 with no Hook:", noHookDelta.amount0());
+        console2.log("amount1 with no Hook:", noHookDelta.amount1());
+        
+        (BalanceDelta hookDelta) = swapRouter.swap(
+            key, // Pool with Hook
+            largeSwapParams,
+            testSettings,
+            Constants.ZERO_BYTES
+        );
 
-            (BalanceDelta noHookDelta) = swapRouter.swap(
-                noHookKey, 
-                largeSwapParams, 
-                testSettings, 
-                Constants.ZERO_BYTES
-            );
-            console2.log("amount0 with no Hook:", noHookDelta.amount0());
-            console2.log("amount1 with no Hook:", noHookDelta.amount1());
-            
-            (BalanceDelta hookDelta) = swapRouter.swap(
-                key, // Pool with Hook
-                largeSwapParams,
-                testSettings,
-                Constants.ZERO_BYTES
-            );
-
-            console2.log("amount0 with Hook:", hookDelta.amount0());
-            console2.log("amount1 with Hook:", hookDelta.amount1());
-        }
-
+        console2.log("amount0 with Hook:", hookDelta.amount0());
+        console2.log("amount1 with Hook:", hookDelta.amount1());
 
 
     }
