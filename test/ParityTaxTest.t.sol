@@ -154,7 +154,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         // remove liquidity
         BalanceDelta hookDelta = modifyPoolLiquidity(key, -600, 600, -1e17, 0);
         BalanceDelta noHookDelta = modifyPoolLiquidity(noHookKey, -600, 600, -1e17, 0);
-
+        console2.log("Permit 2 Address:", address(permit2));
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }               
 

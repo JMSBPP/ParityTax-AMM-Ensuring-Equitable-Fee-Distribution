@@ -1,0 +1,22 @@
+{
+    "typescript.enablePromptUseWorkspaceTsdk": false,
+    "typescript.validate.enable": false,
+    "javascript.validate.enable": false,
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/foundry-out/**": true,
+      "**/cache/**": true,
+      "**/broadcast/**": true,
+      "**/artifacts/**": true,
+      "**/.git/**": true
+    },
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/foundry-out": true,
+      "**/cache": true,
+      "**/broadcast": true,
+      "**/artifacts": true,
+      "**/.git": true
+    },
+    "makefile.configureOnOpen": false
+}
