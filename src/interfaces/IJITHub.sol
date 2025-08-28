@@ -8,8 +8,8 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 interface IJITHub{
 
-    function fulfillTrade(
+    function approveJITLiquidityForSwap(
         PoolKey memory pooKey,
         ModifyLiquidityParams memory jitLiquidityParams
-    ) external;
+    ) external returns (uint256 liquidity0, uint256 liquidity1);
 }

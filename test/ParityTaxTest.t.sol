@@ -43,12 +43,15 @@ import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {MockJITOperator} from "./mocks/MockJITOperator.sol";
 import {MockPLPOperator} from "./mocks/MockPLPOperator.sol";
+import {MockJITHub} from "./mocks/MockJITHub.sol";
 import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
 import {StateView} from "@uniswap/v4-periphery/src/lens/StateView.sol";
 
 import {console2} from "forge-std/Test.sol";
 
+
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
 // Add missing constants
 uint160 constant MIN_PRICE_LIMIT = 4295128739 + 1; // TickMath.MIN_SQRT_PRICE + 1
 uint160 constant MAX_PRICE_LIMIT = 1461446703485210103287273052203988822378723970342 - 1; // TickMath.MAX_SQRT_PRICE - 1
@@ -63,6 +66,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     
     MockJITOperator jitOperator;
     MockPLPOperator plpOperator;
+    MockJITHub jitHub;
     LumpSumTaxController taxController;
     V4Quoter v4Quoter;
     StateView stateView;
@@ -79,6 +83,35 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             address(lpm),
             address(permit2)
         );
+
+
+        jitHub = new MockJITHub(
+            manager
+        );
+        
+        
+        vm.startPrank(address(this));
+        
+        {
+            IERC20(Currency.unwrap(currency0)).transfer(
+                address(jitHub),
+                uint256(type(uint128).max)
+            );
+            console2.log(
+                "Balance of Sender on currency0:", IERC20(Currency.unwrap(currency0)).balanceOf(address(jitHub))
+            );
+
+            IERC20(Currency.unwrap(currency1)).transfer(
+                address(jitHub),
+                uint256(type(uint128).max)
+            );
+
+            console2.log(
+                "Balance of Sender on currency1:", IERC20(Currency.unwrap(currency1)).balanceOf(address(jitHub))
+            );
+        }
+        vm.stopPrank();
+        
         
         plpOperator = new MockPLPOperator(
             manager
@@ -100,7 +133,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                     Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG| 
                     Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG | 
                     Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG | Hooks.BEFORE_SWAP_FLAG | 
-                    Hooks.AFTER_SWAP_FLAG 
+                    Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
                 )
 
             )
@@ -111,7 +144,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             abi.encode(
                 manager,
                 address(v4Quoter),
-                address(jitOperator),
+                address(jitHub),
                 address(plpOperator),
                 address(0x123),
                 address(taxController)

@@ -42,27 +42,29 @@ contract MockJITHub is IJITHub{
         jitResolver = _resolver;
     }
 
-    function fulfillTrade(
+    function approveJITLiquidityForSwap(
         PoolKey memory poolKey,
         ModifyLiquidityParams memory jitLiquidityParams
-    ) external {
+    ) external returns (uint256 liquidity0, uint256 liquidity1){
         // TODO Request to the whitelisted JIT Operators to fill the liquidity
         // And this can even be an integration with 1 Inch ...
         // Now we are requesting the Resolvers to fill the trade ...
 
         // JIT Operators == 1 Inch Limit Orders Resolvers
 
-        (uint256 liquidity0, uint256 liquidity1,) = _queryJITAmounts(poolKey, jitLiquidityParams);
+        (liquidity0,liquidity1,) = _queryJITAmounts(poolKey, jitLiquidityParams);
         {
             //========APROVE THE HOOK TO MANAGE THE AGGREGATE JIT LIQUIDITY ==========
             IERC20(Currency.unwrap(poolKey.currency0)).approve(address(poolKey.hooks),liquidity0);
             IERC20(Currency.unwrap(poolKey.currency1)).approve(address(poolKey.hooks),liquidity1);
         
         }
+
         {
             //=======REQUEST THE AGGREGATE JIT LIQUIDITY FROM RESOLVERS ===========
             //                           ...
         }
+
 
 
         // NOTE: For testing purposes let's do only one Resolver filling trades
@@ -72,7 +74,7 @@ contract MockJITHub is IJITHub{
     function _queryJITAmounts(
         PoolKey memory poolKey,
         ModifyLiquidityParams memory jitLiquidityParams
-    ) internal returns(uint256 liquidity0, uint256 liquidity1, uint128 newLiquidity){
+    ) internal view returns(uint256 liquidity0, uint256 liquidity1, uint128 newLiquidity){
         PoolId poolId = poolKey.toId();
         (uint160 sqrtPriceX96,int24 tick,,) = poolManager.getSlot0(poolId);
         (int24 tickLower, int24 tickUpper) = (

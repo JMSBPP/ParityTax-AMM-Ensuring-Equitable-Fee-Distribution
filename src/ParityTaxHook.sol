@@ -182,10 +182,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         taxController = ITaxController(_taxController);
     }
 
-    //TODO: This is a place holder
-    function _pay(Currency token, address payer, uint256 amount) internal virtual override{
-        uint256 x;
-    }
+
 
 
 
@@ -214,7 +211,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
             afterSwap: true,
             beforeDonate: false,
             afterDonate: false,
-            beforeSwapReturnDelta:false,
+            beforeSwapReturnDelta:true,
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: true,
             afterRemoveLiquidityReturnDelta: true
@@ -270,6 +267,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         uint128 jitLiquidity;
         uint128 plpLiquidity;
         int24 expectedAfterSwapTick;
+        BeforeSwapDelta remainingSwapDeltaToBeFullfilled;
         {
             // NOTE: On this block we aim to simulate a swap as if the trader were
             // to use the available liquidity on the pool.
@@ -380,8 +378,8 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                         swapParams.amountSpecified <0 && swapParams.zeroForOne
                     );
 
-                    console2.log("Amount Deposited By the Trader of Currency 0:", swapParams.amountSpecified);
-                    console2.log("Amount Calculated by the CFMM of Currency 1: ", amountUnspecified);
+                    console2.log("Amount Deposited By the Trader of Currency 0 (amountSpecified):", swapParams.amountSpecified);
+                    console2.log("Amount Calculated by the CFMM of Currency 1 (amountUnspecified): ", amountUnspecified);
 
                     console2.log("The amount0 Delta of the swapDelta is the trader deposit:", swapDelta.amount0());
                     console2.log("The amount1 Delta of the swapDelta of the amountUnspecified:",swapDelta.amount1()==amountUnspecified);
@@ -399,6 +397,8 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                         expectedAfterSwapTick.getSqrtPriceAtTick(),
                         _getFullCredit(poolKey.currency1)
                     ).toUint128();
+
+
                     // TODO: Given the JIT Liquidity delta we already have the params
                     // to set the position, this is:
                     ModifyLiquidityParams memory jitLiquidityParams = ModifyLiquidityParams({
@@ -408,9 +408,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                         salt: bytes32(uint256(0x00)) //placeHolder
                     });
 
-                    // NOTE: This needs to be passed to a JIT Liquidity Manager
-                    // That has a method to fill liquidity among the avilable JIT Operators
-                    jitHub.fulfillTrade(poolKey,jitLiquidityParams);
+
                     
                     console2.log(
                         "The Trader owes to the Hook (amountSpecified) of currency0"
@@ -419,17 +417,80 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                         "The Hook owes to the PoolManager amountSpecified of currency0",
                         _getFullDebt(poolKey.currency0)
                     );
+                    
+                    _fillSwapJIT(poolKey, jitLiquidityParams);
+                    
+                    console2.log(
+                        "After JIT Liquidity is added: The Hook owes to the PoolManager amountSpecified* of currency0",
+                        _getFullDebt(poolKey.currency0)
+                    );
 
-                    // TODO: We need to transfer this debt
-                    // to the JIToperator, which will be in charge
-                    // of taking the capital, doing a flash loan
-                    // and getting back the amountUnspecified
-                   
+                    console2.log(
+                        "After JIT Liquidity is added: The PoolManager owes to the Hook amountUnspecified* of currency1",
+                        _getFullCredit(poolKey.currency1)
+                    );
+
+                    uint256 plpRemainingAmountSpecified = _getFullDebt(poolKey.currency0);
+                    uint256 plpRemainingAmountUnspecified = _getFullCredit(poolKey.currency1);
+                    remainingSwapDeltaToBeFullfilled = toBeforeSwapDelta(
+                        (-(plpRemainingAmountSpecified.toUint128()).toInt128()),
+                        ((plpRemainingAmountUnspecified.toUint128()).toInt128())
+                    );
                     
 
                 }
             }
-            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, uint24(0x00));
+            return (IHooks.beforeSwap.selector, remainingSwapDeltaToBeFullfilled, uint24(0x00));
+        }
+
+        //TODO: This is a place holder
+        function _fillSwapJIT(
+            PoolKey memory poolKey,
+            ModifyLiquidityParams memory jitLiquidityParams
+        ) internal {
+            //NOTE: First the JIT approves the JIT amounts
+            // TODO : This needs to be improved using permits
+            // using deadlines to protect for attacks
+            (uint256 liquidity0, uint256 liquidity1) = jitHub.approveJITLiquidityForSwap(
+                poolKey,
+                jitLiquidityParams
+            );
+            console2.log(
+                "Aggregate Balance of JITHub on currency0:", IERC20(
+                    Currency.unwrap(poolKey.currency0)).balanceOf(address(jitHub))
+            );
+
+            console2.log(
+                "Aggregate Balance of JITHub on currency1:", IERC20(
+                    Currency.unwrap(poolKey.currency1)).balanceOf(address(jitHub))
+            );
+
+            {
+                _pay(
+                    poolKey.currency0,
+                    address(jitHub),
+                    liquidity0
+                );
+                _pay(
+                    poolKey.currency1,
+                    address(jitHub),
+                    liquidity1
+                );
+            }
+
+
+        }
+        function _pay(
+            Currency token,
+            address payer,
+            uint256 amount
+        ) internal virtual override{
+            token.settle(
+                poolManager,
+                payer,
+                amount,
+                false
+            );
         }
 
         
@@ -489,14 +550,32 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
     // before the transaction ends
 
     function _afterSwap(
-        address,
+        address swapRouter,
         PoolKey calldata poolKey,
         SwapParams calldata,
-        BalanceDelta,
+        BalanceDelta swapDelta,
         bytes calldata hookData
     ) internal virtual override returns (bytes4, int128)
     {
-        // bytes32 jitPositionKey = _jitPositionKey();
+
+        console2.log(
+            "The amountSpecified of swap after partial-jit swap fullfillemnt",
+            swapDelta.amount0()
+        );
+        console2.log(
+            "The amountUnspecified of swap after partial-jit swap fullfillemnt",
+            swapDelta.amount1()
+        );
+        // NOTE: Let's read the accounting at this point
+        console2.log(
+            "After Swap is Fullfilled : The Hook owes to the PoolManager amountSpecified* of currency0",
+            _getFullDebt(poolKey.currency0)
+        );
+
+        console2.log(
+            "After Swap is Fullfilled: The PoolManager owes to the Hook amountUnspecified* of currency1",
+            _getFullCredit(poolKey.currency1)
+        );
         
         // jitOperator.removeJITLiquidity(
         //     jitPositionKey,
