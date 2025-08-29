@@ -552,7 +552,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
     function _afterSwap(
         address swapRouter,
         PoolKey calldata poolKey,
-        SwapParams calldata,
+        SwapParams calldata swapParams,
         BalanceDelta swapDelta,
         bytes calldata hookData
     ) internal virtual override returns (bytes4, int128)
@@ -576,13 +576,38 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
             "After Swap is Fullfilled: The PoolManager owes to the Hook amountUnspecified* of currency1",
             _getFullCredit(poolKey.currency1)
         );
-        
+
+// (,, int256 deltaAfter1) = 
+        // ------->                                 deltaHolder  
+// _fetchBalances(data.key.currency1, data.sender, address(this));
+        console2.log(
+            "Swap Router delta After Swap",
+            poolManager.currencyDelta(
+                address(swapRouter),
+                poolKey.currency1
+            )
+        );
+
+        console2.log(
+            "Hook delta After Swap",
+            poolManager.currencyDelta(
+                address(this),
+                poolKey.currency1
+            )
+        );
         // jitOperator.removeJITLiquidity(
         //     jitPositionKey,
         //     hookData
         // );
+        int128 deltaAfter1 = swapParams.zeroForOne ? swapDelta.amount1() < 0 ? -swapDelta.amount1():swapDelta.amount1() : swapDelta.amount1() < 0 ? swapDelta.amount1(): -swapDelta.amount1();
+        
+        if(swapParams.zeroForOne){
+            delta= -swapDelta.amount1().toInt128();
+        } else {
+            delta = -swapDelta.amount0().toInt128();
+        }
 
-        return (IHooks.afterSwap.selector, int128(0x00));
+        return (IHooks.afterSwap.selector, delta);
     }
 
     function _beforeAddLiquidity(
