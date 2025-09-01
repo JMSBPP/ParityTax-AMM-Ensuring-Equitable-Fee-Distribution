@@ -2,12 +2,11 @@
 pragma solidity ^0.8.0;
 
 
-import {IJITHub} from "../../src/interfaces/IJITHub.sol";
+import "../../src/interfaces/IJITHub.sol";
 import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"; 
 
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -16,11 +15,19 @@ import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {LiquidityMath} from "@uniswap/v4-core/src/libraries/LiquidityMath.sol";
 import "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
-import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import{
+    Currency,
+    CurrencySettler
+} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 
 
-contract MockJITHub is IJITHub{
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
+
+
+contract MockJITHub is IJITHub, DeltaResolver{
     using SafeCast for *;
+    using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;    
     using SqrtPriceMath for uint160;
@@ -31,10 +38,41 @@ contract MockJITHub is IJITHub{
     address jitResolver;
     mapping(PoolId poolId => bytes32 positionKey) private jitOperators;
 
-    IPoolManager poolManager;
-    constructor(IPoolManager _manager) {
-        poolManager = _manager;
+
+    constructor(IPoolManager _manager) ImmutableState (_manager) DeltaResolver() {}
+
+    function fillSwap(JITData memory jitData) external returns(uint256){
+        //NOTE: This is  place holder, further checks are needed
+        uint256 amountToFullfill = jitData.amountOut;
+        {  
+            // NOTE: This is to be corrected for more cases
+
+            _pay(
+                jitData.poolKey.currency1,
+                address(this),
+                amountToFullfill
+            );
+        }
+        
+        return jitData.amountOut;
     }
+
+    function _pay(
+        Currency token,
+        address payer, 
+        uint256 amount
+        ) internal virtual override {
+            token.settle(
+                poolManager,
+                payer,
+                amount,
+                false
+            );
+
+    } 
+
+
+
 
     function whiteListResolver(
         address _resolver
@@ -42,34 +80,7 @@ contract MockJITHub is IJITHub{
         jitResolver = _resolver;
     }
 
-    function approveJITLiquidityForSwap(
-        PoolKey memory poolKey,
-        ModifyLiquidityParams memory jitLiquidityParams
-    ) external returns (uint256 liquidity0, uint256 liquidity1){
-        // TODO Request to the whitelisted JIT Operators to fill the liquidity
-        // And this can even be an integration with 1 Inch ...
-        // Now we are requesting the Resolvers to fill the trade ...
-
-        // JIT Operators == 1 Inch Limit Orders Resolvers
-
-        (liquidity0,liquidity1,) = _queryJITAmounts(poolKey, jitLiquidityParams);
-        {
-            //========APROVE THE HOOK TO MANAGE THE AGGREGATE JIT LIQUIDITY ==========
-            IERC20(Currency.unwrap(poolKey.currency0)).approve(address(poolKey.hooks),liquidity0);
-            IERC20(Currency.unwrap(poolKey.currency1)).approve(address(poolKey.hooks),liquidity1);
-        
-        }
-
-        {
-            //=======REQUEST THE AGGREGATE JIT LIQUIDITY FROM RESOLVERS ===========
-            //                           ...
-        }
-
-
-
-        // NOTE: For testing purposes let's do only one Resolver filling trades
-        // and this resolver being the current contract
-    }
+   
 
     function _queryJITAmounts(
         PoolKey memory poolKey,

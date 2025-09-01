@@ -5,9 +5,9 @@ import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+// import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
-import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -40,20 +40,21 @@ import{
     Currency,
     CurrencySettler
 } from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
-import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
+// import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
 import {CurrencyDelta} from "@uniswap/v4-core/src/libraries/CurrencyDelta.sol";
 
 // =============== External Dependencies ============================
 //TODO: Do we need a manager also for the PLP ?? ...
 import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
 import {IJITHub} from "./interfaces/IJITHub.sol";
+import "./types/Shared.sol";
 
 
 //logging-Debugging
 
 import {console2} from "forge-std/Test.sol";
 
-contract ParityTaxHook is BaseHook, DeltaResolver {
+contract ParityTaxHook is BaseHook{
     using Position for address;
     using Address for address;
     using QuoterRevert for bytes;
@@ -87,7 +88,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
 
         
     }
-
+    error AmountOutGreaterThanSwapAmountOut();
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
 
@@ -174,7 +175,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         address _plpOperator,
         address _lpOracle,
         address _taxController
-    ) BaseHook(_manager) DeltaResolver(){
+    ) BaseHook(_manager) {
         v4Quoter = IV4Quoter(_v4Quoter);
         jitHub = IJITHub(_jitHub);
         plpOperator = IPLPOperator(_plpOperator);
@@ -264,17 +265,6 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
 //     swapParams.amountSpecified > 0     ^        !zeroForOne       -->   amountUnspecified < 0
 // ====================================================================================================
 
-    struct JITData{
-      PoolKey poolKey;
-      SwapParams swapParams;
-      
-      uint160 beforeSwapSqrtPriceX96;
-      int24 expectedAfterSwapTick;
-
-      uint128 plpLiquidity;
-      uint160 expectedAfterSwapSqrtPriceX96;
-      
-    }
     function _beforeSwap(
         address swapRouter ,
         PoolKey calldata poolKey, 
@@ -297,27 +287,27 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
             // to use the available liquidity on the pool.
             bool isExactInput = swapParams.amountSpecified <0;
             bool zeroForOne = swapParams.zeroForOne;
-            BalanceDelta swapDelta = BalanceDelta.wrap(
-                abi.decode(
-                    address(poolManager).functionCall(
-                        abi.encodeCall(
-                            IPoolManager.swap,
-                            (
-                                poolKey,
-                                swapParams,
-                                Constants.ZERO_BYTES
-                            )
-                        )
-                    ),
-                    (int256)
-                )
-            );
             if (isExactInput){
                 amountIn = uint256(-swapParams.amountSpecified);
-                amountOut = zeroForOne ? uint256(swapDelta.amount1()) : uint256(swapDelta.amount0());
+                (amountOut,) = v4Quoter.quoteExactInputSingle(
+                    IV4Quoter.QuoteExactSingleParams({
+                        poolKey: poolKey,
+                        zeroForOne: swapParams.zeroForOne,
+                        exactAmount: (-swapParams.amountSpecified).toInt128().toUint128(),
+                        hookData: Constants.ZERO_BYTES
+                    })
+                );
             } else {
                 amountOut = uint256(swapParams.amountSpecified);
-                amountIn = uint256(zeroForOne ? -swapDelta.amount0() : -swapDelta.amount1());
+                (amountIn,) = v4Quoter.quoteExactOutputSingle(
+                    IV4Quoter.QuoteExactSingleParams({
+                        poolKey: poolKey,
+                        zeroForOne: swapParams.zeroForOne,
+                        exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
+                        hookData: Constants.ZERO_BYTES
+                    })
+                );
+
             }
 
             // return the delta to the PoolManager, so it can process the accounting
@@ -327,9 +317,6 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
             // exact output:
             //   specifiedDelta = negative, to offset the output token paid by the hook (positive delta)
             //   unspecifiedDelta = positive, to offset the input token taken by the hook (negative delta)
-            returnDelta = isExactInput
-                ? toBeforeSwapDelta(amountIn.toInt128(), -(amountOut.toInt128()))
-                : toBeforeSwapDelta(-(amountOut.toInt128()), amountIn.toInt128());
 
 
             // NOTE: To calculate the priceImpact we need to get the price after the swap
@@ -361,28 +348,49 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                 JITData({
                     poolKey: poolKey,
                     swapParams: swapParams,
+                    amountOut: amountOut,
                     beforeSwapSqrtPriceX96: beforeSwapSqrtPriceX96,
                     expectedAfterSwapTick:expectedAfterSwapTick,
                     plpLiquidity: plpLiquidity,
-                    expectedAfterSwapSqrtPriceX96: expectedAfterSwapTick
+                    expectedAfterSwapSqrtPriceX96: expectedAfterSwapTick.getSqrtPriceAtTick()
                 })
             );
 
 
-            poolManager.take(
-                swapParams.zeroForOne ? poolKey.currency0 : currency1,
-                address(jitHub),
-                jitAmountWillingToFulfilled 
-            );
+            if (jitAmountWillingToFulfilled > 0 && jitAmountWillingToFulfilled <= amountOut ){
+                // NOTE: The JIT is willing to partially or fully fulfill the trade
+                // therefore it JITHUb needs to take the input token from
+                // the pool Manager
+                poolManager.take(
+                    swapParams.zeroForOne ? poolKey.currency0 : poolKey.currency1,
+                    address(jitHub),
+                    amountIn 
+                );
 
-            poolManager.sync(
-                swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
-            );
+                poolManager.sync(
+                  swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
+                );
 
-        
+                poolManager.settleFor(
+                    address(jitHub)
+                );
 
-            return (IHooks.beforeSwap.selector, remainingSwapDeltaToBeFullfilled, uint24(0x00));
+
+
+            } else if (jitAmountWillingToFulfilled > amountOut) {
+                revert AmountOutGreaterThanSwapAmountOut();
+            }
+
+            // NOTE: It either fulfilles the entire trade or
+            // leaves some amountOut to be fulfilled by PLP
+            returnDelta = isExactInput
+                ? toBeforeSwapDelta(amountIn.toInt128(), -(jitAmountWillingToFulfilled.toInt128()))
+                : toBeforeSwapDelta(-(jitAmountWillingToFulfilled.toInt128()), amountIn.toInt128());
+
+            
+            return (IHooks.beforeSwap.selector, returnDelta, uint24(0x00));
         }
+    }
 
 
     function _afterSwap(
@@ -403,15 +411,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
             swapDelta.amount1()
         );
         // NOTE: Let's read the accounting at this point
-        console2.log(
-            "After Swap is Fullfilled : The Hook owes to the PoolManager amountSpecified* of currency0",
-            _getFullDebt(poolKey.currency0)
-        );
 
-        console2.log(
-            "After Swap is Fullfilled: The PoolManager owes to the Hook amountUnspecified* of currency1",
-            _getFullCredit(poolKey.currency1)
-        );
 
 // (,, int256 deltaAfter1) = 
         // ------->                                 deltaHolder  
@@ -431,6 +431,7 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                 poolKey.currency1
             )
         );
+
         // jitOperator.removeJITLiquidity(
         //     jitPositionKey,
         //     hookData

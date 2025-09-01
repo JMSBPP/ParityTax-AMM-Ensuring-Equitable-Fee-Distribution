@@ -44,7 +44,7 @@ import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 import {MockJITOperator} from "./mocks/MockJITOperator.sol";
 import {MockPLPOperator} from "./mocks/MockPLPOperator.sol";
 import {MockJITHub} from "./mocks/MockJITHub.sol";
-import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
+import {UnlockedV4Quoter} from "../src/UnlockedV4Quoter.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
 import {StateView} from "@uniswap/v4-periphery/src/lens/StateView.sol";
 
@@ -68,7 +68,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     MockPLPOperator plpOperator;
     MockJITHub jitHub;
     LumpSumTaxController taxController;
-    V4Quoter v4Quoter;
+    UnlockedV4Quoter v4Quoter;
     StateView stateView;
 
 
@@ -106,6 +106,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                 uint256(type(uint128).max)
             );
 
+            
+
             console2.log(
                 "Balance of Sender on currency1:", IERC20(Currency.unwrap(currency1)).balanceOf(address(jitHub))
             );
@@ -120,7 +122,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             plpOperator,
             jitOperator
         );
-        v4Quoter = new V4Quoter(
+        v4Quoter = new UnlockedV4Quoter(
             manager
         );
 
