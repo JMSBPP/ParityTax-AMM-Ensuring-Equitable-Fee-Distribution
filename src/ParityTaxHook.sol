@@ -8,7 +8,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {BalanceDelta,BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {TickBitmap} from "@uniswap/v4-core/src/libraries/TickBitmap.sol";
@@ -248,11 +248,33 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         uint160 feeTimes2
     );
 
-    //       =========================================================
-    // NOTE: For this Hook the bytes hookData is to implement further calls
+// ===================================================================================================
+//                  "Intent: How much of currency1 can I buy given a specified amount of currency0"
+//    "Trader deposits currency0 "             "Trader enters 0"            "Trader receives currency1"   
+//    swapParams.amountSpecified < 0     ^         zeroForOne         -->     amountUnspecified > 0
+//
+//                "Intent: How much of currency0 can I buy given a specified amount of currency1"
+//    "Trader deposits currency1"               "Trader enters 1"         "Trader receives currency0"
+//     swapParams.amountSpecified < 0      ^       !zeroForOne        -->   amountUnspecified > 0
+//
+//                "Intent: How much currency0 must I sell to receive a specified amount of currency1"
+//     swapParams.amountSpecified > 0     ^        zeroForOne        -->   amountUnspecified < 0
+//
+//                "Intent: How much currency1 must I sell to receive a specified amount of currency0"
+//     swapParams.amountSpecified > 0     ^        !zeroForOne       -->   amountUnspecified < 0
+// ====================================================================================================
 
-    // before the transaction ends
+    struct JITData{
+      PoolKey poolKey;
+      SwapParams swapParams;
+      
+      uint160 beforeSwapSqrtPriceX96;
+      int24 expectedAfterSwapTick;
 
+      uint128 plpLiquidity;
+      uint160 expectedAfterSwapSqrtPriceX96;
+      
+    }
     function _beforeSwap(
         address swapRouter ,
         PoolKey calldata poolKey, 
@@ -263,15 +285,17 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         // NOTE: store the price before the swap
         (uint160 beforeSwapSqrtPriceX96,int24 beforeSwapTick,,uint24 lpFee) = poolManager.getSlot0(poolKey.toId());
  
+        int24 expectedAfterSwapTick;
         uint160 expectedSqrtPriceImpactX96;
         uint128 jitLiquidity;
         uint128 plpLiquidity;
-        int24 expectedAfterSwapTick;
-        BeforeSwapDelta remainingSwapDeltaToBeFullfilled;
+        uint256 amountIn;
+        uint256 amountOut;
+        BeforeSwapDelta returnDelta;
         {
             // NOTE: On this block we aim to simulate a swap as if the trader were
             // to use the available liquidity on the pool.
-            bool InputSpecified = swapParams.amountSpecified <0;
+            bool isExactInput = swapParams.amountSpecified <0;
             bool zeroForOne = swapParams.zeroForOne;
             BalanceDelta swapDelta = BalanceDelta.wrap(
                 abi.decode(
@@ -288,266 +312,78 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
                     (int256)
                 )
             );
+            if (isExactInput){
+                amountIn = uint256(-swapParams.amountSpecified);
+                amountOut = zeroForOne ? uint256(swapDelta.amount1()) : uint256(swapDelta.amount0());
+            } else {
+                amountOut = uint256(swapParams.amountSpecified);
+                amountIn = uint256(zeroForOne ? -swapDelta.amount0() : -swapDelta.amount1());
+            }
 
-            // NOTE: From the swapDelta returned by the simulation we can get
-            /// the amount calculated by the CFMM and label it as amountUnspecifiedjitLiquidityDelta
-                        /// the amount calculated by the CFMM and label it as amountUnspecified
-            // ===================================================================================================
-            //                  "Intent: How much of currency1 can I buy given a specified amount of currency0"
-            //    "Trader deposits currency0 "             "Trader enters 0"            "Trader receives currency1"   
-            //    swapParams.amountSpecified < 0     ^         zeroForOne         -->     amountUnspecified > 0
-            //
-            //                "Intent: How much of currency0 can I buy given a specified amount of currency1"
-            //    "Trader deposits currency1"               "Trader enters 1"         "Trader receives currency0"
-            //     swapParams.amountSpecified < 0      ^       !zeroForOne        -->   amountUnspecified > 0
-            //
-            //                "Intent: How much currency0 must I sell to receive a specified amount of currency1"
-            //     swapParams.amountSpecified > 0     ^        zeroForOne        -->   amountUnspecified < 0
-            //
-            //                "Intent: How much currency1 must I sell to receive a specified amount of currency0"
-            //     swapParams.amountSpecified > 0     ^        !zeroForOne       -->   amountUnspecified < 0
-            // ====================================================================================================
-            int128 amountUnspecified = InputSpecified ? zeroForOne ? swapDelta.amount1() : swapDelta.amount0() : zeroForOne ? -swapDelta.amount0() : -swapDelta.amount1();
-            
+            // return the delta to the PoolManager, so it can process the accounting
+            // exact input:
+            //   specifiedDelta = positive, to offset the input token taken by the hook (negative delta)
+            //   unspecifiedDelta = negative, to offset the credit of the output token paid by the hook (positive delta)
+            // exact output:
+            //   specifiedDelta = negative, to offset the output token paid by the hook (positive delta)
+            //   unspecifiedDelta = positive, to offset the input token taken by the hook (negative delta)
+            returnDelta = isExactInput
+                ? toBeforeSwapDelta(amountIn.toInt128(), -(amountOut.toInt128()))
+                : toBeforeSwapDelta(-(amountOut.toInt128()), amountIn.toInt128());
 
-            
+
             // NOTE: To calculate the priceImpact we need to get the price after the swap
             // This is, givem the amount calculated by the CFMM if the swapper were
             // to trade with the available liquidity on the pool, we calculate
             // the priace after such swap with the pool Liquidity
             plpLiquidity = poolManager.getLiquidity(poolKey.toId());
             
-            uint160 expectedAfterSwapSqrtPriceX96 = InputSpecified ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
+            uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
                 plpLiquidity,
-                uint256(amountUnspecified.toUint128()),
+                amountOut,
                 zeroForOne
             ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
                 plpLiquidity,
-                uint256(swapParams.amountSpecified),
+                amountIn,
                 zeroForOne
             );
-
-            // NOTE: With the expectedAfterSwapSqrtPriceX96 we can calculate the priceImpact
-            // as the absolute difference between the before and after price
-            expectedSqrtPriceImpactX96 = beforeSwapSqrtPriceX96 > expectedAfterSwapSqrtPriceX96 ? beforeSwapSqrtPriceX96 - expectedAfterSwapSqrtPriceX96 : expectedAfterSwapSqrtPriceX96 - beforeSwapSqrtPriceX96;  
+  
             // NOTE: The tick of such after price nees to be rounded to the nearest tick
             // based on the tickSpacing of the pool
             expectedAfterSwapTick = (expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice().compress(poolKey.tickSpacing))*int24(poolKey.tickSpacing);
+            
+
+            //NOTE: All this data is passed to the JIT Hub, which returns
+            // a bool response acknoleding the amount willing to fulfill
+            uint256 jitAmountWillingToFulfilled = IJITHub(
+                address(jitHub)
+            ).fillSwap(
+                JITData({
+                    poolKey: poolKey,
+                    swapParams: swapParams,
+                    beforeSwapSqrtPriceX96: beforeSwapSqrtPriceX96,
+                    expectedAfterSwapTick:expectedAfterSwapTick,
+                    plpLiquidity: plpLiquidity,
+                    expectedAfterSwapSqrtPriceX96: expectedAfterSwapTick
+                })
+            );
+
+
+            poolManager.take(
+                swapParams.zeroForOne ? poolKey.currency0 : currency1,
+                address(jitHub),
+                jitAmountWillingToFulfilled 
+            );
+
+            poolManager.sync(
+                swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
+            );
+
         
-            //NOTE: The JIT Liquidity delta is essentially the
-            // other side of the trade, this is the amountUnspecified
-            // Then for single trade case the
-            // For the currency that the trader specifed
-            // the swapParams the amount to provide liquidity
-            // and for the other side the amountUnspecified
-            // unchecked {
-            // // "if currency1 is specified"
-            // if (zeroForOne != (params.amountSpecified < 0)) {
-            //     swapDelta = toBalanceDelta(
-            //         amountCalculated.toInt128(), (params.amountSpecified - amountSpecifiedRemaining).toInt128()
-            //     );
-            // } else {
-            //     swapDelta = toBalanceDelta(
-            //         (params.amountSpecified - amountSpecifiedRemaining).toInt128(), amountCalculated.toInt128()
-            //     );
-            // }
-            // }
 
-            // ===================================================================================================
-            //                  "Intent: How much of currency1 can I buy given a specified amount of currency0"
-            //    "Trader deposits currency0 "             "Trader enters 0"            "Trader receives currency1"   
-            //    swapParams.amountSpecified < 0     ^         zeroForOne         -->     amountUnspecified > 0
-            //
-            //                "Intent: How much of currency0 can I buy given a specified amount of currency1"
-            //    "Trader deposits currency1"               "Trader enters 1"         "Trader receives currency0"
-            //     swapParams.amountSpecified < 0      ^       !zeroForOne        -->   amountUnspecified > 0
-            //
-            //                "Intent: How much currency0 must I sell to receive a specified amount of currency1"
-            //     swapParams.amountSpecified > 0     ^        zeroForOne        -->   amountUnspecified < 0
-            //
-            //                "Intent: How much currency1 must I sell to receive a specified amount of currency0"
-            //     swapParams.amountSpecified > 0     ^        !zeroForOne       -->   amountUnspecified < 0
-            // ====================================================================================================
-            // NOTE: getLiquidityForAmountX takes the amount X of tokens being sent to the pool
-            //      
-
-                if (swapParams.amountSpecified <0 && swapParams.zeroForOne){
-                    
-                    console2.log(
-                        "Trader Deposits currency0 and wants to buy currency 1:",
-                        swapParams.amountSpecified <0 && swapParams.zeroForOne
-                    );
-
-                    console2.log("Amount Deposited By the Trader of Currency 0 (amountSpecified):", swapParams.amountSpecified);
-                    console2.log("Amount Calculated by the CFMM of Currency 1 (amountUnspecified): ", amountUnspecified);
-
-                    console2.log("The amount0 Delta of the swapDelta is the trader deposit:", swapDelta.amount0());
-                    console2.log("The amount1 Delta of the swapDelta of the amountUnspecified:",swapDelta.amount1()==amountUnspecified);
-                    console2.log(
-                        "PoolManager owes to the Hook amount of currency1 calculated by the CFMM (amountUnspecified)"
-                    );
-                    console2.log(
-                        "Hook owes to the trader amountUnspecified of currency1",
-                         uint256(amountUnspecified.toUint128()) == _getFullCredit(poolKey.currency1)
-                    );
-
-                    // NOTE: What the hook owes the trader is the liquidity we need to mint
-                    // therefore
-                    jitLiquidity = beforeSwapSqrtPriceX96.getLiquidityForAmount1(
-                        expectedAfterSwapTick.getSqrtPriceAtTick(),
-                        _getFullCredit(poolKey.currency1)
-                    ).toUint128();
-
-
-                    // TODO: Given the JIT Liquidity delta we already have the params
-                    // to set the position, this is:
-                    ModifyLiquidityParams memory jitLiquidityParams = ModifyLiquidityParams({
-                        tickLower:beforeSwapTick < expectedAfterSwapTick ? beforeSwapTick : expectedAfterSwapTick ,
-                        tickUpper: beforeSwapTick < expectedAfterSwapTick ? expectedAfterSwapTick :beforeSwapTick,
-                        liquidityDelta: uint256(jitLiquidity).toInt256(),
-                        salt: bytes32(uint256(0x00)) //placeHolder
-                    });
-
-
-                    
-                    console2.log(
-                        "The Trader owes to the Hook (amountSpecified) of currency0"
-                    );
-                    console2.log(
-                        "The Hook owes to the PoolManager amountSpecified of currency0",
-                        _getFullDebt(poolKey.currency0)
-                    );
-                    
-                    _fillSwapJIT(poolKey, jitLiquidityParams);
-                    
-                    console2.log(
-                        "After JIT Liquidity is added: The Hook owes to the PoolManager amountSpecified* of currency0",
-                        _getFullDebt(poolKey.currency0)
-                    );
-
-                    console2.log(
-                        "After JIT Liquidity is added: The PoolManager owes to the Hook amountUnspecified* of currency1",
-                        _getFullCredit(poolKey.currency1)
-                    );
-
-                    uint256 plpRemainingAmountSpecified = _getFullDebt(poolKey.currency0);
-                    uint256 plpRemainingAmountUnspecified = _getFullCredit(poolKey.currency1);
-                    remainingSwapDeltaToBeFullfilled = toBeforeSwapDelta(
-                        (-(plpRemainingAmountSpecified.toUint128()).toInt128()),
-                        ((plpRemainingAmountUnspecified.toUint128()).toInt128())
-                    );
-                    
-
-                }
-            }
             return (IHooks.beforeSwap.selector, remainingSwapDeltaToBeFullfilled, uint24(0x00));
         }
 
-        //TODO: This is a place holder
-        function _fillSwapJIT(
-            PoolKey memory poolKey,
-            ModifyLiquidityParams memory jitLiquidityParams
-        ) internal {
-            //NOTE: First the JIT approves the JIT amounts
-            // TODO : This needs to be improved using permits
-            // using deadlines to protect for attacks
-            (uint256 liquidity0, uint256 liquidity1) = jitHub.approveJITLiquidityForSwap(
-                poolKey,
-                jitLiquidityParams
-            );
-            console2.log(
-                "Aggregate Balance of JITHub on currency0:", IERC20(
-                    Currency.unwrap(poolKey.currency0)).balanceOf(address(jitHub))
-            );
-
-            console2.log(
-                "Aggregate Balance of JITHub on currency1:", IERC20(
-                    Currency.unwrap(poolKey.currency1)).balanceOf(address(jitHub))
-            );
-
-            {
-                _pay(
-                    poolKey.currency0,
-                    address(jitHub),
-                    liquidity0
-                );
-                _pay(
-                    poolKey.currency1,
-                    address(jitHub),
-                    liquidity1
-                );
-            }
-
-
-        }
-        function _pay(
-            Currency token,
-            address payer,
-            uint256 amount
-        ) internal virtual override{
-            token.settle(
-                poolManager,
-                payer,
-                amount,
-                false
-            );
-        }
-
-        
-
-
-        // ===================================================
-        
-        // TODO: This is to be improved using the positionManager
-        // NOTE: We are approving for both but this should be done only for the currency where
-        // amountSPecified amount falls into 
-        
-        // uint128 addLiquidityDelta = jitLiquidityDelta.toInt128().toUint128();
- 
-        // approvePosmCurrency(
-        //     poolKey.currency0,
-        //     uint256(addLiquidityDelta),
-        //     uint48(block.timestamp + uint48(0x01))
-        // );
-
-        // approvePosmCurrency(
-        //     poolKey.currency1,
-        //     uint256(addLiquidityDelta),
-        //     uint48(block.timestamp + uint48(0x01))
-        // );
-
-        
-        // jitOperator.addJITLiquidity(
-        //     poolKey,    
-        //     beforeSwapTick,
-        //     expectedAfterSwapTick,
-        //     addLiquidityDelta,
-        //     address(taxController),
-        //     hookData
-        // );
-
-
-        // {
-        //     JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        //     jitTransientMetrics.addedLiquidity = addLiquidityDelta;
-        //     jitTransientMetrics.jitPositionInfo = poolKey.initialize(
-        //         beforeSwapTick,
-        //         expectedAfterSwapTick
-        //     );
-
-        //     assembly{
-        //         tstore(JIT_Transient_MetricsLocation, jitTransientMetrics)
-        //     }
-            
-         
-        
-    
-
-
-
-    // NOTE: For this Hook the bytes hookData is to implement further calls
-
-    // before the transaction ends
 
     function _afterSwap(
         address swapRouter,
@@ -602,12 +438,12 @@ contract ParityTaxHook is BaseHook, DeltaResolver {
         int128 deltaAfter1 = swapParams.zeroForOne ? swapDelta.amount1() < 0 ? -swapDelta.amount1():swapDelta.amount1() : swapDelta.amount1() < 0 ? swapDelta.amount1(): -swapDelta.amount1();
         
         if(swapParams.zeroForOne){
-            delta= -swapDelta.amount1().toInt128();
+            deltaAfter1= -swapDelta.amount1().toInt128();
         } else {
-            delta = -swapDelta.amount0().toInt128();
+            deltaAfter1 = -swapDelta.amount0().toInt128();
         }
 
-        return (IHooks.afterSwap.selector, delta);
+        return (IHooks.afterSwap.selector, deltaAfter1);
     }
 
     function _beforeAddLiquidity(
