@@ -10,7 +10,6 @@ import {
     StateLibrary,
     IPositionManager
 } from "../src/ParityTaxHook.sol";
-
 import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -41,13 +40,15 @@ import {
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
+import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
+import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
+
 import {MockJITOperator} from "./mocks/MockJITOperator.sol";
 import {MockPLPOperator} from "./mocks/MockPLPOperator.sol";
 import {MockJITHub} from "./mocks/MockJITHub.sol";
-import {UnlockedV4Quoter} from "../src/UnlockedV4Quoter.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
 import {StateView} from "@uniswap/v4-periphery/src/lens/StateView.sol";
-
+import {ParityTaxRouter} from "../src/ParityTaxRouter.sol";
 import {console2} from "forge-std/Test.sol";
 
 
@@ -68,7 +69,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     MockPLPOperator plpOperator;
     MockJITHub jitHub;
     LumpSumTaxController taxController;
-    UnlockedV4Quoter v4Quoter;
+    ParityTaxRouter parityTaxRouter;
+    V4Quoter v4Quoter;
     StateView stateView;
 
 
@@ -122,9 +124,25 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             plpOperator,
             jitOperator
         );
-        v4Quoter = new UnlockedV4Quoter(
+        v4Quoter = new V4Quoter(
             manager
         );
+
+        parityTaxRouter = new ParityTaxRouter(
+            manager,
+            IV4Quoter(address(v4Quoter))
+        );
+        {
+            IERC20(Currency.unwrap(currency0)).approve(
+                address(parityTaxRouter),
+                Constants.MAX_UINT256
+            );
+            IERC20(Currency.unwrap(currency1)).approve(
+                address(parityTaxRouter),
+                Constants.MAX_UINT256
+            );
+        }
+        
 
         stateView = new StateView(manager);
 
@@ -137,6 +155,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                     Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG | Hooks.BEFORE_SWAP_FLAG | 
                     Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
                 )
+
 
             )
             
@@ -221,11 +240,9 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         console2.log("amount0 with no Hook:", noHookDelta.amount0());
         console2.log("amount1 with no Hook:", noHookDelta.amount1());
         
-        (BalanceDelta hookDelta) = swapRouter.swap(
+        (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook
-            largeSwapParams,
-            testSettings,
-            Constants.ZERO_BYTES
+            largeSwapParams
         );
 
         console2.log("amount0 with Hook:", hookDelta.amount0());

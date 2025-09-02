@@ -8,11 +8,19 @@ import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 struct JITData{
     PoolKey poolKey;
     SwapParams swapParams;
+    uint256 amountIn;
     uint256 amountOut;
     uint160 beforeSwapSqrtPriceX96;
     int24 expectedAfterSwapTick;
 
     uint128 plpLiquidity;
     uint160 expectedAfterSwapSqrtPriceX96;
-
 }
+
+struct SwapCallbackData {
+    address sender;
+    PoolKey key;
+    SwapParams params;
+    bytes hookData;
+}
+

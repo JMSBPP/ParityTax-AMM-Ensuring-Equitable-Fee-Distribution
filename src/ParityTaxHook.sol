@@ -47,6 +47,9 @@ import {CurrencyDelta} from "@uniswap/v4-core/src/libraries/CurrencyDelta.sol";
 //TODO: Do we need a manager also for the PLP ?? ...
 import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
 import {IJITHub} from "./interfaces/IJITHub.sol";
+import {IParityTaxRouter} from "./interfaces/IParityTaxRouter.sol";
+import {IParityTaxHook} from "./interfaces/IParityTaxHook.sol";
+import {ParityTaxHookBase} from "./base/ParityTaxHookBase.sol";
 import "./types/Shared.sol";
 
 
@@ -54,7 +57,7 @@ import "./types/Shared.sol";
 
 import {console2} from "forge-std/Test.sol";
 
-contract ParityTaxHook is BaseHook{
+contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
     using Position for address;
     using Address for address;
     using QuoterRevert for bytes;
@@ -73,110 +76,25 @@ contract ParityTaxHook is BaseHook{
     using CurrencySettler for Currency;
     using CurrencyDelta for Currency;
     
-    /// @custom:transient-storage-location erc7201:openzeppelin.transient-storage.JIT_TRANSIENT
-    struct JIT_Transient_Metrics{
-        //slot1 
-        uint128 addedLiquidity;
-        uint128 jitProfit;
-        // slot2 
-        PositionInfo jitPositionInfo;
-        // slot3 
-        bytes32 positionKey;
-        // slot4 
-        BalanceDelta withheldFees;
-          // slot5
 
-        
-    }
-    error AmountOutGreaterThanSwapAmountOut();
-    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
-
-    function _jitTransientMetrics() private view returns(JIT_Transient_Metrics memory){
-        bytes32 slot1;
-        bytes32 slot2;
-        bytes32 slot3;
-        bytes32 slot4;
-        assembly("memory-safe"){
-            slot1 := tload(JIT_Transient_MetricsLocation)
-            slot2 := tload(add(JIT_Transient_MetricsLocation, 0x01))
-            slot3 := tload(add(JIT_Transient_MetricsLocation, 0x02))
-            slot4 := tload(add(JIT_Transient_MetricsLocation, 0x03))
-        }
-        // Unpack the struct
-        return JIT_Transient_Metrics({
-            addedLiquidity: uint128(uint256(slot1)),
-            jitProfit: uint128(uint256(slot1 >> 128)),
-            jitPositionInfo: PositionInfo.wrap(uint256(slot2)),
-            positionKey: slot3,
-            withheldFees : BalanceDelta.wrap(uint256(slot4).toInt256())
-        });
-    }
-
-    function _addedLiquidity() private view returns(uint128){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.addedLiquidity;
-    }
-
-    function _jitProfit() private view returns(uint128){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.jitProfit;
-    }
-
-    function _jitPositionInfo() private view returns(PositionInfo){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.jitPositionInfo;
-    }
-
-    function _jitPositionKey() private view returns(bytes32){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.positionKey;
-    }
-
-    function _withheldFees() private view returns(BalanceDelta){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.withheldFees;
-    }
-
-    /// @custom:storage-location erc7201:openzeppelin.storage.JIT_Aggregate_Metrics
-    struct JIT_Aggregate_Metrics{
-        uint256 cummAddedLiquidity;
-        uint256 cummProfit;
-    }
-
-
-    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.JIT_AGGREGATE")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant JIT_Aggregate_MetricsLocation = 0xe0cf99b8cd0560d8640e62178018c84af9084dd2b92a0b03d3120e8fa0633800;
-
-    function _getJITAggregateMetrics() private pure returns (JIT_Aggregate_Metrics storage $){
-        assembly{
-            $.slot := JIT_Aggregate_MetricsLocation
-        }
-    }
-
-
-
-
-    IV4Quoter v4Quoter;
+    IParityTaxRouter router;
     IJITHub jitHub;
     IPLPOperator plpOperator;
     ILPOracle lpOracle;
     ITaxController taxController;
 
-    error NotEnoughLiquidity(PoolId poolId);
-    error NotWithdrawableLiquidity__LiquidityIsCommitted(uint256 remainingCommitedBlocks);
-    error NoLiquidityToReceiveTaxRevenue();
+
 
 
     constructor(
         IPoolManager _manager,
-        address _v4Quoter,
+        address _router,
         address _jitHub,
         address _plpOperator,
         address _lpOracle,
         address _taxController
     ) BaseHook(_manager) {
-        v4Quoter = IV4Quoter(_v4Quoter);
+        router = IParityTaxRouter(_router);
         jitHub = IJITHub(_jitHub);
         plpOperator = IPLPOperator(_plpOperator);
         lpOracle = ILPOracle(_lpOracle);
@@ -272,125 +190,53 @@ contract ParityTaxHook is BaseHook{
         bytes calldata hookData
     ) internal virtual override returns (bytes4, BeforeSwapDelta, uint24)
     {   
-        // NOTE: store the price before the swap
-        (uint160 beforeSwapSqrtPriceX96,int24 beforeSwapTick,,uint24 lpFee) = poolManager.getSlot0(poolKey.toId());
- 
-        int24 expectedAfterSwapTick;
-        uint160 expectedSqrtPriceImpactX96;
-        uint128 jitLiquidity;
-        uint128 plpLiquidity;
-        uint256 amountIn;
-        uint256 amountOut;
+        //NOTE: All this data is passed to the JIT Hub, which returns
+        // a bool response acknoleding the amount willing to fulfill
+        
         BeforeSwapDelta returnDelta;
-        {
-            // NOTE: On this block we aim to simulate a swap as if the trader were
-            // to use the available liquidity on the pool.
-            bool isExactInput = swapParams.amountSpecified <0;
-            bool zeroForOne = swapParams.zeroForOne;
-            if (isExactInput){
-                amountIn = uint256(-swapParams.amountSpecified);
-                (amountOut,) = v4Quoter.quoteExactInputSingle(
-                    IV4Quoter.QuoteExactSingleParams({
-                        poolKey: poolKey,
-                        zeroForOne: swapParams.zeroForOne,
-                        exactAmount: (-swapParams.amountSpecified).toInt128().toUint128(),
-                        hookData: Constants.ZERO_BYTES
-                    })
-                );
-            } else {
-                amountOut = uint256(swapParams.amountSpecified);
-                (amountIn,) = v4Quoter.quoteExactOutputSingle(
-                    IV4Quoter.QuoteExactSingleParams({
-                        poolKey: poolKey,
-                        zeroForOne: swapParams.zeroForOne,
-                        exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
-                        hookData: Constants.ZERO_BYTES
-                    })
-                );
+        
+        JITData memory jitData = abi.decode(hookData, (JITData));
+        bool isExactInput = jitData.swapParams.amountSpecified <0;
+        uint256 jitAmountWillingToFulfilled = IJITHub(
+            address(jitHub)
+        ).fillSwap(
+            jitData
+        );
 
-            }
-
-            // return the delta to the PoolManager, so it can process the accounting
-            // exact input:
-            //   specifiedDelta = positive, to offset the input token taken by the hook (negative delta)
-            //   unspecifiedDelta = negative, to offset the credit of the output token paid by the hook (positive delta)
-            // exact output:
-            //   specifiedDelta = negative, to offset the output token paid by the hook (positive delta)
-            //   unspecifiedDelta = positive, to offset the input token taken by the hook (negative delta)
-
-
-            // NOTE: To calculate the priceImpact we need to get the price after the swap
-            // This is, givem the amount calculated by the CFMM if the swapper were
-            // to trade with the available liquidity on the pool, we calculate
-            // the priace after such swap with the pool Liquidity
-            plpLiquidity = poolManager.getLiquidity(poolKey.toId());
-            
-            uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
-                plpLiquidity,
-                amountOut,
-                zeroForOne
-            ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
-                plpLiquidity,
-                amountIn,
-                zeroForOne
+        if (jitAmountWillingToFulfilled > 0 && jitAmountWillingToFulfilled <= jitData.amountOut ){
+            // NOTE: The JIT is willing to partially or fully fulfill the trade
+            // therefore it JITHUb needs to take the input token from
+            // the pool Manager
+            poolManager.take(
+                swapParams.zeroForOne ? poolKey.currency0 : poolKey.currency1,
+                address(jitHub),
+                jitData.amountIn 
             );
-  
-            // NOTE: The tick of such after price nees to be rounded to the nearest tick
-            // based on the tickSpacing of the pool
-            expectedAfterSwapTick = (expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice().compress(poolKey.tickSpacing))*int24(poolKey.tickSpacing);
-            
 
-            //NOTE: All this data is passed to the JIT Hub, which returns
-            // a bool response acknoleding the amount willing to fulfill
-            uint256 jitAmountWillingToFulfilled = IJITHub(
+            poolManager.sync(
+                swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
+            );
+
+            poolManager.settleFor(
                 address(jitHub)
-            ).fillSwap(
-                JITData({
-                    poolKey: poolKey,
-                    swapParams: swapParams,
-                    amountOut: amountOut,
-                    beforeSwapSqrtPriceX96: beforeSwapSqrtPriceX96,
-                    expectedAfterSwapTick:expectedAfterSwapTick,
-                    plpLiquidity: plpLiquidity,
-                    expectedAfterSwapSqrtPriceX96: expectedAfterSwapTick.getSqrtPriceAtTick()
-                })
             );
 
 
-            if (jitAmountWillingToFulfilled > 0 && jitAmountWillingToFulfilled <= amountOut ){
-                // NOTE: The JIT is willing to partially or fully fulfill the trade
-                // therefore it JITHUb needs to take the input token from
-                // the pool Manager
-                poolManager.take(
-                    swapParams.zeroForOne ? poolKey.currency0 : poolKey.currency1,
-                    address(jitHub),
-                    amountIn 
-                );
 
-                poolManager.sync(
-                  swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
-                );
+        } else if (jitAmountWillingToFulfilled > jitData.amountOut) {
+            revert AmountOutGreaterThanSwapAmountOut();
+        }
 
-                poolManager.settleFor(
-                    address(jitHub)
-                );
-
-
-
-            } else if (jitAmountWillingToFulfilled > amountOut) {
-                revert AmountOutGreaterThanSwapAmountOut();
-            }
-
-            // NOTE: It either fulfilles the entire trade or
-            // leaves some amountOut to be fulfilled by PLP
-            returnDelta = isExactInput
-                ? toBeforeSwapDelta(amountIn.toInt128(), -(jitAmountWillingToFulfilled.toInt128()))
-                : toBeforeSwapDelta(-(jitAmountWillingToFulfilled.toInt128()), amountIn.toInt128());
+        // NOTE: It either fulfilles the entire trade or
+        // leaves some amountOut to be fulfilled by PLP
+        returnDelta = isExactInput
+            ? toBeforeSwapDelta(jitData.amountIn.toInt128(), -(jitAmountWillingToFulfilled.toInt128()))
+            : toBeforeSwapDelta(-(jitAmountWillingToFulfilled.toInt128()), jitData.amountIn.toInt128());
 
             
-            return (IHooks.beforeSwap.selector, returnDelta, uint24(0x00));
-        }
+        return (IHooks.beforeSwap.selector, returnDelta, uint24(0x00));
     }
+    
 
 
     function _afterSwap(
