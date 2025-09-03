@@ -7,7 +7,7 @@ import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol"
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"; 
 
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolKey,PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -22,15 +22,29 @@ import{
 
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
+
 import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
+import {
+    LiquidityOperations,
+    Planner,
+    Plan,
+    PositionConfig,
+    LiquidityAmounts,
+    Actions
+} from "@uniswap/v4-periphery/test/shared/LiquidityOperations.sol";
+import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
+import {console2} from "forge-std/Test.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 
-contract MockJITHub is IJITHub, DeltaResolver{
+contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
     using SafeCast for *;
     using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
+    using Planner for Plan;
     using PoolIdLibrary for PoolKey;    
     using SqrtPriceMath for uint160;
+    using LiquidityAmounts for uint160;
     // NOTE: The JIT Operators are identified by their positionKey
 
 
@@ -39,23 +53,93 @@ contract MockJITHub is IJITHub, DeltaResolver{
     mapping(PoolId poolId => bytes32 positionKey) private jitOperators;
 
 
-    constructor(IPoolManager _manager) ImmutableState (_manager) DeltaResolver() {}
+    constructor(
+        IPoolManager _manager,
+        IPositionManager _lpm
+    ) ImmutableState (_manager) DeltaResolver() {
+        lpm = _lpm;
+    }
+
+
 
     function fillSwap(JITData memory jitData) external returns(uint256){
         //NOTE: This is  place holder, further checks are needed
+        (Currency currency0 , Currency currency1 ) = (
+            Currency.wrap(jitData.token0),
+            Currency.wrap(jitData.token1)
+        );
         uint256 amountToFullfill = jitData.amountOut;
         {  
             // NOTE: This is to be corrected for more cases
 
             _pay(
-                jitData.poolKey.currency1,
+                currency1,
                 address(this),
                 amountToFullfill
             );
         }
+
+        // NOTE : At this point the JITHub has a debit of the amount of liquidity he will provide
+        // to the swap
+        uint256 jitLiquidity = uint256(jitData.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
+            jitData.expectedAfterSwapSqrtPriceX96,
+            amountToFullfill
+        ));
+
+        console2.log("JIT Liquidity:", jitLiquidity);
+
+        //NOTE: This is provisional, because the JITData needs to give the PoolKey not
+        // the PoolId
+        (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
         
+        PositionConfig memory jitPosition = PositionConfig({
+            poolKey: jitData.poolKey,
+            tickLower: currentTick,
+            tickUpper: jitData.expectedAfterSwapTick
+        });
+        _mintFromDeltasUnlocked(
+            jitPosition,
+            jitLiquidity,
+            address(this),
+            Constants.ZERO_BYTES
+        );
+ 
         return jitData.amountOut;
     }
+
+    function _mintFromDeltasUnlocked(
+        PositionConfig memory config,
+        uint256 liquidity,
+        address recipient,
+        bytes memory hookData
+    ) internal {
+        Plan memory planner = Planner.init();
+        {
+            planner.add(
+                Actions.MINT_POSITION,
+                abi.encode(
+                    config.poolKey,
+                    config.tickLower,
+                    MAX_SLIPPAGE_INCREASE,
+                    MAX_SLIPPAGE_INCREASE,
+                    liquidity,
+                    recipient,
+                    hookData
+                )
+            );
+            planner.add(
+                Actions.CLOSE_CURRENCY,
+                abi.encode(config.poolKey.currency0)
+            );
+            planner.add(
+                Actions.CLOSE_CURRENCY, abi.encode(config.poolKey.currency1)
+            );
+        }
+        
+        lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
+    }
+
+
 
     function _pay(
         Currency token,

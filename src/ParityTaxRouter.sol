@@ -8,6 +8,8 @@ import {
     PoolKey
 } from "@uniswap/v4-core/src/types/PoolId.sol";
 
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IV4Quoter,V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -78,12 +80,18 @@ contract ParityTaxRouter is SafeCallback{
         bool zeroForOne = swapParams.zeroForOne;
 
         {
-
+            PoolKey memory noHookKey = PoolKey({
+                                            currency0: poolKey.currency0,
+                                            currency1: poolKey.currency1,
+                                            fee: poolKey.fee,
+                                            tickSpacing: poolKey.tickSpacing,
+                                            hooks: IHooks(address(0x00))
+                                        });
             if (isExactInput){
                 amountIn = uint256(-swapParams.amountSpecified);
                 (amountOut,) = v4Quoter.quoteExactInputSingle(
                     IV4Quoter.QuoteExactSingleParams({
-                        poolKey: poolKey,
+                        poolKey: noHookKey,
                         zeroForOne: swapParams.zeroForOne,
                         exactAmount: (-swapParams.amountSpecified).toInt128().toUint128(),
                         hookData: Constants.ZERO_BYTES
@@ -93,7 +101,7 @@ contract ParityTaxRouter is SafeCallback{
                 amountOut = uint256(swapParams.amountSpecified);
                 (amountIn,) = v4Quoter.quoteExactOutputSingle(
                     IV4Quoter.QuoteExactSingleParams({
-                        poolKey: poolKey,
+                        poolKey: noHookKey,
                         zeroForOne: swapParams.zeroForOne,
                         exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
                         hookData: Constants.ZERO_BYTES
@@ -126,13 +134,17 @@ contract ParityTaxRouter is SafeCallback{
         bytes memory hookData = abi.encode(
             JITData({
                 poolKey: poolKey,
-                swapParams: swapParams,
+                amountSpecified: swapParams.amountSpecified,
                 amountIn: amountIn,
                 amountOut: amountOut,
+                token0: Currency.unwrap(poolKey.currency0),
+                sqrtPriceLimitX96: swapParams.sqrtPriceLimitX96,
+                token1: Currency.unwrap(poolKey.currency1),
                 beforeSwapSqrtPriceX96:beforeSwapSqrtPriceX96,
-                expectedAfterSwapTick:expectedAfterSwapTick,
                 plpLiquidity:plpLiquidity,
-                expectedAfterSwapSqrtPriceX96:expectedAfterSwapTick.getSqrtPriceAtTick()
+                expectedAfterSwapSqrtPriceX96:expectedAfterSwapTick.getSqrtPriceAtTick(),
+                expectedAfterSwapTick:expectedAfterSwapTick,
+                zeroForOne: swapParams.zeroForOne
             })
         );
         

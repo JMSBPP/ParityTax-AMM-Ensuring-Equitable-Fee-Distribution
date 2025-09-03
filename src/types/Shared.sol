@@ -5,17 +5,28 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 
-struct JITData{
-    PoolKey poolKey;
-    SwapParams swapParams;
-    uint256 amountIn;
-    uint256 amountOut;
-    uint160 beforeSwapSqrtPriceX96;
-    int24 expectedAfterSwapTick;
+struct JITData {
+    PoolKey poolKey;                  // slot 0 (32B)
+    int256 amountSpecified;                 // slot 1 (32B)
+    uint256 amountIn;                       // slot 2 (32B)
+    uint256 amountOut;                      // slot 3 (32B)
 
-    uint128 plpLiquidity;
-    uint160 expectedAfterSwapSqrtPriceX96;
+    // Pack addresses with uint160
+    address token0;                         // 20B
+    uint160 sqrtPriceLimitX96;              // 20B → shares with token0
+    // total: 40B → spans slot 4 + slot 5
+
+    address token1;                         // 20B
+    uint160 beforeSwapSqrtPriceX96;         // 20B
+    // total: 40B → spans slot 5 + slot 6
+
+    uint128 plpLiquidity;                   // 16B
+    uint160 expectedAfterSwapSqrtPriceX96;  // 20B
+    int24 expectedAfterSwapTick;            // 3B
+    bool zeroForOne;                        // 1B
+    // total: 40B → spans slot 6 + slot 7
 }
+
 
 struct SwapCallbackData {
     address sender;

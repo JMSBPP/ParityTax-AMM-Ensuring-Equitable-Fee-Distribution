@@ -145,28 +145,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
     }
 
 
-
-    // ============================DEBUGGING LOGS (EVENTS) ====================
-
-    event ImportantMetricsLog(
-        int24 beforeSwapTick,
-        int24 expectedAfterSwapTick, //This is to be compared with the actualAfterSwapTick to asses the 
-        // accuracy of the calculation
-        uint160 expectedSqrtPriceImpactX96,
-        BalanceDelta expectedSwapDelta, // This is to be comparaed with the actualSwapDelta on afterSwap
-        // to asses the accuracy of the calculation
-        uint128 plpLiquidityBeforeSwap,
-        uint128 plpLiquidityAfterSwap,
-        int256 jitLiquidityUsedOnTrade
-    );
-
-    event HypotheticalProfitabilityConditions(
-        uint24 lpFee,
-        uint160 expectedSqrtPriceImpactX96,
-        bool isProfitable,
-        uint160 feeTimes2
-    );
-
 // ===================================================================================================
 //                  "Intent: How much of currency1 can I buy given a specified amount of currency0"
 //    "Trader deposits currency0 "             "Trader enters 0"            "Trader receives currency1"   
@@ -193,39 +171,39 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
         //NOTE: All this data is passed to the JIT Hub, which returns
         // a bool response acknoleding the amount willing to fulfill
         
+        
         BeforeSwapDelta returnDelta;
         
         JITData memory jitData = abi.decode(hookData, (JITData));
-        bool isExactInput = jitData.swapParams.amountSpecified <0;
+        
+
+        if (
+            jitData.token0 != Currency.unwrap(poolKey.currency0) ||
+            jitData.token1 != Currency.unwrap(poolKey.currency1)
+        ) revert CurrencyMissmatch();
+        
+        bool isExactInput = jitData.amountSpecified <0;
+        // NOTE: The JITHub takes the amount frrom the poolManager
+        poolManager.take(
+            jitData.zeroForOne ? poolKey.currency0 : poolKey.currency1,
+            address(jitHub),
+            jitData.amountIn 
+        );
+        // NOTE: The JITHub pays to the poolManager the amount 
+        // willing to fulfilled based on the input amount
+
         uint256 jitAmountWillingToFulfilled = IJITHub(
             address(jitHub)
         ).fillSwap(
             jitData
         );
-
-        if (jitAmountWillingToFulfilled > 0 && jitAmountWillingToFulfilled <= jitData.amountOut ){
-            // NOTE: The JIT is willing to partially or fully fulfill the trade
-            // therefore it JITHUb needs to take the input token from
-            // the pool Manager
-            poolManager.take(
-                swapParams.zeroForOne ? poolKey.currency0 : poolKey.currency1,
-                address(jitHub),
-                jitData.amountIn 
-            );
-
-            poolManager.sync(
-                swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
-            );
-
-            poolManager.settleFor(
-                address(jitHub)
-            );
+        poolManager.sync(
+            swapParams.zeroForOne ? poolKey.currency1 : poolKey.currency0
+        );
 
 
 
-        } else if (jitAmountWillingToFulfilled > jitData.amountOut) {
-            revert AmountOutGreaterThanSwapAmountOut();
-        }
+
 
         // NOTE: It either fulfilles the entire trade or
         // leaves some amountOut to be fulfilled by PLP
@@ -263,18 +241,63 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
         // ------->                                 deltaHolder  
 // _fetchBalances(data.key.currency1, data.sender, address(this));
         console2.log(
-            "Swap Router delta After Swap",
+            "Parity Tax Router delta After Swap on 1",
             poolManager.currencyDelta(
                 address(swapRouter),
                 poolKey.currency1
             )
         );
+        console2.log(
+            "Parity Tax Router delta After Swap on 0",
+            poolManager.currencyDelta(
+                address(swapRouter),
+                poolKey.currency0
+            )
+        );
+
 
         console2.log(
-            "Hook delta After Swap",
+            "Parity Tax Hook delta After Swap on 1",
             poolManager.currencyDelta(
                 address(this),
                 poolKey.currency1
+            )
+        );
+
+        console2.log(
+            "Parity Tax Hook delta After Swap on 0",
+            poolManager.currencyDelta(
+                address(this),
+                poolKey.currency0
+            )
+        );
+        console2.log(
+            "Pool Manager Hook delta After Swap on 0",
+            poolManager.currencyDelta(
+                address(poolManager),
+                poolKey.currency0
+            )
+        );
+        console2.log(
+            "Pool Manager Hook delta After Swap on 1",
+            poolManager.currencyDelta(
+                address(poolManager),
+                poolKey.currency1
+            )
+        );
+
+        console2.log(
+            "JIT Hub delta After Swap on 1",
+            poolManager.currencyDelta(
+                address(jitHub),
+                poolKey.currency1
+            )
+        );
+        console2.log(
+            "JIT Hub Hook delta After Swap on 0",
+            poolManager.currencyDelta(
+                address(jitHub),
+                poolKey.currency0
             )
         );
 

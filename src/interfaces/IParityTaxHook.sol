@@ -12,5 +12,6 @@ interface IParityTaxHook{
     error NotEnoughLiquidity(PoolId poolId);
     error NotWithdrawableLiquidity__LiquidityIsCommitted(uint256 remainingCommitedBlocks);
     error NoLiquidityToReceiveTaxRevenue();
+    error CurrencyMissmatch();
 
 }
