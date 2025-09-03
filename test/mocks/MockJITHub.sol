@@ -21,6 +21,7 @@ import{
 } from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 
 
+
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
 import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
@@ -35,7 +36,9 @@ import {
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {console2} from "forge-std/Test.sol";
+import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 
 contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
     using SafeCast for *;
@@ -47,7 +50,7 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
     using LiquidityAmounts for uint160;
     // NOTE: The JIT Operators are identified by their positionKey
 
-
+    IAllowanceTransfer permit2;
     //NOTE: This is a placeHolder for testing
     address jitResolver;
     mapping(PoolId poolId => bytes32 positionKey) private jitOperators;
@@ -55,9 +58,11 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
 
     constructor(
         IPoolManager _manager,
-        IPositionManager _lpm
+        IPositionManager _lpm,
+        IAllowanceTransfer _permit2
     ) ImmutableState (_manager) DeltaResolver() {
         lpm = _lpm;
+        permit2 = _permit2;
     }
 
 
@@ -68,7 +73,19 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
             Currency.wrap(jitData.token0),
             Currency.wrap(jitData.token1)
         );
+        
         uint256 amountToFullfill = jitData.amountOut;
+        permit2.approve(
+            Currency.unwrap(jitData.poolKey.currency1),
+            address(lpm),
+            amountToFullfill.toUint160(),
+            uint48(block.timestamp + uint48(0x12))
+        );
+        IERC20(Currency.unwrap(jitData.poolKey.currency1)).approve(
+            address(lpm),
+            amountToFullfill
+        );
+
         {  
             // NOTE: This is to be corrected for more cases
 
@@ -88,6 +105,8 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
 
         console2.log("JIT Liquidity:", jitLiquidity);
 
+        console2.log("JIT Hub Balance:", IERC20(Currency.unwrap(jitData.poolKey.currency1)).balanceOf(address(this)));
+        console2.log("Position Manager Allowance:", IERC20(Currency.unwrap(jitData.poolKey.currency1)).allowance(address(this),address(lpm)));
         //NOTE: This is provisional, because the JITData needs to give the PoolKey not
         // the PoolId
         (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
@@ -103,7 +122,7 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
             address(this),
             Constants.ZERO_BYTES
         );
- 
+
         return jitData.amountOut;
     }
 
@@ -119,10 +138,11 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
                 Actions.MINT_POSITION,
                 abi.encode(
                     config.poolKey,
-                    config.tickLower,
-                    MAX_SLIPPAGE_INCREASE,
-                    MAX_SLIPPAGE_INCREASE,
+                    config.tickLower < config.tickUpper ?config.tickLower:config.tickUpper,
+                    config.tickLower < config.tickUpper ?config.tickUpper:config.tickLower,
                     liquidity,
+                    MAX_SLIPPAGE_INCREASE,
+                    MAX_SLIPPAGE_INCREASE,
                     recipient,
                     hookData
                 )

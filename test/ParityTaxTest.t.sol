@@ -89,7 +89,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
         jitHub = new MockJITHub(
             manager,
-            lpm
+            lpm,
+            permit2
         );
         
         
