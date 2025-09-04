@@ -1,34 +1,61 @@
+# Underflow Error in test__Unit_JITSingleLP Test
 
-# Description
+## Issue Description
 
+When running `forge test --mt test__Unit_JITSingleLP`, the test fails with an arithmetic underflow error during the `transferFrom` operation in the MockJITHub contract.
 
-## Task
-- See if one can use the NonZero library inside the beforeAddLiquidity to emit the 
-BalanceDelta as an event just for debugging purposes ...
-### Output
-- The `afterAddLiquidity` is actuallky excecuted, then the  `pool.swap()` function passes 
-- On the `afterAddLiquidity` `NonzeroDeltaCount.read()` outputs zero delta counts. Why ?
+## Environment
 
-- On the unlockCallback the liquidityDelta returns:
+- **Repository**: ParityTax-AMM-Ensuring-Equitable-Fee-Distribution
+- **Branch**: atrium-cohort5-deliverable
+- **Solidity Version**: 0.8.26
+- **Foundry**: Latest version
 
-```solidity
-LiquidityDeltas(dx: -11999472029327828 [-1.199e16], dy: 0)
+## Error Details
+
+The error occurs in the following trace:
+```
+[5290] 0x000000000022D473030F116dDEE9F6B43aC78BA3::transferFrom(MockJITHub: [0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240], PoolManager: [0x2e234DAe75C793f67A35089C9d99245E1C58470b], 994024895398478 [9.94e14], currency1: [0x2a07706473244bc757e10f2a9e86fb532828afe3])
+    ├─ [3855] currency1::transferFrom(MockJITHub: [0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240], PoolManager: [0x2e234DAe75C793f67A35089C9d99245E1C58470b], 994024895398478 [9.94e14])
+    │   └─ ← [Revert] panic: arithmetic underflow or overflow (0x11)
+    └─ ← [Revert] TRANSFER_FROM_FAILED
 ```
 
-- Refer to the overall functional requirement associated with the test
+## Steps to Reproduce
 
-- Refer to the `ADD_LIQUIDITY FLOW` to explain expected behaviour
+1. Clone the repository: `git clone https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution.git`
+2. Checkout the branch: `git checkout atrium-cohort5-deliverable`
+3. Install dependencies: `forge install`
+4. Run the specific test: `forge test --mt test__Unit_JITSingleLP`
 
-- explain possible reasons why I think is not working
+## Expected Behavior
 
-- Can we use free CodeRabbit for this or other AI tool?
+The test should pass successfully, simulating a swap operation where JIT liquidity is provided to fulfill part of a trade.
 
+## Actual Behavior
 
-When running 
+The test fails with an arithmetic underflow error when the MockJITHub attempts to transfer tokens back to the PoolManager.
 
-```sh
-forge test --match-contract LiquidityTimeCommitmenUnitHookTest --mt test__beforeAddLiquidity__shouldRouteToJITLiquidityManager
-```
+## Project Context
 
-Test is reverting and outputting a `CurrencyNotSettled()` error. This seems to be because when the `PoolManager` is to `Lock`, the callback's `NonZeroDelta` shows that there is a non-zero `BalanceDelta`. My hint is that for the intentions of this hook, one might need to use the `afterAddLiquidityReturnDelta` flag. This is because the liquidity is stored on the `PoolManager` by liquidity token claims, and are aimed to be handled by the `LiquidityManager` using `LiquidityAccounting` for managing funds using `ERC4626` vaults.
+This project aims to create a unified system where JIT (Just-In-Time) and PLP (Passive Liquidity Provider) liquidity can coexist under fair conditions, allowing governance to plug different tax schemas for maximizing AMM welfare.
 
+The failing test is part of the core functionality that ensures JIT liquidity providers can properly participate in swap operations before the swap is executed.
+
+## Additional Information
+
+- The error occurs during the `fillSwap` function in `MockJITHub.sol`
+- The JITHub has sufficient token balance as shown in the logs
+- The issue appears to be related to the token flow between the PoolManager and JITHub during swap operations
+- This is blocking progress on implementing the core JIT liquidity functionality
+
+## Related Files
+
+- `test/ParityTaxTest.t.sol` - Contains the failing test
+- `test/mocks/MockJITHub.sol` - Contains the MockJITHub implementation where the error occurs
+- `src/ParityTaxHook.sol` - The main hook implementation that orchestrates the swap
+- `src/ParityTaxRouter.sol` - The router that initiates the swap
+
+## Request for Help
+
+We're looking for assistance in understanding why the token transfer is failing despite the JITHub having sufficient balance. Any insights into the correct token flow pattern for this type of Uniswap V4 hook implementation would be greatly appreciated.

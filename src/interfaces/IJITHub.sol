@@ -8,7 +8,9 @@ import "../types/Shared.sol";
 interface IJITHub{
 
 
-    function fillSwap(JITData memory jitData) external returns(uint256);
+    function addLiquidity(JITData memory jitData) external returns(uint256,uint256);
+
+    function removeLiquidity(uint256 tokenId) external;
 
 
 }

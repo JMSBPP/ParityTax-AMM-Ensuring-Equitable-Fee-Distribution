@@ -24,7 +24,7 @@ import{
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
-import {DeltaResolver} from "@uniswap/v4-periphery/src/base/DeltaResolver.sol";
+
 import {
     LiquidityOperations,
     Planner,
@@ -37,17 +37,24 @@ import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {console2} from "forge-std/Test.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
+import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
+contract MockJITHub is IJITHub, LiquidityOperations, ImmutableState{
     using SafeCast for *;
     using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
     using Planner for Plan;
-    using PoolIdLibrary for PoolKey;    
+    using PoolIdLibrary for PoolKey;
+    using PositionInfoLibrary for PositionInfo;    
     using SqrtPriceMath for uint160;
     using LiquidityAmounts for uint160;
+    using Address for address;
+
+
     // NOTE: The JIT Operators are identified by their positionKey
 
     IAllowanceTransfer permit2;
@@ -60,53 +67,27 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
         IPoolManager _manager,
         IPositionManager _lpm,
         IAllowanceTransfer _permit2
-    ) ImmutableState (_manager) DeltaResolver() {
+    ) ImmutableState (_manager) {
         lpm = _lpm;
         permit2 = _permit2;
     }
 
 
 
-    function fillSwap(JITData memory jitData) external returns(uint256){
+    function addLiquidity(JITData memory jitData) external returns(uint256,uint256){
         //NOTE: This is  place holder, further checks are needed
-        (Currency currency0 , Currency currency1 ) = (
-            Currency.wrap(jitData.token0),
-            Currency.wrap(jitData.token1)
-        );
         
         uint256 amountToFullfill = jitData.amountOut;
-        permit2.approve(
-            Currency.unwrap(jitData.poolKey.currency1),
-            address(lpm),
-            amountToFullfill.toUint160(),
-            uint48(block.timestamp + uint48(0x12))
-        );
-        IERC20(Currency.unwrap(jitData.poolKey.currency1)).approve(
-            address(lpm),
-            amountToFullfill
-        );
-
-        {  
-            // NOTE: This is to be corrected for more cases
-
-            _pay(
-                currency1,
-                address(this),
-                amountToFullfill
-            );
-        }
 
         // NOTE : At this point the JITHub has a debit of the amount of liquidity he will provide
         // to the swap
-        uint256 jitLiquidity = uint256(jitData.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
-            jitData.expectedAfterSwapSqrtPriceX96,
-            amountToFullfill
-        ));
+        uint256 jitLiquidity = uint256(
+            jitData.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
+                jitData.expectedAfterSwapSqrtPriceX96,
+                amountToFullfill
+            )
+        );
 
-        console2.log("JIT Liquidity:", jitLiquidity);
-
-        console2.log("JIT Hub Balance:", IERC20(Currency.unwrap(jitData.poolKey.currency1)).balanceOf(address(this)));
-        console2.log("Position Manager Allowance:", IERC20(Currency.unwrap(jitData.poolKey.currency1)).allowance(address(this),address(lpm)));
         //NOTE: This is provisional, because the JITData needs to give the PoolKey not
         // the PoolId
         (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
@@ -116,17 +97,63 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
             tickLower: currentTick,
             tickUpper: jitData.expectedAfterSwapTick
         });
-        _mintFromDeltasUnlocked(
+        _mintUnlocked(
             jitPosition,
             jitLiquidity,
             address(this),
             Constants.ZERO_BYTES
         );
 
-        return jitData.amountOut;
+        // NOTE: After minting the position our position is the latest tokenId
+        // minted, therefore is safe to call the nextTokenId() on the positionManager
+        // to query our positionTokenId
+        uint256 positionTokenId = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature("nextTokenId()")
+            ),
+            (uint256)
+        );
+
+        return (jitLiquidity, positionTokenId);
     }
 
-    function _mintFromDeltasUnlocked(
+    function removeLiquidity(uint256 tokenId) external{
+
+        PositionInfo jitPositionInfo = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "positionInfo(uint256)",
+                    (tokenId)
+                )
+            )
+            ,
+            (PositionInfo)
+        );
+
+        PoolKey memory poolKey = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "poolKeys(bytes25)", 
+                    (jitPositionInfo.poolId()))
+            ),
+            (PoolKey)
+        );
+
+        PositionConfig memory jitPositionConfig = PositionConfig({
+            poolKey: poolKey,
+            tickLower: jitPositionInfo.tickLower(),
+            tickUpper: jitPositionInfo.tickUpper()
+        });
+
+        _burnUnlocked(
+            tokenId,
+            jitPositionConfig
+        );
+
+
+    }
+
+    function _mintUnlocked(
         PositionConfig memory config,
         uint256 liquidity,
         address recipient,
@@ -159,20 +186,31 @@ contract MockJITHub is IJITHub, DeltaResolver, LiquidityOperations{
         lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
     }
 
+    function _burnUnlocked(
+        uint256 tokenId,
+        PositionConfig memory config
+    ) internal {
+        Plan memory planner = Planner.init();
+        planner.add(
+            Actions.BURN_POSITION,
+            abi.encode(
+                tokenId,
+                MIN_SLIPPAGE_DECREASE,
+                MIN_SLIPPAGE_DECREASE,
+                Constants.ZERO_BYTES
+            )
+        );
 
+        planner.add(
+            Actions.CLOSE_CURRENCY,
+            abi.encode(config.poolKey.currency0)
+        );
+        planner.add(
+            Actions.CLOSE_CURRENCY, 
+            abi.encode(config.poolKey.currency1)
+        );
 
-    function _pay(
-        Currency token,
-        address payer, 
-        uint256 amount
-        ) internal virtual override {
-            token.settle(
-                poolManager,
-                payer,
-                amount,
-                false
-            );
-
+        lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
     } 
 
 

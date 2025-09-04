@@ -101,20 +101,13 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                 address(jitHub),
                 uint256(type(uint128).max)
             );
-            console2.log(
-                "Balance of Sender on currency0:", IERC20(Currency.unwrap(currency0)).balanceOf(address(jitHub))
-            );
 
             IERC20(Currency.unwrap(currency1)).transfer(
                 address(jitHub),
                 uint256(type(uint128).max)
             );
 
-            
-
-            console2.log(
-                "Balance of Sender on currency1:", IERC20(Currency.unwrap(currency1)).balanceOf(address(jitHub))
-            );
+        
         }
         vm.stopPrank();
         
@@ -200,6 +193,11 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         vm.label(Currency.unwrap(currency0), "currency0");
         vm.label(Currency.unwrap(currency1), "currency1");
 
+        approvePosmFor(address(jitHub));
+        approvePosmFor(address(jitHub));
+        approvePosmCurrency(currency0);
+        approvePosmCurrency(currency1);
+
     }
 
     function test__Unit__noSwapsEquivalentBehavior() public {
@@ -215,7 +213,6 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     }               
 
     function test__Unit_JITSingleLP() public {
-        
         
         //=============  beforeSwap PLP Liquidity ==========
         modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
@@ -241,7 +238,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         );
         console2.log("amount0 with no Hook:", noHookDelta.amount0());
         console2.log("amount1 with no Hook:", noHookDelta.amount1());
-        
+
+
         (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook
             largeSwapParams
