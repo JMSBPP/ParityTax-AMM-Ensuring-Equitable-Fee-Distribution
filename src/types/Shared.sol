@@ -35,3 +35,26 @@ struct SwapCallbackData {
     bytes hookData;
 }
 
+/// @custom:transient-storage-location erc7201:openzeppelin.transient-storage.JIT_TRANSIENT
+struct JIT_Transient_Metrics{
+    //slot 1 
+    uint256 addedLiquidity;
+    //slot 2
+    bytes32 positionKey
+    // slot 3 
+    bytes32 jitPositionInfo;
+    // slot 4 
+    uint256 jitProfit;
+    // slot 5 
+    int256 withheldFees;
+}
+
+/// @custom:storage-location erc7201:openzeppelin.storage.JIT_Aggregate_Metrics
+struct JIT_Aggregate_Metrics{
+    uint256 cummAddedLiquidity;
+    uint256 cummProfit;
+}
+
+
+
+

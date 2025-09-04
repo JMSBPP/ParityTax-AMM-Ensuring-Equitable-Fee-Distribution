@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 
-import "../../src/interfaces/IJITHub.sol";
+import "../../src/interfaces/IJITResolver.sol";
 import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"; 
 
@@ -43,7 +43,7 @@ import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol"
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-contract MockJITHub is IJITHub, LiquidityOperations, ImmutableState{
+contract MockJITResolver is IJITResolver, LiquidityOperations, ImmutableState{
     using SafeCast for *;
     using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
@@ -58,6 +58,12 @@ contract MockJITHub is IJITHub, LiquidityOperations, ImmutableState{
     // NOTE: The JIT Operators are identified by their positionKey
 
     IAllowanceTransfer permit2;
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
+
+
+
     //NOTE: This is a placeHolder for testing
     address jitResolver;
     mapping(PoolId poolId => bytes32 positionKey) private jitOperators;
@@ -74,7 +80,7 @@ contract MockJITHub is IJITHub, LiquidityOperations, ImmutableState{
 
 
 
-    function addLiquidity(JITData memory jitData) external returns(uint256,uint256){
+    function addLiquidity(JITData memory jitData) external returns(uint256){
         //NOTE: This is  place holder, further checks are needed
         
         uint256 amountToFullfill = jitData.amountOut;
@@ -104,17 +110,17 @@ contract MockJITHub is IJITHub, LiquidityOperations, ImmutableState{
             Constants.ZERO_BYTES
         );
 
+
+
+        assembly('memory-safe'){
+            tstore(JIT_Transient_MetricsLocation, jitLiquidity)
+        }
+
+
         // NOTE: After minting the position our position is the latest tokenId
         // minted, therefore is safe to call the nextTokenId() on the positionManager
         // to query our positionTokenId
-        uint256 positionTokenId = abi.decode(
-            address(lpm).functionStaticCall(
-                abi.encodeWithSignature("nextTokenId()")
-            ),
-            (uint256)
-        );
-
-        return (jitLiquidity, positionTokenId);
+        return jitLiquidity;
     }
 
     function removeLiquidity(uint256 tokenId) external{

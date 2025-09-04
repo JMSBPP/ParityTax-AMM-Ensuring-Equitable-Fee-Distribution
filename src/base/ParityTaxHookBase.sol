@@ -1,119 +1,83 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {
-    PoolId,
-    PoolIdLibrary,
-    PoolKey
-} from "@uniswap/v4-core/src/types/PoolId.sol";
+
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
 
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {PositionInfoLibrary, PositionInfo} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 
-contract ParityTaxHookBase{
+//==================================================================
+import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
+import {Hooks} from "@uniswap/v4-core/src/librariees/Hooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+//====================================================================
+
+//==============================================================
+import {IPLPResolver} from "./interfaces/IPLPResolver.sol";
+import {IJITResolver} from "./interfaces/IJITResolver.sol";
+import {IParityTaxRouter} from "./interfaces/IParityTaxRouter.sol";
+import {ITaxController} from "./interfaces/IParityTaxRouter.sol";
+import {ILPOracle} from "./interfaces/ILPOracle.sol";
+//==============================================================
+
+abstract contract ParityTaxHookBase is BaseHook{
     using SafeCast for *;
     using Position for address;
     using PositionInfoLibrary for PoolKey;
     using PositionInfoLibrary for PositionInfo;
 
-    /// @custom:transient-storage-location erc7201:openzeppelin.transient-storage.JIT_TRANSIENT
-    struct JIT_Transient_Metrics{
-        //slot 1 
-        uint256 addedLiquidity;
-        //slot 2
-        uint256 jitProfit;
-        // slot 3 
-        bytes32 jitPositionInfo;
-        // slot 4 
-        bytes32 positionKey;
-        // slot 5 
-        int256 withheldFees;
-        
+    IPLPResolver plpResolver;
+    IJITResolver jitResolver;
+    IParityTaxRouter parityTaxRouter;
+    ITaxController taxController;
+    ILPOracle lpOracle;
 
-        
+
+    constructor(
+        IPoolManager _poolManager,
+        IJITResolver _jitResolver,
+        IPLPResolver _plpResolver,
+        IParityTaxRouter _parityTaxRouter,
+        ITaxController _taxController,
+        ILPOracle _lpOracle
+    ) BaseHook(_poolManager){
+        jitResolver  = _jitResolver;
+        plpResolver = _plpResolver;
+        parityTaxRouter = _parityTaxRouter;
+        taxController = _taxController;
+        lpOracle = _lpOracle;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32  constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
-
-    function tstore_JIT_liquidity(uint256 jitLiquidity) internal {
-        assembly('memory-safe'){
-            tstore(JIT_Transient_MetricsLocation, jitLiquidity)
-        }
-    }
-
-    function tload_JIT_addedLiquidity() internal view returns(uint256){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.addedLiquidity;
-    }
-
-
-    function tstore_JIT_positionKey(bytes32 jitPositionKey) internal {
-        assembly('memory-safe'){
-            tstore(add(JIT_Transient_MetricsLocation, 0x02), jitPositionKey)
-        }
-    }
-
-    function tload_JIT_positionKey() internal view returns(bytes32){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.positionKey;
-    }
-
-    function _jitTransientMetrics() internal view returns(JIT_Transient_Metrics memory){
-        bytes32 slot1;
-        bytes32 slot2;
-        bytes32 slot3;
-        bytes32 slot4;
-        assembly("memory-safe"){
-            slot1 := tload(JIT_Transient_MetricsLocation)
-            slot2 := tload(add(JIT_Transient_MetricsLocation, 0x01))
-            slot3 := tload(add(JIT_Transient_MetricsLocation, 0x02))
-            slot4 := tload(add(JIT_Transient_MetricsLocation, 0x03))
-        }
-        // Unpack the struct
-        return JIT_Transient_Metrics({
-            addedLiquidity: uint256(slot1),
-            jitProfit: uint256(slot2),
-            jitPositionInfo: slot2,
-            positionKey: slot3,
-            withheldFees : uint256(slot4).toInt256()
+    function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory){
+        return Hooks.Permissions({
+            beforeInitialize: true,      // NOTE: ILPOracle -> sync the internal price with the external one
+            afterInitialize: false,  
+            beforeAddLiquidity: true,    //NOTE: Handles the commitment of PLP's and JIT's 
+            afterAddLiquidity: true,     //NOTE:
+            beforeRemoveLiquidity: true, //NOTE:
+            afterRemoveLiquidity: true,  //NOTE:
+            beforeSwap: true,            //NOTE:
+            afterSwap: true,             //NOTE:
+            beforeDonate: false,
+            afterDonate: false,
+            beforeSwapReturnDelta:false,  
+            afterSwapReturnDelta: false,
+            afterAddLiquidityReturnDelta: true, //NOTE:
+            afterRemoveLiquidityReturnDelta: true //NOTE:
         });
     }
 
 
 
-    function _jitProfit() internal view returns(uint256){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.jitProfit;
+    function tload_JIT_addedLiquidity() internal view returns(uint256){
+        bytes32 jitLiquidityLocation = jitResolver.jitLiquidityLocation();
+        return uint256(jitResolver.exttload(jitLiquidityLocation));
     }
 
-    function _jitPositionInfo() internal view returns(bytes32){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.jitPositionInfo;
+    function tload_JIT_positionKey() internal view returns(bytes32){
+        bytes32 jitPositionKeyLocation = jitResolver.jitPositionKeyLocation();
+        return jitResolver.exttload(jitPositionKeyLocation);
     }
-
-
-    function _withheldFees() internal view returns(int256){
-        JIT_Transient_Metrics memory jitTransientMetrics = _jitTransientMetrics();
-        return jitTransientMetrics.withheldFees;
-    }
-
-    /// @custom:storage-location erc7201:openzeppelin.storage.JIT_Aggregate_Metrics
-    struct JIT_Aggregate_Metrics{
-        uint256 cummAddedLiquidity;
-        uint256 cummProfit;
-    }
-
-
-    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.JIT_AGGREGATE")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 internal constant JIT_Aggregate_MetricsLocation = 0xe0cf99b8cd0560d8640e62178018c84af9084dd2b92a0b03d3120e8fa0633800;
-
-    function _getJITAggregateMetrics() internal pure returns (JIT_Aggregate_Metrics storage $){
-        assembly{
-            $.slot := JIT_Aggregate_MetricsLocation
-        }
-    }
-
 }

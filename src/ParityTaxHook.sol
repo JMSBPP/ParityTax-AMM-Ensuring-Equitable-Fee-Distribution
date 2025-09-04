@@ -1,12 +1,11 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+//================================================================
+import "./base/ParityTaxHookBase.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-// import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+//=================================================================
+
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
@@ -15,8 +14,12 @@ import {TickBitmap} from "@uniswap/v4-core/src/libraries/TickBitmap.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+import {
+    PoolId, 
+    PoolIdLibrary,
+    PoolKey
+} from "@uniswap/v4-core/src/types/PoolId.sol";
+
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
@@ -45,7 +48,7 @@ import {CurrencyDelta} from "@uniswap/v4-core/src/libraries/CurrencyDelta.sol";
 
 // =============== External Dependencies ============================
 //TODO: Do we need a manager also for the PLP ?? ...
-import {IPLPOperator} from "./interfaces/IPLPOperator.sol";
+
 import {IJITHub} from "./interfaces/IJITHub.sol";
 import {IParityTaxRouter} from "./interfaces/IParityTaxRouter.sol";
 import {IParityTaxHook} from "./interfaces/IParityTaxHook.sol";
@@ -57,7 +60,7 @@ import "./types/Shared.sol";
 
 import {console2} from "forge-std/Test.sol";
 
-contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
+contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     using Position for address;
     using Address for address;
     using QuoterRevert for bytes;
@@ -93,7 +96,10 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
         address _plpOperator,
         address _lpOracle,
         address _taxController
-    ) BaseHook(_manager) {
+    ) ParityTaxHookBase(
+        _poolManager,
+        
+        ) {
         router = IParityTaxRouter(_router);
         jitHub = IJITHub(_jitHub);
         plpOperator = IPLPOperator(_plpOperator);
@@ -169,7 +175,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
     ) internal virtual override returns (bytes4, BeforeSwapDelta, uint24)
     {   
         //NOTE: All this data is passed to the JIT Hub, which returns
-        // a bool response acknoleding the amount willing to fulfill
+        // a bool response acknoledging the amount willing to fulfill
                 
         JITData memory jitData = abi.decode(hookData, (JITData));
         
@@ -181,14 +187,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
         bool isExactInput = jitData.amountSpecified <0;
         // NOTE: The JITHub mints the liquidity to fill the swap
 
-        (uint256 jitLiquidity, uint256 positionTokenId) = IJITHub(
+        uint256 jitLiquidity = IJITHub(
             address(jitHub)
         ).addLiquidity(
             jitData
         );
 
         tstore_JIT_liquidity(jitLiquidity);
-        tstore_JIT_positionKey(bytes32(positionTokenId));
 
 
         return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, uint24(0x00));
@@ -204,28 +209,56 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
         bytes calldata hookData
     ) internal virtual override returns (bytes4, int128)
     {
-        (uint256 jitLiquidity,uint256 jitPositionTokenId) = (
-            tload_JIT_addedLiquidity(),
-            uint256(tload_JIT_positionKey())
-        );
+
 
         // NOTE: If both values are positve this is a swap
         // fulfilled by JIT's
-        if (jitLiquidity >0 && jitPositionTokenId > 0){
-            IJITHub(address(jitHub)).removeLiquidity(
-                jitPositionTokenId
-            );
-        }
+        // if (jitLiquidity >0 && jitPositionTokenId > 0){
+        //     IJITHub(address(jitHub)).removeLiquidity(
+        //         jitPositionTokenId
+        //     );
+        // }
         return (IHooks.afterSwap.selector, int128(0x00));
     }
 
     function _beforeAddLiquidity(
-        address,
+        address liquidityRouter,
         PoolKey calldata poolKey,
-        ModifyLiquidityParams calldata,
+        ModifyLiquidityParams calldata liquidityParams,
         bytes calldata hookData
     ) internal virtual override returns (bytes4)
     {
+        uint256 jitLiquidity = tload_JIT_addedLiquidity();
+        
+        // NOTE: A positie liquidity delta denotes liquidity
+        // addition
+        console2.log(
+            "JIT Liquidity:",
+            jitLiquidity
+        );
+
+        console2.log(
+            "Liquidity Provider Liquidity",
+            liquidityParams.liquidityDelta
+        );
+        if (jitLiquidity == uint256(liquidityParams.liquidityDelta)){
+
+        bytes32 jitLiquidityPositionKey = liquidityRouter.calculatePositionKey(
+            liquidityParams.tickLower,
+            liquidityParams.tickUpper,
+            liquidityParams.salt
+        );
+        // NOTE: The jitLiquidity coming from the addLiquidity
+        // call on the beforeSwap
+            {
+                //================JIT==============
+
+            
+            
+            }
+        }
+        
+ 
         if (hookData.length >0)
         {
             
@@ -322,37 +355,37 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
     ) internal virtual override returns (bytes4, BalanceDelta) {
         PoolId poolId = poolKey.toId();
         bytes32 jitPositionKey = tload_JIT_positionKey();
-        {
+        // {
             //===================JIT========================
-            if (jitPositionKey != bytes32(uint256(0x00))){
-                BalanceDelta initialFeeDelta = BalanceDelta.wrap(_withheldFees());
-                if (initialFeeDelta.amount0() > 0){
-                    poolKey.currency0.settle(
-                        poolManager,
-                        address(this),
-                        uint256(uint128(initialFeeDelta.amount0())),
-                        true
-                    );
-                }
+            // if (jitPositionKey != bytes32(uint256(0x00))){
+            //     BalanceDelta initialFeeDelta = BalanceDelta.wrap(_withheldFees());
+            //     if (initialFeeDelta.amount0() > 0){
+            //         poolKey.currency0.settle(
+            //             poolManager,
+            //             address(this),
+            //             uint256(uint128(initialFeeDelta.amount0())),
+            //             true
+            //         );
+            //     }
 
-                if (initialFeeDelta.amount1() > 0){
-                    poolKey.currency1.settle(
-                        poolManager,
-                        address(this),
-                        uint256(uint128(initialFeeDelta.amount1())),
-                        true
-                    );
-                }
+            //     if (initialFeeDelta.amount1() > 0){
+            //         poolKey.currency1.settle(
+            //             poolManager,
+            //             address(this),
+            //             uint256(uint128(initialFeeDelta.amount1())),
+            //             true
+            //         );
+            //     }
 
-                BalanceDelta totalFees = feeRevenueDelta + initialFeeDelta;
-                if (
-                    totalFees != BalanceDeltaLibrary.ZERO_DELTA
-                )
-                {
-                    BalanceDelta taxedDelta = taxController.taxJITFeeRevenue(
-                        totalFees
-                    );
-                    if (poolManager.getLiquidity(poolId) == 0) revert NoLiquidityToReceiveTaxRevenue();
+            //     BalanceDelta totalFees = feeRevenueDelta + initialFeeDelta;
+            //     if (
+            //         totalFees != BalanceDeltaLibrary.ZERO_DELTA
+            //     )
+            //     {
+            //         BalanceDelta taxedDelta = taxController.taxJITFeeRevenue(
+            //             totalFees
+            //         );
+            //         if (poolManager.getLiquidity(poolId) == 0) revert NoLiquidityToReceiveTaxRevenue();
                 
                     // TODO: taxedDelta is to be taked by the taxController
                 
@@ -363,13 +396,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase, BaseHook{
                     //     Constants.ZERO_BYTES
                     // );
                     
-                }
+                // }
 
-            }
-            // TODO: Here we calculate the JIT lp profit and store it on the tsMetrics
+            // }
+            // // TODO: Here we calculate the JIT lp profit and store it on the tsMetrics
             // then any other calls on the same transaction are governed by the hookData
             // TODO: Here also we must calculate the JIT cummProfit
-        }
+        // }
         return (IHooks.afterRemoveLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
  
     }
