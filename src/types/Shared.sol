@@ -40,7 +40,7 @@ struct JIT_Transient_Metrics{
     //slot 1 
     uint256 addedLiquidity;
     //slot 2
-    bytes32 positionKey
+    bytes32 positionKey;
     // slot 3 
     bytes32 jitPositionInfo;
     // slot 4 

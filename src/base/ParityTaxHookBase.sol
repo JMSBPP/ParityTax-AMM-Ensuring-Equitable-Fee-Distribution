@@ -4,22 +4,26 @@ pragma solidity ^0.8.0;
 
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
 
-import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {PositionInfoLibrary, PositionInfo} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
-
+import {
+    PoolId,
+    PoolIdLibrary,
+    PoolKey
+} from "@uniswap/v4-core/src/types/PoolId.sol";
 //==================================================================
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
-import {Hooks} from "@uniswap/v4-core/src/librariees/Hooks.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 //====================================================================
 
 //==============================================================
-import {IPLPResolver} from "./interfaces/IPLPResolver.sol";
-import {IJITResolver} from "./interfaces/IJITResolver.sol";
-import {IParityTaxRouter} from "./interfaces/IParityTaxRouter.sol";
-import {ITaxController} from "./interfaces/IParityTaxRouter.sol";
-import {ILPOracle} from "./interfaces/ILPOracle.sol";
+import {IPLPResolver} from "../interfaces/IPLPResolver.sol";
+import {IJITResolver} from "../interfaces/IJITResolver.sol";
+import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
+import {ITaxController} from "../interfaces/ITaxController.sol";
+import {ILPOracle} from "../interfaces/ILPOracle.sol";
 //==============================================================
 
 abstract contract ParityTaxHookBase is BaseHook{
@@ -33,6 +37,9 @@ abstract contract ParityTaxHookBase is BaseHook{
     IParityTaxRouter parityTaxRouter;
     ITaxController taxController;
     ILPOracle lpOracle;
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 constant internal JIT_LIQUIDITY_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
 
 
     constructor(
@@ -70,14 +77,4 @@ abstract contract ParityTaxHookBase is BaseHook{
     }
 
 
-
-    function tload_JIT_addedLiquidity() internal view returns(uint256){
-        bytes32 jitLiquidityLocation = jitResolver.jitLiquidityLocation();
-        return uint256(jitResolver.exttload(jitLiquidityLocation));
-    }
-
-    function tload_JIT_positionKey() internal view returns(bytes32){
-        bytes32 jitPositionKeyLocation = jitResolver.jitPositionKeyLocation();
-        return jitResolver.exttload(jitPositionKeyLocation);
-    }
 }

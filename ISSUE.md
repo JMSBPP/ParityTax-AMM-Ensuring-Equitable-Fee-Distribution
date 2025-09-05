@@ -1,61 +1,120 @@
-# Underflow Error in test__Unit_JITSingleLP Test
+# Custom Liquidity Router Issue
 
-## Issue Description
+I have a custom liquidity router for liquidity operations in `test/mocks/MockJITResolver.sol` that mints liquidity in the `beforeSwap` function of `src/ParittTaxHook.sol`.
 
-When running `forge test --mt test__Unit_JITSingleLP`, the test fails with an arithmetic underflow error during the `transferFrom` operation in the MockJITHub contract.
+It mints a position as shown below:
 
-## Environment
-
-- **Repository**: ParityTax-AMM-Ensuring-Equitable-Fee-Distribution
-- **Branch**: atrium-cohort5-deliverable
-- **Solidity Version**: 0.8.26
-- **Foundry**: Latest version
-
-## Error Details
-
-The error occurs in the following trace:
+```solidity
+    function _mintUnlocked(
+        PositionConfig memory config,
+        uint256 liquidity,
+        address recipient,
+        bytes memory hookData
+    ) internal {
+        Plan memory planner = Planner.init();
+        {
+            planner.add(
+                Actions.MINT_POSITION,
+                abi.encode(
+                    config.poolKey,
+                    config.tickLower < config.tickUpper ? config.tickLower : config.tickUpper,
+                    config.tickLower < config.tickUpper ? config.tickUpper : config.tickLower,
+                    liquidity,
+                    MAX_SLIPPAGE_INCREASE,
+                    MAX_SLIPPAGE_INCREASE,
+                    recipient,
+                    hookData
+                )
+            );
+            planner.add(
+                Actions.CLOSE_CURRENCY,
+                abi.encode(config.poolKey.currency0)
+            );
+            planner.add(
+                Actions.CLOSE_CURRENCY, abi.encode(config.poolKey.currency1)
+            );
+        }
+        
+        lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
+    }
 ```
-[5290] 0x000000000022D473030F116dDEE9F6B43aC78BA3::transferFrom(MockJITHub: [0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240], PoolManager: [0x2e234DAe75C793f67A35089C9d99245E1C58470b], 994024895398478 [9.94e14], currency1: [0x2a07706473244bc757e10f2a9e86fb532828afe3])
-    ├─ [3855] currency1::transferFrom(MockJITHub: [0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240], PoolManager: [0x2e234DAe75C793f67A35089C9d99245E1C58470b], 994024895398478 [9.94e14])
-    │   └─ ← [Revert] panic: arithmetic underflow or overflow (0x11)
-    └─ ← [Revert] TRANSFER_FROM_FAILED
+
+However, I am trying to retrieve the `tokenId` of this position in order to burn the position in `afterSwap`.
+
+As far as I understand, it should be enough to call `nextTokenId` on the `positionManager`, since `tokenId` is guaranteed to remain invariant when called within the same transaction. But when running:
+
+```sh
+forge test --mt test__Unit_JITSingleLP -vvvv
 ```
 
-## Steps to Reproduce
+It shows that there is no position nor pool associated with such token:
 
-1. Clone the repository: `git clone https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution.git`
-2. Checkout the branch: `git checkout atrium-cohort5-deliverable`
-3. Install dependencies: `forge install`
-4. Run the specific test: `forge test --mt test__Unit_JITSingleLP`
+```solidity
+    function addLiquidity(JITData memory jitData) external returns(uint256, PositionConfig memory) {
+        // NOTE: This is a placeholder, further checks are needed
+        
+        uint256 amountToFulfill = jitData.amountOut;
 
-## Expected Behavior
+        // NOTE: At this point the JITHub has a debit of the amount of liquidity it will provide
+        // to the swap
+        uint256 jitLiquidity = uint256(
+            jitData.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
+                jitData.expectedAfterSwapSqrtPriceX96,
+                amountToFulfill
+            )
+        );
 
-The test should pass successfully, simulating a swap operation where JIT liquidity is provided to fulfill part of a trade.
+        // NOTE: This is provisional, because the JITData needs to provide the PoolKey
+        // instead of the PoolId
+        (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
+        
+        PositionConfig memory jitPosition = PositionConfig({
+            poolKey: jitData.poolKey,
+            tickLower: currentTick,
+            tickUpper: jitData.expectedAfterSwapTick
+        });
+        _mintUnlocked(
+            jitPosition,
+            jitLiquidity,
+            address(this),
+            Constants.ZERO_BYTES
+        );
+        uint256 _tokenId = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "nextTokenId()"
+                )
+            ),
+            (uint256)
+        );
 
-## Actual Behavior
+        bytes32 jitPositionKey = address(this).calculatePositionKey(
+            jitPosition.tickLower,
+            jitPosition.tickUpper,
+            bytes32(_tokenId)
+        );
+        (PoolKey memory _poolKey, PositionInfo jitPositionInfo) = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "getPoolAndPositionInfo(uint256)", _tokenId
+                )
+            ),
+            (PoolKey, PositionInfo)
+        );
 
-The test fails with an arithmetic underflow error when the MockJITHub attempts to transfer tokens back to the PoolManager.
+        console2.log(
+            "JIT Position Info",
+            PositionInfo.unwrap(jitPositionInfo)
+        );
 
-## Project Context
+        // NOTE: After minting the position, our position is the latest tokenId
+        // minted. Therefore, it is safe to call nextTokenId() on the positionManager
+        // to query our positionTokenId.
+        return (jitLiquidity, jitPosition);
+    }
+```
 
-This project aims to create a unified system where JIT (Just-In-Time) and PLP (Passive Liquidity Provider) liquidity can coexist under fair conditions, allowing governance to plug different tax schemas for maximizing AMM welfare.
+I just want to burn the position — I bet there is a simpler approach.
+Any help will be highly appreciated.
 
-The failing test is part of the core functionality that ensures JIT liquidity providers can properly participate in swap operations before the swap is executed.
-
-## Additional Information
-
-- The error occurs during the `fillSwap` function in `MockJITHub.sol`
-- The JITHub has sufficient token balance as shown in the logs
-- The issue appears to be related to the token flow between the PoolManager and JITHub during swap operations
-- This is blocking progress on implementing the core JIT liquidity functionality
-
-## Related Files
-
-- `test/ParityTaxTest.t.sol` - Contains the failing test
-- `test/mocks/MockJITHub.sol` - Contains the MockJITHub implementation where the error occurs
-- `src/ParityTaxHook.sol` - The main hook implementation that orchestrates the swap
-- `src/ParityTaxRouter.sol` - The router that initiates the swap
-
-## Request for Help
-
-We're looking for assistance in understanding why the token transfer is failing despite the JITHub having sufficient balance. Any insights into the correct token flow pattern for this type of Uniswap V4 hook implementation would be greatly appreciated.
+https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution

@@ -2,11 +2,13 @@
 pragma solidity ^0.8.0;
 
 
-import "../../src/interfaces/IJITResolver.sol";
+import "../../src/base/JITResolverBase.sol";
+
 import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"; 
 
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {PoolKey,PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -43,7 +45,7 @@ import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol"
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-contract MockJITResolver is IJITResolver, LiquidityOperations, ImmutableState{
+contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState{
     using SafeCast for *;
     using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
@@ -53,6 +55,7 @@ contract MockJITResolver is IJITResolver, LiquidityOperations, ImmutableState{
     using SqrtPriceMath for uint160;
     using LiquidityAmounts for uint160;
     using Address for address;
+    using Position for address;
 
 
     // NOTE: The JIT Operators are identified by their positionKey
@@ -80,7 +83,7 @@ contract MockJITResolver is IJITResolver, LiquidityOperations, ImmutableState{
 
 
 
-    function addLiquidity(JITData memory jitData) external returns(uint256){
+    function addLiquidity(JITData memory jitData) external returns(uint256, PositionConfig memory){
         //NOTE: This is  place holder, further checks are needed
         
         uint256 amountToFullfill = jitData.amountOut;
@@ -109,21 +112,44 @@ contract MockJITResolver is IJITResolver, LiquidityOperations, ImmutableState{
             address(this),
             Constants.ZERO_BYTES
         );
+        uint256 _tokenId = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "nextTokenId()"
+                )
+            ),
+            (uint256)
+        );
 
+        bytes32 jitPositionKey = address(this).calculatePositionKey(
+            jitPosition.tickLower,
+            jitPosition.tickUpper,
+            bytes32(_tokenId)
+        );
+        (PoolKey memory _poolKey, PositionInfo jitPositionInfo ) = abi.decode(
+            address(lpm).functionStaticCall(
+                abi.encodeWithSignature(
+                    "getPoolAndPositionInfo(uint256)", _tokenId
+                )
+            ),
+            (PoolKey, PositionInfo)
+        );
 
+        console2.log(
+            "JIT Position Info",
+            PositionInfo.unwrap(jitPositionInfo)
+        );
 
-        assembly('memory-safe'){
-            tstore(JIT_Transient_MetricsLocation, jitLiquidity)
-        }
 
 
         // NOTE: After minting the position our position is the latest tokenId
         // minted, therefore is safe to call the nextTokenId() on the positionManager
         // to query our positionTokenId
-        return jitLiquidity;
+        return (jitLiquidity, jitPosition);
     }
 
     function removeLiquidity(uint256 tokenId) external{
+     
 
         PositionInfo jitPositionInfo = abi.decode(
             address(lpm).functionStaticCall(

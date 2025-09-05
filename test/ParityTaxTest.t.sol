@@ -10,6 +10,7 @@ import {
     StateLibrary,
     IPositionManager
 } from "../src/ParityTaxHook.sol";
+
 import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -45,8 +46,9 @@ import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 
 
 import {MockJITResolver} from "./mocks/MockJITResolver.sol";
+import {MockPLPResolver} from "./mocks/MockPLPResolver.sol";
+import {MockLPOracle} from "./mocks/MockLPOracle.sol";
 import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
-import {StateView} from "@uniswap/v4-periphery/src/lens/StateView.sol";
 import {ParityTaxRouter} from "../src/ParityTaxRouter.sol";
 import {console2} from "forge-std/Test.sol";
 
@@ -65,10 +67,12 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
     
     MockJITResolver jitResolver;
+    MockPLPResolver plpResolver;
+    MockLPOracle lpOracle;
     LumpSumTaxController taxController;
     ParityTaxRouter parityTaxRouter;
     V4Quoter v4Quoter;
-    StateView stateView;
+
 
 
     function setUp() public {
@@ -82,6 +86,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             lpm,
             permit2
         );
+
+        plpResolver = new MockPLPResolver();
         
         
         vm.startPrank(address(this));
@@ -102,13 +108,11 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         vm.stopPrank();
         
         
-        taxController = new LumpSumTaxController(
-            plpOperator,
-            jitOperator
-        );
+        taxController = new LumpSumTaxController();
         v4Quoter = new V4Quoter(
             manager
         );
+        lpOracle = new MockLPOracle();
 
         parityTaxRouter = new ParityTaxRouter(
             manager,
@@ -125,8 +129,6 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             );
         }
         
-
-        stateView = new StateView(manager);
 
         parityTax = ParityTaxHook(
             address(
@@ -146,11 +148,11 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             "ParityTaxHook.sol:ParityTaxHook",
             abi.encode(
                 manager,
-                address(v4Quoter),
-                address(jitResolver),
-                address(plpOperator),
-                address(0x123),
-                address(taxController)
+                jitResolver,
+                plpResolver,
+                parityTaxRouter,
+                taxController,
+                lpOracle
             ),
             address(parityTax)
         );

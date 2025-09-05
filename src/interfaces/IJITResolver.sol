@@ -2,14 +2,14 @@
 pragma solidity ^0.8.0;
 
 
+import {PositionConfig} from "@uniswap/v4-periphery/test/shared/PositionConfig.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {IExttload} from "@uniswap/v4-core/src/interfaces/IExttload.sol";
+import "../types/Shared.sol";
 
-interface IJITResolver, IExttload{
+interface IJITResolver{
 
-    function jitLiquidityLocation() external returns(bytes32);
-    fucntion jitPositionKeyLocation() external returns(bytes32);
-    function addLiquidity(JITData memory jitData) external returns(uint256);
+ 
+    function addLiquidity(JITData memory jitData) external returns(uint256, PositionConfig memory);
 
     function removeLiquidity(uint256 tokenId) external;
 
