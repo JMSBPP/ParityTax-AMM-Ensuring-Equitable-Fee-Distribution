@@ -1,11 +1,8 @@
-\//SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 
 import "../../src/base/JITResolverBase.sol";
-
-import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"; 
 
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
@@ -27,16 +24,6 @@ import{
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IERC721} from "forge-std/interfaces/IERC721.sol";
 
-import {
-    LiquidityOperations,
-    Planner,
-    Plan,
-    PositionConfig,
-    LiquidityAmounts,
-    Actions
-} from "@uniswap/v4-periphery/test/shared/LiquidityOperations.sol";
-import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
-
 import {console2} from "forge-std/Test.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
@@ -45,7 +32,7 @@ import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol"
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState{
+contract MockJITResolver is JITResolverBase{
     using SafeCast for *;
     using CurrencySettler for Currency;
     using StateLibrary for IPoolManager;
@@ -58,14 +45,6 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
     using Position for address;
 
 
-    // NOTE: The JIT Operators are identified by their positionKey
-
-    IAllowanceTransfer permit2;
-
-    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant JIT_Transient_MetricsLocation = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
-
-
 
     //NOTE: This is a placeHolder for testing
     address jitResolver;
@@ -74,12 +53,8 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
 
     constructor(
         IPoolManager _manager,
-        IPositionManager _lpm,
-        IAllowanceTransfer _permit2
-    ) ImmutableState (_manager) {
-        lpm = _lpm;
-        permit2 = _permit2;
-    }
+        IPositionManager _lpm
+    ) JITResolverBase (_manager, _lpm) {}
 
 
 
@@ -97,7 +72,7 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
             )
         );
 
-        //NOTE: This is provisional, because the JITData needs to give the PoolKey not
+        //TODO: This is provisional, because the JITData needs to give the PoolKey not
         // the PoolId
         (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
         
@@ -126,16 +101,7 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
     function removeLiquidity(uint256 tokenId) external{
      
 
-        PositionInfo jitPositionInfo = abi.decode(
-            address(lpm).functionStaticCall(
-                abi.encodeWithSignature(
-                    "positionInfo(uint256)",
-                    (tokenId)
-                )
-            )
-            ,
-            (PositionInfo)
-        );
+        PositionInfo jitPositionInfo = lpm.positionInfo(tokenId);
 
         PoolKey memory poolKey = abi.decode(
             address(lpm).functionStaticCall(
@@ -159,66 +125,6 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
 
 
     }
-
-    function _mintUnlocked(
-        PositionConfig memory config,
-        uint256 liquidity,
-        address recipient,
-        bytes memory hookData
-    ) internal {
-        Plan memory planner = Planner.init();
-        {
-            planner.add(
-                Actions.MINT_POSITION,
-                abi.encode(
-                    config.poolKey,
-                    config.tickLower < config.tickUpper ?config.tickLower:config.tickUpper,
-                    config.tickLower < config.tickUpper ?config.tickUpper:config.tickLower,
-                    liquidity,
-                    MAX_SLIPPAGE_INCREASE,
-                    MAX_SLIPPAGE_INCREASE,
-                    recipient,
-                    hookData
-                )
-            );
-            planner.add(
-                Actions.CLOSE_CURRENCY,
-                abi.encode(config.poolKey.currency0)
-            );
-            planner.add(
-                Actions.CLOSE_CURRENCY, abi.encode(config.poolKey.currency1)
-            );
-        }
-        
-        lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
-    }
-
-    function _burnUnlocked(
-        uint256 tokenId,
-        PositionConfig memory config
-    ) internal {
-        Plan memory planner = Planner.init();
-        planner.add(
-            Actions.BURN_POSITION,
-            abi.encode(
-                tokenId,
-                MIN_SLIPPAGE_DECREASE,
-                MIN_SLIPPAGE_DECREASE,
-                Constants.ZERO_BYTES
-            )
-        );
-
-        planner.add(
-            Actions.CLOSE_CURRENCY,
-            abi.encode(config.poolKey.currency0)
-        );
-        planner.add(
-            Actions.CLOSE_CURRENCY, 
-            abi.encode(config.poolKey.currency1)
-        );
-
-        lpm.modifyLiquiditiesWithoutUnlock(planner.actions, planner.params);
-    } 
 
 
 

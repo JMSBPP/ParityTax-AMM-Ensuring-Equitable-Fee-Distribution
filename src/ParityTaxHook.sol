@@ -75,9 +75,12 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     
 
     mapping(PoolId poolId => mapping(uint256 tokenId => uint48 blockNumberCommitment)) private _plpBlockNumberCommitmnet;
-    mapping(PoolId poolId => mapping(bytes32 positionKey => BalanceDelta delta)) private _withheldFees;
+    mapping(PoolId poolId => mapping(uint256 tokenId => BalanceDelta delta)) private _withheldFees;
+    mapping(bytes32 lpPositionKey => uint256 lpPositionTokenId) private _lpTokenIds;
 
 
+    //TODO: The ParityTaxRouter is not needed as any router that calls the swap/modifyLiquidity
+    // with the right hookData and no claims is valid
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
@@ -99,21 +102,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     }
 
-
-
-
-
-    // modifier onlyUncommitedLiquidity(
-    //     PoolId poolId,
-    //     uint256 plpTokenId
-    // ){
-    //     uint48 plpCommitment = plpOperator.getPLPCommitment(
-    //         poolId,
-    //         bytes32(plpTokenId)
-    //     );
-    //     if (plpCommitment !=0 && block.number < plpCommitment ) revert NotWithdrawableLiquidity__LiquidityIsCommitted(uint256(plpCommitment)-block.number);   
-    //     _;
-    // }
 
 
     function _beforeInitialize(
@@ -205,10 +193,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     {
         
         PoolId poolId = poolKey.toId();
+        bytes32 lpPositionKey = liquidityRouter.calculatePositionKey(
+            liquidityParams.tickLower,
+            liquidityParams.tickUpper,
+            liquidityParams.salt
+        );
+        
         
 
-        //NOTE: This means that there is a time commitment, thus is a PLP position 
-        if (hookData.length >0)
+        if (hookData.length > uint256(0x00) && liquidityRouter != address(lpm))
         {
             
             uint48 plpBlockNumberCommitment = abi.decode(
@@ -217,15 +210,16 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             ) + uint48(block.timestamp);
             
             uint256 plpPositionTokenId = plpResolver.commitLiquidity(
-                poolId,
+                poolKey,
                 liquidityParams,
                 plpBlockNumberCommitment
             );
 
             _lockLiquidity(poolId, plpPositionTokenId, plpBlockNumberCommitment);
+            _lpTokenIds[lpPositionKey] = plpPositionTokenId;
 
-            
-        }   
+        
+        }
         
         return IHooks.beforeAddLiquidity.selector;
     }
@@ -253,9 +247,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             liquidityParams.salt
         );
 
+        uint256 plpPositionTokenId = _lpTokenIds[lpPositionKey];
+
         
 
-        _withholdFeeRevenue(poolKey,lpPositionKey,feeDelta);
+        _withholdFeeRevenue(poolKey,plpPositionTokenId,feeDelta);
 
         
 
@@ -264,11 +260,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     function _withholdFeeRevenue(
         PoolKey memory poolKey,
-        bytes32 lpPositionKey,
+        uint256 lpPositionTokenId,
         BalanceDelta feeRevenueDelta
     ) internal virtual {
         PoolId poolId = poolKey.toId();
-         _withheldFees[poolId][lpPositionKey] = _withheldFees[poolId][lpPositionKey] + feeRevenueDelta;
+         _withheldFees[poolId][lpPositionTokenId] = _withheldFees[poolId][lpPositionTokenId] + feeRevenueDelta;
 
         poolKey.currency0.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount0())), true);
         poolKey.currency1.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount1())), true);
@@ -292,16 +288,18 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             liquidityParams.salt
         );
 
+        uint256 plpPositionTokenId = _lpTokenIds[lpPositionKey];
+
         uint48 plpPositionBlockNumberCommitment = getPositionBlockNumberCommitment(
             poolId ,
-            lpPositionKey
+            plpPositionTokenId
         );
 
         if (uint48(block.number) >= plpPositionBlockNumberCommitment ){
-            _clearPositionBlockNumberCommitment(poolId, lpPositionKey);
+            _clearPositionBlockNumberCommitment(poolId, plpPositionTokenId);
             plpResolver.removeLiquidity(
                 poolId,
-                lpPositionKey,
+                plpPositionTokenId,
                 liquidityParams.liquidityDelta
             );
         } else if (
@@ -348,8 +346,9 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             liquidityParams.tickUpper,
             liquidityParams.salt
         );
+        uint256 plpPositionTokenId = _lpTokenIds[lpPositionKey];
 
-        BalanceDelta withheldFees = _remitFeeRevenue(poolKey, lpPositionKey);
+        BalanceDelta withheldFees = _remitFeeRevenue(poolKey, plpPositionTokenId);
 
         BalanceDelta taxableFeeRevenueIncomeDelta = feeRevenueDelta + withheldFees;
         
@@ -397,14 +396,14 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     function _remitFeeRevenue(
         PoolKey memory poolKey,
-        bytes32 lpPositionKey
+        uint256 tokenId
     ) internal virtual returns(BalanceDelta withheldFees) {
         
         PoolId poolId = poolKey.toId();
         
-        withheldFees = getWithheldFees(poolId, lpPositionKey);
+        withheldFees = getWithheldFees(poolId, tokenId);
         
-        _withheldFees[poolId][lpPositionKey] = BalanceDeltaLibrary.ZERO_DELTA;
+        _withheldFees[poolId][tokenId] = BalanceDeltaLibrary.ZERO_DELTA;
 
         if (withheldFees.amount0() > 0) {
             poolKey.currency0.settle(poolManager, address(this), uint256(uint128(withheldFees.amount0())), true);
@@ -420,8 +419,8 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     //     return metrics.sqrtPriceImpactX96;
     // }
 
-    function getWithheldFees(PoolId poolId, bytes32 positionKey) public view virtual returns (BalanceDelta) {
-        return _withheldFees[poolId][positionKey];
+    function getWithheldFees(PoolId poolId, uint256 tokenId) public view virtual returns (BalanceDelta) {
+        return _withheldFees[poolId][tokenId];
     }
 
 

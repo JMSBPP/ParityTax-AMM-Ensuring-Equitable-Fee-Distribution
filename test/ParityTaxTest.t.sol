@@ -83,8 +83,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
         jitResolver = new MockJITResolver(
             manager,
-            lpm,
-            permit2
+            lpm
         );
 
 
@@ -120,6 +119,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         );
 
         plpResolver = new MockPLPResolver(
+            manager,
             parityTaxRouter,
             lpm    
         );

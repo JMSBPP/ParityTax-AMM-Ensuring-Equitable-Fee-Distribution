@@ -14,5 +14,6 @@ interface IParityTaxHook{
     error NoLiquidityToReceiveTaxRevenue();
     error CurrencyMissmatch();
     error NoLiquidityToReceiveTaxCredit();
+    error InvalidLiquidityRouterCaller();
 
 }

@@ -7,14 +7,13 @@ import {IParityTaxHook} from "../interfaces/IParityTaxHook.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
 
 
-import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 
 import "../types/Shared.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import "./ResolverBase.sol";
 
-
-abstract contract PLPResolverBase is IPLPResolver, AccessControl{
+abstract contract PLPResolverBase is IPLPResolver,ResolverBase, AccessControl{
     
     struct YieldGenerator{
         IERC4626 yieldOnCurrency0;
@@ -25,19 +24,19 @@ abstract contract PLPResolverBase is IPLPResolver, AccessControl{
 
     mapping(PoolId => YieldGenerator) pairYieldGenerator;
 
+
     IParityTaxHook parityTaxHook;
     IParityTaxRouter parityTaxRouter;
-    IPositionManager lpm;
 
     error HookHasNotBeenSet();
     error HookHasAlreadyBeenSet();
     
     constructor(
+        IPoolManager _poolManager,
         IParityTaxRouter _parityTaxRouter,
         IPositionManager _lpm
-    ){
+    ) ResolverBase(_poolManager, _lpm){
         parityTaxRouter = _parityTaxRouter;
-        lpm = _lpm;
     }
 
     modifier onlyWithHookInitialized(){
