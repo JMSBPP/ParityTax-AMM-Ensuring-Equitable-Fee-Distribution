@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
-
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 interface IPLPResolver{
     
@@ -10,14 +10,16 @@ interface IPLPResolver{
     
     function commitLiquidity(
         PoolId poolId,
-        bytes32 positionKey,
+        ModifyLiquidityParams memory liquidityParams,
         uint48 blockNumber
-    ) external;
+    ) external returns(uint256);
 
-    function getPLPCommitment(
+
+    function removeLiquidity(
         PoolId poolId,
-        bytes32 positionKey
-    ) external view returns(uint48);
+        bytes32 positionKey,
+        int256 liquidityDelta
+    ) external;
 
 
 }

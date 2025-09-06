@@ -16,6 +16,7 @@ import {
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 //====================================================================
 
 //==============================================================
@@ -35,21 +36,23 @@ abstract contract ParityTaxHookBase is BaseHook{
     IPLPResolver plpResolver;
     IJITResolver jitResolver;
     IParityTaxRouter parityTaxRouter;
+    IPositionManager lpm;
     ITaxController taxController;
     ILPOracle lpOracle;
 
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 constant internal JIT_LIQUIDITY_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
 
-
     constructor(
         IPoolManager _poolManager,
+        IPositionManager _lpm,
         IJITResolver _jitResolver,
         IPLPResolver _plpResolver,
         IParityTaxRouter _parityTaxRouter,
         ITaxController _taxController,
         ILPOracle _lpOracle
     ) BaseHook(_poolManager){
+        lpm = _lpm;
         jitResolver  = _jitResolver;
         plpResolver = _plpResolver;
         parityTaxRouter = _parityTaxRouter;
@@ -75,6 +78,18 @@ abstract contract ParityTaxHookBase is BaseHook{
             afterRemoveLiquidityReturnDelta: true //NOTE:
         });
     }
+
+    function _getJitPositionTokenIdAndLiquidity() internal returns(uint256,uint256){
+        uint256 jitPositionTokenId;
+        assembly("memory-safe"){
+            jitPositionTokenId := tload(JIT_LIQUIDITY_LOCATION)
+        }
+
+        uint256 jitLiquidity = lpm.getPositionLiquidity(jitPositionTokenId);
+        return (jitLiquidity,jitPositionTokenId);
+    }
+
+    
 
 
 }

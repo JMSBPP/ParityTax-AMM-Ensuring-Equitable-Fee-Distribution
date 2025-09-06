@@ -38,7 +38,9 @@ import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
 import {IParityTaxRouter} from "./interfaces/IParityTaxRouter.sol";
 
-contract ParityTaxRouter is SafeCallback{
+import {console2} from "forge-std/Test.sol";
+
+contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
     using SafeCast for *;
     using SqrtPriceMath for uint160;
     using TickMath for uint160;
@@ -55,11 +57,39 @@ contract ParityTaxRouter is SafeCallback{
 
     IV4Quoter v4Quoter;
 
+    error InvalidPLPLiquidityCommitment();
+
     constructor(
         IPoolManager _poolManager,
         IV4Quoter _v4Quoter
     ) SafeCallback(_poolManager){
         v4Quoter = _v4Quoter;
+    }
+
+    function modifyLiquidity(
+        PoolKey memory poolKey,
+        ModifyLiquidityParams memory liquidityParams,
+        uint48 plpLiquidityBlockCommitment 
+    ) external payable returns (BalanceDelta delta){
+        if (plpLiquidityBlockCommitment < MIN_PLP_BLOCK_NUMBER_COMMITMENT) revert InvalidPLPLiquidityCommitment();
+        bytes memory hookData = abi.encode(plpLiquidityBlockCommitment);
+        bytes memory encodedLiquidityCallbackData = abi.encode(
+                    ModifyLiquidityCallBackData(
+                        msg.sender,
+                        poolKey,
+                        liquidityParams,
+                        hookData
+                    )
+                );
+        delta = abi.decode(
+            poolManager.unlock(
+                abi.encode(
+                   encodedLiquidityCallbackData
+                )
+            ),
+            (BalanceDelta)
+        );
+
     }
 
     function swap(
@@ -147,16 +177,17 @@ contract ParityTaxRouter is SafeCallback{
                 zeroForOne: swapParams.zeroForOne
             })
         );
-        
-        delta = abi.decode(
-            poolManager.unlock(
-                abi.encode(
+        bytes memory encodedSwapCallBackData = abi.encode(
                     SwapCallbackData(
                         msg.sender,
                         poolKey,
                         swapParams,
                         hookData)
-                    )
+                    );
+        console2.log("Swap CallBackData lenght:", encodedSwapCallBackData.length);
+        delta = abi.decode(
+            poolManager.unlock(
+                encodedSwapCallBackData
                 ),
             (BalanceDelta)
         );
@@ -168,72 +199,112 @@ contract ParityTaxRouter is SafeCallback{
 
     function _unlockCallback(bytes calldata rawData) internal override returns (bytes memory) {
         require(msg.sender == address(poolManager));
+        BalanceDelta delta;
 
-        SwapCallbackData memory data = abi.decode(rawData, (SwapCallbackData));
+        if (rawData.length == SWAP_CALLBACK_DATA_LENGTH){
+            SwapCallbackData memory data = abi.decode(rawData, (SwapCallbackData));
 
-        (,, int256 deltaBefore0) = _fetchBalances(data.key.currency0, data.sender, address(this));
-        (,, int256 deltaBefore1) = _fetchBalances(data.key.currency1, data.sender, address(this));
+            (,, int256 deltaBefore0) = _fetchBalances(data.key.currency0, data.sender, address(this));
+            (,, int256 deltaBefore1) = _fetchBalances(data.key.currency1, data.sender, address(this));
 
-        require(deltaBefore0 == 0, "deltaBefore0 is not equal to 0");
-        require(deltaBefore1 == 0, "deltaBefore1 is not equal to 0");
+            require(deltaBefore0 == 0, "deltaBefore0 is not equal to 0");
+            require(deltaBefore1 == 0, "deltaBefore1 is not equal to 0");
 
-        BalanceDelta delta = poolManager.swap(data.key, data.params, data.hookData);
+            delta = poolManager.swap(data.key, data.params, data.hookData);
 
-        (,, int256 deltaAfter0) = _fetchBalances(data.key.currency0, data.sender, address(this));
-        (,, int256 deltaAfter1) = _fetchBalances(data.key.currency1, data.sender, address(this));
+            (,, int256 deltaAfter0) = _fetchBalances(data.key.currency0, data.sender, address(this));
+            (,, int256 deltaAfter1) = _fetchBalances(data.key.currency1, data.sender, address(this));
 
-        if (data.params.zeroForOne) {
-            if (data.params.amountSpecified < 0) {
-                // exact input, 0 for 1
-                require(
-                    deltaAfter0 >= data.params.amountSpecified,
-                    "deltaAfter0 is not greater than or equal to data.params.amountSpecified"
-                );
-                require(delta.amount0() == deltaAfter0, "delta.amount0() is not equal to deltaAfter0");
-                require(deltaAfter1 >= 0, "deltaAfter1 is not greater than or equal to 0");
+            if (data.params.zeroForOne) {
+                if (data.params.amountSpecified < 0) {
+                    // exact input, 0 for 1
+                    require(
+                        deltaAfter0 >= data.params.amountSpecified,
+                        "deltaAfter0 is not greater than or equal to data.params.amountSpecified"
+                    );
+                    require(delta.amount0() == deltaAfter0, "delta.amount0() is not equal to deltaAfter0");
+                    require(deltaAfter1 >= 0, "deltaAfter1 is not greater than or equal to 0");
+                } else {
+                    // exact output, 0 for 1
+                    require(deltaAfter0 <= 0, "deltaAfter0 is not less than or equal to zero");
+                    require(delta.amount1() == deltaAfter1, "delta.amount1() is not equal to deltaAfter1");
+                    require(
+                        deltaAfter1 <= data.params.amountSpecified,
+                        "deltaAfter1 is not less than or equal to data.params.amountSpecified"
+                    );
+                }
             } else {
-                // exact output, 0 for 1
-                require(deltaAfter0 <= 0, "deltaAfter0 is not less than or equal to zero");
-                require(delta.amount1() == deltaAfter1, "delta.amount1() is not equal to deltaAfter1");
-                require(
-                    deltaAfter1 <= data.params.amountSpecified,
-                    "deltaAfter1 is not less than or equal to data.params.amountSpecified"
-                );
+                if (data.params.amountSpecified < 0) {
+                    // exact input, 1 for 0
+                    require(
+                        deltaAfter1 >= data.params.amountSpecified,
+                        "deltaAfter1 is not greater than or equal to data.params.amountSpecified"
+                    );
+                    require(delta.amount1() == deltaAfter1, "delta.amount1() is not equal to deltaAfter1");
+                    require(deltaAfter0 >= 0, "deltaAfter0 is not greater than or equal to 0");
+                } else {
+                    // exact output, 1 for 0
+                    require(deltaAfter1 <= 0, "deltaAfter1 is not less than or equal to 0");
+                    require(delta.amount0() == deltaAfter0, "delta.amount0() is not equal to deltaAfter0");
+                    require(
+                        deltaAfter0 <= data.params.amountSpecified,
+                        "deltaAfter0 is not less than or equal to data.params.amountSpecified"
+                    );
+                }
             }
+
+            if (deltaAfter0 < 0) {
+                data.key.currency0.settle(poolManager, data.sender, uint256(-deltaAfter0), false);
+            }
+            if (deltaAfter1 < 0) {
+                data.key.currency1.settle(poolManager, data.sender, uint256(-deltaAfter1), false);
+            }
+            if (deltaAfter0 > 0) {
+                data.key.currency0.take(poolManager, data.sender, uint256(deltaAfter0), false);
+            }
+            if (deltaAfter1 > 0) {
+                data.key.currency1.take(poolManager, data.sender, uint256(deltaAfter1), false);
+            }
+
+            return abi.encode(delta);
+        // TODO: bytes length cheching for routing on liquidity modifications
         } else {
-            if (data.params.amountSpecified < 0) {
-                // exact input, 1 for 0
-                require(
-                    deltaAfter1 >= data.params.amountSpecified,
-                    "deltaAfter1 is not greater than or equal to data.params.amountSpecified"
-                );
-                require(delta.amount1() == deltaAfter1, "delta.amount1() is not equal to deltaAfter1");
-                require(deltaAfter0 >= 0, "deltaAfter0 is not greater than or equal to 0");
-            } else {
-                // exact output, 1 for 0
-                require(deltaAfter1 <= 0, "deltaAfter1 is not less than or equal to 0");
-                require(delta.amount0() == deltaAfter0, "delta.amount0() is not equal to deltaAfter0");
-                require(
-                    deltaAfter0 <= data.params.amountSpecified,
-                    "deltaAfter0 is not less than or equal to data.params.amountSpecified"
-                );
+
+            ModifyLiquidityCallBackData memory data = abi.decode(rawData, (ModifyLiquidityCallBackData));
+            (uint128 liquidityBefore,,) = poolManager.getPositionInfo(
+                data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
+            );
+
+            (delta,) = poolManager.modifyLiquidity(data.key, data.params, data.hookData);
+
+            (uint128 liquidityAfter,,) = poolManager.getPositionInfo(
+                data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
+            );
+
+            (,, int256 delta0) = _fetchBalances(data.key.currency0, data.sender, address(this));
+            (,, int256 delta1) = _fetchBalances(data.key.currency1, data.sender, address(this));
+
+            require(
+                int128(liquidityBefore) + data.params.liquidityDelta == int128(liquidityAfter), "liquidity change incorrect"
+            );
+
+            if (data.params.liquidityDelta < 0) {
+                assert(delta0 > 0 || delta1 > 0);
+                assert(!(delta0 < 0 || delta1 < 0));
+            } else if (data.params.liquidityDelta > 0) {
+                assert(delta0 < 0 || delta1 < 0);
+                assert(!(delta0 > 0 || delta1 > 0));
             }
-        }
 
-        if (deltaAfter0 < 0) {
-            data.key.currency0.settle(poolManager, data.sender, uint256(-deltaAfter0), false);
-        }
-        if (deltaAfter1 < 0) {
-            data.key.currency1.settle(poolManager, data.sender, uint256(-deltaAfter1), false);
-        }
-        if (deltaAfter0 > 0) {
-            data.key.currency0.take(poolManager, data.sender, uint256(deltaAfter0), false);
-        }
-        if (deltaAfter1 > 0) {
-            data.key.currency1.take(poolManager, data.sender, uint256(deltaAfter1), false);
-        }
+            if (delta0 < 0) data.key.currency0.settle(poolManager, data.sender, uint256(-delta0),false);
+            if (delta1 < 0) data.key.currency1.settle(poolManager, data.sender, uint256(-delta1), false);
+            if (delta0 > 0) data.key.currency0.take(poolManager, data.sender, uint256(delta0), false);
+            if (delta1 > 0) data.key.currency1.take(poolManager, data.sender, uint256(delta1), false);
 
-        return abi.encode(delta);
+            return abi.encode(delta);
+        } 
+
+        
     }
 
 

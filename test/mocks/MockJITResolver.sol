@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: MIT
+\//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 
@@ -25,7 +25,7 @@ import{
 
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
+import {IERC721} from "forge-std/interfaces/IERC721.sol";
 
 import {
     LiquidityOperations,
@@ -83,7 +83,7 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
 
 
 
-    function addLiquidity(JITData memory jitData) external returns(uint256, PositionConfig memory){
+    function addLiquidity(JITData memory jitData) external returns(uint256){
         //NOTE: This is  place holder, further checks are needed
         
         uint256 amountToFullfill = jitData.amountOut;
@@ -106,46 +106,21 @@ contract MockJITResolver is JITResolverBase, LiquidityOperations, ImmutableState
             tickLower: currentTick,
             tickUpper: jitData.expectedAfterSwapTick
         });
+
+        uint256 tokenId = lpm.nextTokenId();
         _mintUnlocked(
             jitPosition,
             jitLiquidity,
             address(this),
             Constants.ZERO_BYTES
         );
-        uint256 _tokenId = abi.decode(
-            address(lpm).functionStaticCall(
-                abi.encodeWithSignature(
-                    "nextTokenId()"
-                )
-            ),
-            (uint256)
-        );
-
-        bytes32 jitPositionKey = address(this).calculatePositionKey(
-            jitPosition.tickLower,
-            jitPosition.tickUpper,
-            bytes32(_tokenId)
-        );
-        (PoolKey memory _poolKey, PositionInfo jitPositionInfo ) = abi.decode(
-            address(lpm).functionStaticCall(
-                abi.encodeWithSignature(
-                    "getPoolAndPositionInfo(uint256)", _tokenId
-                )
-            ),
-            (PoolKey, PositionInfo)
-        );
-
-        console2.log(
-            "JIT Position Info",
-            PositionInfo.unwrap(jitPositionInfo)
-        );
-
+        
 
 
         // NOTE: After minting the position our position is the latest tokenId
         // minted, therefore is safe to call the nextTokenId() on the positionManager
         // to query our positionTokenId
-        return (jitLiquidity, jitPosition);
+        return (tokenId);
     }
 
     function removeLiquidity(uint256 tokenId) external{

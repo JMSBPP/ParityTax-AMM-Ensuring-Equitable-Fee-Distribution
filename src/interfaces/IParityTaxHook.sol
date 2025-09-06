@@ -10,8 +10,9 @@ import {
 interface IParityTaxHook{
     error AmountOutGreaterThanSwapAmountOut();
     error NotEnoughLiquidity(PoolId poolId);
-    error NotWithdrawableLiquidity__LiquidityIsCommitted(uint256 remainingCommitedBlocks);
+    error NotWithdrawableLiquidity__LiquidityIsCommitted(uint48 remainingCommitedBlocks);
     error NoLiquidityToReceiveTaxRevenue();
     error CurrencyMissmatch();
+    error NoLiquidityToReceiveTaxCredit();
 
 }

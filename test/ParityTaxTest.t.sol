@@ -87,7 +87,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             permit2
         );
 
-        plpResolver = new MockPLPResolver();
+
         
         
         vm.startPrank(address(this));
@@ -118,6 +118,13 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             manager,
             IV4Quoter(address(v4Quoter))
         );
+
+        plpResolver = new MockPLPResolver(
+            parityTaxRouter,
+            lpm    
+        );
+
+        
         {
             IERC20(Currency.unwrap(currency0)).approve(
                 address(parityTaxRouter),
@@ -144,10 +151,13 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             )
             
         );
+
+
         deployCodeTo(
             "ParityTaxHook.sol:ParityTaxHook",
             abi.encode(
                 manager,
+                lpm,
                 jitResolver,
                 plpResolver,
                 parityTaxRouter,
@@ -156,6 +166,8 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             ),
             address(parityTax)
         );
+        plpResolver.setParityTaxHook(parityTax);
+
 
 
         (key, ) = initPool(

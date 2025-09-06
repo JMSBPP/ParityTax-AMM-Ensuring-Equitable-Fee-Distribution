@@ -2,8 +2,11 @@
 pragma solidity ^0.8.0;
 
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
+uint48 constant JIT_COMMITMNET = uint48(0x01);
+uint48 constant  MIN_PLP_BLOCK_NUMBER_COMMITMENT = uint48(0x02);
+uint256 constant SWAP_CALLBACK_DATA_LENGTH = uint256(0x380);
 
 struct JITData {
     PoolKey poolKey;                  // slot 0 (32B)
@@ -32,6 +35,13 @@ struct SwapCallbackData {
     address sender;
     PoolKey key;
     SwapParams params;
+    bytes hookData;
+}
+
+struct ModifyLiquidityCallBackData{
+    address sender;
+    PoolKey key;
+    ModifyLiquidityParams params;
     bytes hookData;
 }
 

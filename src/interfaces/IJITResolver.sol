@@ -9,7 +9,7 @@ import "../types/Shared.sol";
 interface IJITResolver{
 
  
-    function addLiquidity(JITData memory jitData) external returns(uint256, PositionConfig memory);
+    function addLiquidity(JITData memory jitData) external returns(uint256);
 
     function removeLiquidity(uint256 tokenId) external;
 

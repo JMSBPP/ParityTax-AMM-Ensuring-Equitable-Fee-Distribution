@@ -9,5 +9,15 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 
 interface ITaxController {
 
-    function taxJITFeeRevenue(BalanceDelta totalFees) external returns(BalanceDelta);    
+
+    function getTaxRate() external returns(uint24);
+
+
+    function getJitTaxLiability(BalanceDelta jitFeeRevenueDelta) external returns (BalanceDelta);
+    function getPlpTaxCredit(uint256 plpPositionTokenId) external returns(BalanceDelta);
+    
+    function fillJITTaxReturn(
+        BalanceDelta taxableFeeRevenue,
+        uint48 liquidityBlockCommitment
+    ) external;    
 }
