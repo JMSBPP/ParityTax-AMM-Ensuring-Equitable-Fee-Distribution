@@ -12,6 +12,7 @@ import {
     PoolIdLibrary,
     PoolKey
 } from "@uniswap/v4-core/src/types/PoolId.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 //==================================================================
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -20,6 +21,7 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 //====================================================================
 
 //==============================================================
+import "../types/Shared.sol";
 import {IPLPResolver} from "../interfaces/IPLPResolver.sol";
 import {IJITResolver} from "../interfaces/IJITResolver.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
@@ -32,6 +34,7 @@ abstract contract ParityTaxHookBase is BaseHook{
     using Position for address;
     using PositionInfoLibrary for PoolKey;
     using PositionInfoLibrary for PositionInfo;
+    using StateLibrary for IPoolManager;
 
     IPLPResolver plpResolver;
     IJITResolver jitResolver;
@@ -79,14 +82,72 @@ abstract contract ParityTaxHookBase is BaseHook{
         });
     }
 
-    function _getJitPositionTokenIdAndLiquidity() internal returns(uint256,uint256){
-        uint256 jitPositionTokenId;
-        assembly("memory-safe"){
-            jitPositionTokenId := tload(JIT_LIQUIDITY_LOCATION)
-        }
+    function getLiquidityPositionData(
+        PoolKey memory poolKey,
+        LP_TYPE lpType,
+        uint256 tokenId,
+        bool overrideLpType
+    ) public view returns (LiquidityPositionData memory liquidityPositionData){
+        PoolId poolId = poolKey.toId();
+        if (lpType == LP_TYPE.JIT && !overrideLpType){
+            uint256 jitPositionTokenId;
+            
+            assembly("memory-safe"){
+                jitPositionTokenId := tload(JIT_LIQUIDITY_LOCATION)
+            }
 
-        uint256 jitLiquidity = lpm.getPositionLiquidity(jitPositionTokenId);
-        return (jitLiquidity,jitPositionTokenId);
+            uint256 jitLiquidity = lpm.getPositionLiquidity(jitPositionTokenId);
+            
+            PositionInfo jitPositionInfo = lpm.positionInfo(jitPositionTokenId);
+            
+            bytes32 jitPositionKey = address(jitResolver).calculatePositionKey(
+                jitPositionInfo.tickLower(),
+                jitPositionInfo.tickUpper(),
+                bytes32(jitPositionTokenId)
+            );
+
+            (uint128 _jitLiquidity,uint256 feeRevenueOn0, uint256 feeRevenueOn1) = poolManager.getPositionInfo(
+                poolId,
+                jitPositionKey
+            );
+
+            // assert(jitLiquidity == uint256(_jitLiquidity));
+
+            liquidityPositionData = LiquidityPositionData({
+                    lpType: LP_TYPE.JIT,
+                    tokenId: jitPositionTokenId,
+                    positionKey: jitPositionKey,
+                    positionInfo: jitPositionInfo,
+                    liquidity: jitLiquidity,
+                    feeRevenueOnCurrency0: feeRevenueOn0,
+                    feeRevenueOnCurrency1: feeRevenueOn1
+            });
+
+        } else if (lpType == LP_TYPE.JIT && overrideLpType) {
+            uint256 jitLiquidity = lpm.getPositionLiquidity(tokenId);            
+            PositionInfo jitPositionInfo = lpm.positionInfo(tokenId);
+            bytes32 jitPositionKey = address(jitResolver).calculatePositionKey(
+                jitPositionInfo.tickLower(),
+                jitPositionInfo.tickUpper(),
+                bytes32(tokenId)
+            );
+
+            (uint128 _jitLiquidity,uint256 feeRevenueOn0, uint256 feeRevenueOn1) = poolManager.getPositionInfo(
+                poolId,
+                jitPositionKey
+            );
+
+            liquidityPositionData = LiquidityPositionData({
+                    lpType: LP_TYPE.JIT,
+                    tokenId: tokenId,
+                    positionKey: jitPositionKey,
+                    positionInfo: jitPositionInfo,
+                    liquidity: jitLiquidity,
+                    feeRevenueOnCurrency0: feeRevenueOn0,
+                    feeRevenueOnCurrency1: feeRevenueOn1
+            });
+        
+        }
     }
 
     

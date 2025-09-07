@@ -173,10 +173,20 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
         // =====================JIT=======================
         
-        (uint256 jitLiquidity, uint256 jitPositionTokenId) = _getJitPositionTokenIdAndLiquidity();
+        LiquidityPositionData memory jitLiquidityPositionData = getLiquidityPositionData(
+            poolKey,
+            LP_TYPE.JIT,
+            uint256(0x00),
+            false
+        );
 
-        if (jitLiquidity > uint256(0x00)){
-            jitResolver.removeLiquidity(jitPositionTokenId);
+        if
+        (
+            jitLiquidityPositionData.liquidity > uint256(0x00)
+        )
+        {
+            
+            jitResolver.removeLiquidity(jitLiquidityPositionData.tokenId);
         }
         //=================================================
 
@@ -207,7 +217,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             uint48 plpBlockNumberCommitment = abi.decode(
                 hookData,
                 (uint48)
-            ) + uint48(block.timestamp);
+            ) + uint48(block.number);
             
             uint256 plpPositionTokenId = plpResolver.commitLiquidity(
                 poolKey,
@@ -295,7 +305,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             plpPositionTokenId
         );
 
-        if (uint48(block.number) >= plpPositionBlockNumberCommitment ){
+        if ( plpPositionBlockNumberCommitment > uint48(0x00) && uint48(block.number) >= plpPositionBlockNumberCommitment ){
             _clearPositionBlockNumberCommitment(poolId, plpPositionTokenId);
             plpResolver.removeLiquidity(
                 poolId,
@@ -303,7 +313,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                 liquidityParams.liquidityDelta
             );
         } else if (
-            plpPositionBlockNumberCommitment != uint48(0x00) 
+            plpPositionBlockNumberCommitment > uint48(0x00) 
             &&
             uint48(block.number) < plpPositionBlockNumberCommitment
         )
@@ -351,15 +361,21 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         BalanceDelta withheldFees = _remitFeeRevenue(poolKey, plpPositionTokenId);
 
         BalanceDelta taxableFeeRevenueIncomeDelta = feeRevenueDelta + withheldFees;
+
+        // LiquidityPositionData memory plpLiquidityPositionData = getLiquidityPositionData(
+        //     poolKey,
+        //     LP_TYPE.PLP,
+        //     plpPositionTokenId
+        // );
         
 
         //=============================JIT========================================
-        (uint256 jitLiquidity, uint256 jitPositionTokenId) = _getJitPositionTokenIdAndLiquidity();
-    
+        LiquidityPositionData memory jitLiquidityPositionData = getLiquidityPositionData(poolKey, LP_TYPE.JIT, uint256(0x00), false);
+        
         //NOTE: This is sufficient condition to tell this transaction
         // is JIT Liquidity
         
-        if (jitLiquidity > uint256(0x00)){
+        if (jitLiquidityPositionData.liquidity > uint256(0x00)){
             //NOTE: This informs the tax controller what kind of LP this is
             taxController.fillJITTaxReturn(taxableFeeRevenueIncomeDelta, JIT_COMMITMNET);
             BalanceDelta jitTaxLiabilityDelta = taxController.getJitTaxLiability(taxableFeeRevenueIncomeDelta);

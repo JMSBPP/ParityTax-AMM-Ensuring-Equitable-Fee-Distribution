@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+
+import "../src/types/Shared.sol";
+
 import {
     ParityTaxHook,
     IPoolManager,
@@ -52,6 +55,8 @@ import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
 import {ParityTaxRouter} from "../src/ParityTaxRouter.sol";
 import {console2} from "forge-std/Test.sol";
 
+import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
+import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 // Add missing constants
@@ -62,8 +67,11 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
     using StateLibrary for IPoolManager;
     using BalanceDeltaLibrary for BalanceDelta;
     using PoolIdLibrary for PoolKey;
+    using Position for address;
+    using PositionInfoLibrary for PositionInfo;
+    
     PoolKey noHookKey;    
-    ParityTaxHook parityTax;
+    ParityTaxHook parityTaxHook;
 
     
     MockJITResolver jitResolver;
@@ -137,7 +145,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         }
         
 
-        parityTax = ParityTaxHook(
+        parityTaxHook = ParityTaxHook(
             address(
                 uint160(
                     Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
@@ -164,9 +172,9 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                 taxController,
                 lpOracle
             ),
-            address(parityTax)
+            address(parityTaxHook)
         );
-        plpResolver.setParityTaxHook(parityTax);
+        plpResolver.setParityTaxHook(parityTaxHook);
 
 
 
@@ -174,7 +182,7 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             currency0,
             currency1,
             IHooks(
-                address(parityTax)
+                address(parityTaxHook)
             ),
             Constants.FEE_MEDIUM,
             SQRT_PRICE_1_1
@@ -213,11 +221,14 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }               
 
-    function test__Unit_JITSingleLP() public {
-        
+    function test__Unit_JITSingleLPShouldFullfillSwapZeroForOne() public {
+
         //=============  beforeSwap PLP Liquidity ==========
         modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
         modifyPoolLiquidity(key, -600, 600, 1e18, 0);
+        //================================================
+        // NOTE: We need to make sure the liquidity was added on both cases
+        // where the owner the modifyLiquidityRouter
         
         //==================LARGE SWAP===================
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
@@ -237,14 +248,35 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             testSettings, 
             Constants.ZERO_BYTES
         );
+
         console2.log("amount0 with no Hook:", noHookDelta.amount0());
         console2.log("amount1 with no Hook:", noHookDelta.amount1());
 
+        uint256 jitPositionTokenId = lpm.nextTokenId();
+        
+        LiquidityPositionData memory beforeSwapJitPositionData = parityTaxHook.getLiquidityPositionData(
+            key,
+            LP_TYPE.JIT, 
+            jitPositionTokenId,
+            true
+        );
+        assertEq(uint256(0x00), beforeSwapJitPositionData.liquidity);
 
         (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook
             largeSwapParams
         );
+
+        LiquidityPositionData memory afterSwapJitPositionData = parityTaxHook.getLiquidityPositionData(
+            key,
+            LP_TYPE.JIT, 
+            jitPositionTokenId,
+            true
+        );
+
+        console2.log("JIT Has burned its liquidity, so its liquidity must be zero");
+        assertEq(uint256(0x00), afterSwapJitPositionData.liquidity);
+        console2.log("JIT Must have earned fees due to swap ..");
 
         console2.log("amount0 with Hook:", hookDelta.amount0());
         console2.log("amount1 with Hook:", hookDelta.amount1());
