@@ -28,8 +28,6 @@ abstract contract PLPResolverBase is IPLPResolver,ResolverBase, AccessControl{
     IParityTaxHook parityTaxHook;
     IParityTaxRouter parityTaxRouter;
 
-    error HookHasNotBeenSet();
-    error HookHasAlreadyBeenSet();
     
     constructor(
         IPoolManager _poolManager,

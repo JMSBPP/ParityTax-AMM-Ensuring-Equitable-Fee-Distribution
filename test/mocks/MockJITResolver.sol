@@ -58,28 +58,31 @@ contract MockJITResolver is JITResolverBase{
 
 
 
-    function addLiquidity(JITData memory jitData) external returns(uint256){
+    function addLiquidity(SwapContext memory swapContext) external returns(uint256){
         //NOTE: This is  place holder, further checks are needed
         
-        uint256 amountToFullfill = jitData.amountOut;
+        uint256 amountToFullfill = swapContext.amountOut;
 
         // NOTE : At this point the JITHub has a debit of the amount of liquidity he will provide
         // to the swap
+        console2.log("Price Before Swap:",swapContext.beforeSwapSqrtPriceX96 );
+        console2.log("Price After Swap:",swapContext.expectedAfterSwapSqrtPriceX96);
         uint256 jitLiquidity = uint256(
-            jitData.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
-                jitData.expectedAfterSwapSqrtPriceX96,
+            swapContext.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
+                swapContext.expectedAfterSwapSqrtPriceX96,
                 amountToFullfill
             )
         );
+        console2.log("JIT Liquidity Per Swap:", jitLiquidity);
 
         //TODO: This is provisional, because the JITData needs to give the PoolKey not
         // the PoolId
-        (, int24 currentTick,,) = poolManager.getSlot0(jitData.poolKey.toId());
+        (, int24 currentTick,,) = poolManager.getSlot0(swapContext.poolKey.toId());
         
         PositionConfig memory jitPosition = PositionConfig({
-            poolKey: jitData.poolKey,
+            poolKey: swapContext.poolKey,
             tickLower: currentTick,
-            tickUpper: jitData.expectedAfterSwapTick
+            tickUpper: swapContext.expectedAfterSwapTick
         });
 
         uint256 tokenId = lpm.nextTokenId();
@@ -98,7 +101,13 @@ contract MockJITResolver is JITResolverBase{
         return (tokenId);
     }
 
-    function removeLiquidity(uint256 tokenId) external{
+
+    function removeLiquidity (LiquidityPosition memory jitLiquidityPosition) external{
+        _removeLiquidity(jitLiquidityPosition.tokenId);
+    }
+
+
+    function _removeLiquidity(uint256 tokenId) internal{
      
 
         PositionInfo jitPositionInfo = lpm.positionInfo(tokenId);

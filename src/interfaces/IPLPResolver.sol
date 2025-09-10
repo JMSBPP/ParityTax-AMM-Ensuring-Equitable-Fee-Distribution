@@ -6,6 +6,10 @@ import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.so
 
 interface IPLPResolver{
     
+
+    error HookHasNotBeenSet();
+    error HookHasAlreadyBeenSet();
+
     error InvalidCommitment___MustBeGreaterThanCurrentBlock();
     
     function commitLiquidity(

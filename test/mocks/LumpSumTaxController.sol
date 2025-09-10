@@ -8,7 +8,8 @@ import {MockERC4626} from "@solmate/test/utils/mocks/MockERC4626.sol";
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
 // TODO: This is meant to be initializable proxy
 
-
+import {FeeRevenueInfo} from "../../src/types/FeeRevenueInfo.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolId.sol";
 
 contract LumpSumTaxController is ITaxController{
     using BalanceDeltaLibrary for BalanceDelta;
@@ -28,10 +29,7 @@ contract LumpSumTaxController is ITaxController{
     //     jitOperator = _jitOperator;
     // }
 
-    function fillJITTaxReturn(
-        BalanceDelta taxableFeeRevenue,
-        uint48 liquidityBlockCommitment
-    ) external{
+    function filTaxReport(PoolKey memory poolKey, FeeRevenueInfo) external{
     }
 
 

@@ -254,28 +254,33 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
 
         uint256 jitPositionTokenId = lpm.nextTokenId();
         
-        LiquidityPositionData memory beforeSwapJitPositionData = parityTaxHook.getLiquidityPositionData(
+        LiquidityPosition memory beforeSwapJitPosition = parityTaxHook.getLiquidityPosition(
             key,
             LP_TYPE.JIT, 
-            jitPositionTokenId,
-            true
+            jitPositionTokenId
         );
-        assertEq(uint256(0x00), beforeSwapJitPositionData.liquidity);
-
+        assertEq(uint256(0x00), beforeSwapJitPosition.liquidity);
+        console2.log("Before Swap encoded Position");
+        console2.logBytes(abi.encode(beforeSwapJitPosition));
         (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook
             largeSwapParams
         );
 
-        LiquidityPositionData memory afterSwapJitPositionData = parityTaxHook.getLiquidityPositionData(
+        LiquidityPosition memory afterSwapJitPosition = parityTaxHook.getLiquidityPosition(
             key,
             LP_TYPE.JIT, 
-            jitPositionTokenId,
-            true
+            jitPositionTokenId
         );
 
+        console2.log("After Swap encoded Position");
+        console2.logBytes(abi.encode(afterSwapJitPosition));
+        
+
+
+
         console2.log("JIT Has burned its liquidity, so its liquidity must be zero");
-        assertEq(uint256(0x00), afterSwapJitPositionData.liquidity);
+        assertEq(uint256(0x00), afterSwapJitPosition.liquidity);
         console2.log("JIT Must have earned fees due to swap ..");
 
         console2.log("amount0 with Hook:", hookDelta.amount0());

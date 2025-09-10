@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import  "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {
     PoolId,
     PoolIdLibrary,
@@ -92,6 +92,60 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
 
     }
 
+    function compareSwapOutput(
+        PoolKey memory hookedKey,
+        SwapParams memory swapParams,
+        PoolKey memory comparedPoolKey
+    ) public view returns(BalanceDelta delta){
+
+    }
+
+    function simulateSwapOuputOnUnHookedPool(
+        PoolKey memory hookedKey,
+        SwapParams memory swapParams
+    ) public returns(BalanceDelta delta, SwapOutput memory swapOutput){
+        
+        bool isExactInput = swapParams.amountSpecified <0;
+        bool zeroForOne = swapParams.zeroForOne;
+        PoolKey memory noHookKey = PoolKey({
+                                currency0: hookedKey.currency0,
+                                currency1: hookedKey.currency1,
+                                fee: hookedKey.fee,
+                                tickSpacing: hookedKey.tickSpacing,
+                                hooks: IHooks(address(0x00))
+                            });
+
+        if (isExactInput){
+                swapOutput.amountIn = uint256(-swapParams.amountSpecified);
+                (swapOutput.amountOut,) = v4Quoter.quoteExactInputSingle(
+                    IV4Quoter.QuoteExactSingleParams({
+                        poolKey: noHookKey,
+                        zeroForOne: swapParams.zeroForOne,
+                        exactAmount: (-swapParams.amountSpecified).toInt128().toUint128(),
+                        hookData: Constants.ZERO_BYTES
+                    })
+                );
+
+            } else {
+                (swapOutput.amountIn,) = v4Quoter.quoteExactOutputSingle(
+                    IV4Quoter.QuoteExactSingleParams({
+                        poolKey: noHookKey,
+                        zeroForOne: swapParams.zeroForOne,
+                        exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
+                        hookData: Constants.ZERO_BYTES
+                    })
+                );
+                swapOutput.amountOut = uint256(swapParams.amountSpecified);
+                    
+            }
+            
+            delta = toBalanceDelta(
+                zeroForOne ? swapParams.amountSpecified.toInt128() : int256(swapOutput.amountOut).toInt128(),
+                zeroForOne ? -int256(swapOutput.amountOut).toInt128() : swapParams.amountSpecified.toInt128()
+            );
+        
+    }
+
     function swap(
         PoolKey memory poolKey,
         SwapParams memory swapParams
@@ -104,54 +158,24 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
         uint128 jitLiquidity;
 
         uint128 plpLiquidity;
-        uint256 amountIn;
-        uint256 amountOut;
+        (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = simulateSwapOuputOnUnHookedPool(
+            poolKey,
+            swapParams
+        );
         bool isExactInput = swapParams.amountSpecified <0;
         bool zeroForOne = swapParams.zeroForOne;
 
-        {
-            PoolKey memory noHookKey = PoolKey({
-                                            currency0: poolKey.currency0,
-                                            currency1: poolKey.currency1,
-                                            fee: poolKey.fee,
-                                            tickSpacing: poolKey.tickSpacing,
-                                            hooks: IHooks(address(0x00))
-                                        });
-            if (isExactInput){
-                amountIn = uint256(-swapParams.amountSpecified);
-                (amountOut,) = v4Quoter.quoteExactInputSingle(
-                    IV4Quoter.QuoteExactSingleParams({
-                        poolKey: noHookKey,
-                        zeroForOne: swapParams.zeroForOne,
-                        exactAmount: (-swapParams.amountSpecified).toInt128().toUint128(),
-                        hookData: Constants.ZERO_BYTES
-                    })
-                );
-            } else {
-                amountOut = uint256(swapParams.amountSpecified);
-                (amountIn,) = v4Quoter.quoteExactOutputSingle(
-                    IV4Quoter.QuoteExactSingleParams({
-                        poolKey: noHookKey,
-                        zeroForOne: swapParams.zeroForOne,
-                        exactAmount: swapParams.amountSpecified.toInt128().toUint128(),
-                        hookData: Constants.ZERO_BYTES
-                    })
-                );
-
-            }
-
-        }
-
+        
         {
             plpLiquidity = poolManager.getLiquidity(poolKey.toId());
             
             uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
                 plpLiquidity,
-                amountOut,
+                noHookSwapOutput.amountOut,
                 zeroForOne
             ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
                 plpLiquidity,
-                amountIn,
+                noHookSwapOutput.amountIn,
                 zeroForOne
             );
   
@@ -162,19 +186,15 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
         }
 
         bytes memory hookData = abi.encode(
-            JITData({
+            SwapContext({
                 poolKey: poolKey,
-                amountSpecified: swapParams.amountSpecified,
-                amountIn: amountIn,
-                amountOut: amountOut,
-                token0: Currency.unwrap(poolKey.currency0),
-                sqrtPriceLimitX96: swapParams.sqrtPriceLimitX96,
-                token1: Currency.unwrap(poolKey.currency1),
+                swapParams: swapParams,
+                amountIn: noHookSwapOutput.amountIn,
+                amountOut: noHookSwapOutput.amountOut,
                 beforeSwapSqrtPriceX96:beforeSwapSqrtPriceX96,
                 plpLiquidity:plpLiquidity,
                 expectedAfterSwapSqrtPriceX96:expectedAfterSwapTick.getSqrtPriceAtTick(),
-                expectedAfterSwapTick:expectedAfterSwapTick,
-                zeroForOne: swapParams.zeroForOne
+                expectedAfterSwapTick:expectedAfterSwapTick
             })
         );
         bytes memory encodedSwapCallBackData = abi.encode(
@@ -184,7 +204,6 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
                         swapParams,
                         hookData)
                     );
-        console2.log("Swap CallBackData lenght:", encodedSwapCallBackData.length);
         delta = abi.decode(
             poolManager.unlock(
                 encodedSwapCallBackData
