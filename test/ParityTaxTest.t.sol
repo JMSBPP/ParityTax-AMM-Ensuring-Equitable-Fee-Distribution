@@ -6,18 +6,15 @@ import "../src/types/Shared.sol";
 
 import {
     ParityTaxHook,
-    IPoolManager,
     PoolId,
     PoolIdLibrary,
     PoolKey,
-    StateLibrary,
-    IPositionManager
+    StateLibrary
 } from "../src/ParityTaxHook.sol";
 
 import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {
     BalanceDelta,
@@ -42,107 +39,51 @@ import {
     IAllowanceTransfer
 } from "@uniswap/v4-periphery/test/shared/PosmTestSetup.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
-import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
-
-import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
-import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 
 
-import {MockJITResolver} from "./mocks/MockJITResolver.sol";
-import {MockPLPResolver} from "./mocks/MockPLPResolver.sol";
-import {MockLPOracle} from "./mocks/MockLPOracle.sol";
-import {LumpSumTaxController} from "./mocks/LumpSumTaxController.sol";
-import {ParityTaxRouter} from "../src/ParityTaxRouter.sol";
+
 import {console2} from "forge-std/Test.sol";
 
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+
+
+
+import "./helpers/LiquidityResolversSetUp.sol";
+import "./helpers/TaxControllerSetUp.sol";
 // Add missing constants
 uint160 constant MIN_PRICE_LIMIT = 4295128739 + 1; // TickMath.MIN_SQRT_PRICE + 1
 uint160 constant MAX_PRICE_LIMIT = 1461446703485210103287273052203988822378723970342 - 1; // TickMath.MAX_SQRT_PRICE - 1
 
-contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
+contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookTest, BalanceDeltaAssertions{
     using StateLibrary for IPoolManager;
     using BalanceDeltaLibrary for BalanceDelta;
     using PoolIdLibrary for PoolKey;
     using Position for address;
     using PositionInfoLibrary for PositionInfo;
-    
+    using SafeCast for *;
     PoolKey noHookKey;    
     ParityTaxHook parityTaxHook;
 
-    
-    MockJITResolver jitResolver;
-    MockPLPResolver plpResolver;
-    MockLPOracle lpOracle;
-    LumpSumTaxController taxController;
-    ParityTaxRouter parityTaxRouter;
-    V4Quoter v4Quoter;
+    address alice = makeAddr("ALICE");
+    address bob = makeAddr("BOB");
 
 
 
     function setUp() public {
+
+        
         deployFreshManagerAndRouters();
         deployMintAndApprove2Currencies();
-
-        deployPosm(manager);
-
-        jitResolver = new MockJITResolver(
-            manager,
-            lpm
-        );
+        deployAndApprovePosm(manager);
+        deployAndApproveResolvers(manager,lpm);
+        deployAndApproveTaxController(manager);
 
 
         
-        
-        vm.startPrank(address(this));
-        
-        {
-            IERC20(Currency.unwrap(currency0)).transfer(
-                address(jitResolver),
-                uint256(type(uint128).max)
-            );
-
-            IERC20(Currency.unwrap(currency1)).transfer(
-                address(jitResolver),
-                uint256(type(uint128).max)
-            );
-
-        
-        }
-        vm.stopPrank();
-        
-        
-        taxController = new LumpSumTaxController();
-        v4Quoter = new V4Quoter(
-            manager
-        );
-        lpOracle = new MockLPOracle();
-
-        parityTaxRouter = new ParityTaxRouter(
-            manager,
-            IV4Quoter(address(v4Quoter))
-        );
-
-        plpResolver = new MockPLPResolver(
-            manager,
-            parityTaxRouter,
-            lpm    
-        );
-
-        
-        {
-            IERC20(Currency.unwrap(currency0)).approve(
-                address(parityTaxRouter),
-                Constants.MAX_UINT256
-            );
-            IERC20(Currency.unwrap(currency1)).approve(
-                address(parityTaxRouter),
-                Constants.MAX_UINT256
-            );
-        }
+        fundResolvers();
         
 
         parityTaxHook = ParityTaxHook(
@@ -154,7 +95,6 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
                     Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG | Hooks.BEFORE_SWAP_FLAG | 
                     Hooks.AFTER_SWAP_FLAG
                 )
-
 
             )
             
@@ -202,10 +142,37 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         vm.label(Currency.unwrap(currency0), "currency0");
         vm.label(Currency.unwrap(currency1), "currency1");
 
-        approvePosmFor(address(jitResolver));
-        approvePosmFor(address(jitResolver));
-        approvePosmCurrency(currency0);
-        approvePosmCurrency(currency1);
+        seedBalance(alice);
+        seedBalance(bob);
+        approvePosmFor(alice);
+        approvePosmFor(bob);
+
+        vm.startPrank(alice);
+        IERC20(Currency.unwrap(key.currency0)).approve(
+            address(parityTaxRouter),
+            IERC20(Currency.unwrap(key.currency0)).balanceOf(alice)
+        );
+        IERC20(Currency.unwrap(key.currency1)).approve(
+            address(parityTaxRouter),
+            IERC20(Currency.unwrap(key.currency1)).balanceOf(alice)
+        );
+        vm.stopPrank();
+
+
+        vm.startPrank(bob);
+        IERC20(Currency.unwrap(key.currency0)).approve(
+            address(swapRouter),
+            IERC20(Currency.unwrap(key.currency0)).balanceOf(bob)
+        );
+        IERC20(Currency.unwrap(key.currency1)).approve(
+            address(swapRouter),
+            IERC20(Currency.unwrap(key.currency1)).balanceOf(bob)
+        );
+        vm.stopPrank();
+
+
+
+
 
     }
 
@@ -217,31 +184,56 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
         // remove liquidity
         BalanceDelta hookDelta = modifyPoolLiquidity(key, -600, 600, -1e17, 0);
         BalanceDelta noHookDelta = modifyPoolLiquidity(noHookKey, -600, 600, -1e17, 0);
-        console2.log("Permit 2 Address:", address(permit2));
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }               
 
     function test__Unit_JITSingleLPShouldFullfillSwapZeroForOne() public {
 
         //=============  beforeSwap PLP Liquidity ==========
+        
         modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
         modifyPoolLiquidity(key, -600, 600, 1e18, 0);
+        
         //================================================
         // NOTE: We need to make sure the liquidity was added on both cases
-        // where the owner the modifyLiquidityRouter
+        console2.log("//========================BEFORE SWAP STATE =========================");
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(alice));
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(alice));
+        console2.log("Alice Has Starting Balance Of Both Currencies", STARTING_USER_BALANCE);
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(bob));
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(bob));
+        console2.log("Bob Has Starting Balance Of Both Currencies", STARTING_USER_BALANCE);
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(address(jitResolver)));
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(address(jitResolver)));
         
-        //==================LARGE SWAP===================
+        console2.log("JIT Resolver funds are the Starting Balance for Both Currencies", STARTING_USER_BALANCE);
+        
+        console2.log("//==================================================================");
+        console2.log("//==============================SWAP===============================");
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
             takeClaims: false, 
             settleUsingBurn: false  
         });
 
+        console2.log("Bob Is doing swap in Hook less Pool whereas Alice is doing swap in Hooked Pool");
+        
         SwapParams memory largeSwapParams = SwapParams({
             zeroForOne: true,
             amountSpecified: -1e15, // exact input
             sqrtPriceLimitX96: MIN_PRICE_LIMIT 
         });
+        console2.log(
+            "Swapping Token 0 for One Specifying input",
+            largeSwapParams.zeroForOne && largeSwapParams.amountSpecified < 0
+        );
 
+        console2.log(
+            "Currency 0 deposit for swapper",
+            uint256(1e15)
+        );
+
+        vm.startPrank(bob);
+        
         (BalanceDelta noHookDelta) = swapRouter.swap(
             noHookKey, 
             largeSwapParams, 
@@ -249,42 +241,55 @@ contract ParityTaxHookTest is PosmTestSetup, HookTest, BalanceDeltaAssertions{
             Constants.ZERO_BYTES
         );
 
-        console2.log("amount0 with no Hook:", noHookDelta.amount0());
-        console2.log("amount1 with no Hook:", noHookDelta.amount1());
+        vm.stopPrank();
 
-        uint256 jitPositionTokenId = lpm.nextTokenId();
-        
-        LiquidityPosition memory beforeSwapJitPosition = parityTaxHook.getLiquidityPosition(
-            key,
-            LP_TYPE.JIT, 
-            jitPositionTokenId
-        );
-        assertEq(uint256(0x00), beforeSwapJitPosition.liquidity);
-        console2.log("Before Swap encoded Position");
-        console2.logBytes(abi.encode(beforeSwapJitPosition));
+        vm.startPrank(alice);
+
         (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook
             largeSwapParams
         );
 
-        LiquidityPosition memory afterSwapJitPosition = parityTaxHook.getLiquidityPosition(
-            key,
-            LP_TYPE.JIT, 
-            jitPositionTokenId
+        vm.stopPrank();
+        console2.log("//======================================================================");
+        console2.log("//=======================AFTER SWAP STATE================================");
+        console2.log("After Swap Bob has a decreased balance on Currency 0", IERC20(Currency.unwrap(key.currency0)).balanceOf(bob));
+        assertEq(
+            STARTING_USER_BALANCE - uint256(-int256(noHookDelta.amount0())),
+            IERC20(Currency.unwrap(key.currency0)).balanceOf(bob)
+        );
+        console2.log("After Swap Bob Has a increased balance on Currency 1", IERC20(Currency.unwrap(key.currency1)).balanceOf(bob));
+        
+        assertEq(
+            STARTING_USER_BALANCE + uint256(int256(noHookDelta.amount1())),
+            IERC20(Currency.unwrap(key.currency1)).balanceOf(bob)
         );
 
-        console2.log("After Swap encoded Position");
-        console2.logBytes(abi.encode(afterSwapJitPosition));
+        console2.log("After Swap ALice has a decreased balance on Currency 0", IERC20(Currency.unwrap(key.currency0)).balanceOf(alice));
+        assertEq(
+            STARTING_USER_BALANCE - uint256(-int256(hookDelta.amount0())),
+            IERC20(Currency.unwrap(key.currency0)).balanceOf(alice)
+        );
+        console2.log("After Swap Alice Has a increased balance on Currency 1", IERC20(Currency.unwrap(key.currency1)).balanceOf(alice));
+        
+        assertEq(
+            STARTING_USER_BALANCE + uint256(int256(hookDelta.amount1())),
+            IERC20(Currency.unwrap(key.currency1)).balanceOf(alice)
+        );
+
+        console2.log("The liquidity Resolver has earned swap fees to enable ALice Trade:");
+        console2.log("After Swap JIT Resolver balance on Currency 0:",IERC20(Currency.unwrap(key.currency0)).balanceOf(address(jitResolver)));
+        console2.log("After Swap JIT Resolver balance on Currency 1:",IERC20(Currency.unwrap(key.currency1)).balanceOf(address(jitResolver)));
+        assertGt(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(address(jitResolver)));
+        console2.log("The cummulated Fees by the PLP on the Hookless Pool Are");
+
+
+        console2.log("//======================================================================");
         
 
 
 
-        console2.log("JIT Has burned its liquidity, so its liquidity must be zero");
-        assertEq(uint256(0x00), afterSwapJitPosition.liquidity);
-        console2.log("JIT Must have earned fees due to swap ..");
 
-        console2.log("amount0 with Hook:", hookDelta.amount0());
-        console2.log("amount1 with Hook:", hookDelta.amount1());
 
 
     }

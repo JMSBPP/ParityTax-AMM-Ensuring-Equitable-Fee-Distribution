@@ -17,9 +17,8 @@ contract MockPLPResolver is IPLPResolver, PLPResolverBase{
     
     constructor(
         IPoolManager _poolManager,
-        IParityTaxRouter _parityTaxRouter,
         IPositionManager _lpm
-    ) PLPResolverBase(_poolManager,_parityTaxRouter, _lpm){}
+    ) PLPResolverBase(_poolManager, _lpm){}
 
     function commitLiquidity(
         PoolKey memory poolKey,

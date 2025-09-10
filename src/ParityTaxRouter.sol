@@ -100,7 +100,7 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
 
     }
 
-    function simulateSwapOuputOnUnHookedPool(
+    function simulateSwapOutputOnUnHookedPool(
         PoolKey memory hookedKey,
         SwapParams memory swapParams
     ) public returns(BalanceDelta delta, SwapOutput memory swapOutput){
@@ -146,44 +146,64 @@ contract ParityTaxRouter is IParityTaxRouter, SafeCallback{
         
     }
 
+    function simulatePriceImpact(
+        PoolKey memory poolKey,
+        uint160 initialSqrtPriceX96,
+        uint128 liquidity,
+        SwapParams memory swapParams,
+        SwapOutput memory swapOutput
+    ) public returns(uint160,int24){
+
+        bool isExactInput = swapParams.amountSpecified <0;
+        bool zeroForOne = swapParams.zeroForOne;
+                   
+        uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? initialSqrtPriceX96.getNextSqrtPriceFromOutput(
+            liquidity,
+            swapOutput.amountOut,
+            zeroForOne
+        ) : initialSqrtPriceX96.getNextSqrtPriceFromInput(
+            liquidity,
+            swapOutput.amountIn,
+            zeroForOne
+        );
+  
+        // NOTE: The tick of such after price nees to be rounded to the nearest tick
+        // based on the tickSpacing of the pool
+        int24 expectedAfterSwapTick = (expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice().compress(poolKey.tickSpacing))*int24(poolKey.tickSpacing);
+
+        return (expectedAfterSwapSqrtPriceX96, expectedAfterSwapTick);
+    }
+
     function swap(
         PoolKey memory poolKey,
         SwapParams memory swapParams
     ) external payable returns (BalanceDelta delta)
     {
         (uint160 beforeSwapSqrtPriceX96,int24 beforeSwapTick,,uint24 lpFee) = poolManager.getSlot0(poolKey.toId());
- 
-        int24 expectedAfterSwapTick;
-        uint160 expectedSqrtPriceImpactX96;
-        uint128 jitLiquidity;
-
-        uint128 plpLiquidity;
-        (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = simulateSwapOuputOnUnHookedPool(
-            poolKey,
-            swapParams
-        );
         bool isExactInput = swapParams.amountSpecified <0;
         bool zeroForOne = swapParams.zeroForOne;
 
         
-        {
-            plpLiquidity = poolManager.getLiquidity(poolKey.toId());
-            
-            uint160 expectedAfterSwapSqrtPriceX96 = isExactInput ? beforeSwapSqrtPriceX96.getNextSqrtPriceFromOutput(
-                plpLiquidity,
-                noHookSwapOutput.amountOut,
-                zeroForOne
-            ) : beforeSwapSqrtPriceX96.getNextSqrtPriceFromInput(
-                plpLiquidity,
-                noHookSwapOutput.amountIn,
-                zeroForOne
-            );
-  
-            // NOTE: The tick of such after price nees to be rounded to the nearest tick
-            // based on the tickSpacing of the pool
-            expectedAfterSwapTick = (expectedAfterSwapSqrtPriceX96.getTickAtSqrtPrice().compress(poolKey.tickSpacing))*int24(poolKey.tickSpacing);
+        //NOTE: What we need is the PLP liqudity on the range where the
+        // swap will happen
 
-        }
+        uint128 plpLiquidity= poolManager.getLiquidity(poolKey.toId());
+
+        (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = simulateSwapOutputOnUnHookedPool(
+            poolKey,
+            swapParams
+        );
+
+
+        (uint160 expectedSqrtPriceImpactX96,int24 expectedAfterSwapTick) = simulatePriceImpact(
+            poolKey,
+            beforeSwapSqrtPriceX96,
+            plpLiquidity,
+            swapParams,
+            noHookSwapOutput
+        );
+
+        
 
         bytes memory hookData = abi.encode(
             SwapContext({

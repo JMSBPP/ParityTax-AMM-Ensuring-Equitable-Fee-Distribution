@@ -31,10 +31,8 @@ abstract contract PLPResolverBase is IPLPResolver,ResolverBase, AccessControl{
     
     constructor(
         IPoolManager _poolManager,
-        IParityTaxRouter _parityTaxRouter,
         IPositionManager _lpm
     ) ResolverBase(_poolManager, _lpm){
-        parityTaxRouter = _parityTaxRouter;
     }
 
     modifier onlyWithHookInitialized(){

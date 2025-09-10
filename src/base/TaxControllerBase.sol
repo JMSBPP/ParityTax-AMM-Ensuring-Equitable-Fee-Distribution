@@ -10,7 +10,24 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolId.sol";
 //  --> bytes32 -> (uint256 --> uint256[])[]
 
 // TODO: The TaxController needs to be a DonateRouter to credit the PLP's
+
+
+import {ILPOracle} from "../interfaces/ILPOracle.sol";
+import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
+
 abstract contract TaxControllerBase is ITaxController{
+
+    ILPOracle lpOracle;
+    IParityTaxRouter router;
+
+    constructor(
+        ILPOracle _lpOracle,
+        IParityTaxRouter _router
+    )
+    {
+        lpOracle = _lpOracle;
+        router = _router;
+    }
 
     function _getJitTaxLiability(BalanceDelta jitFeeRevenueDelta) internal returns (BalanceDelta){
 

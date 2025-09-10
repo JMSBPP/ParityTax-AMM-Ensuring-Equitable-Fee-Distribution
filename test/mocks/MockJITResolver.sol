@@ -65,16 +65,13 @@ contract MockJITResolver is JITResolverBase{
 
         // NOTE : At this point the JITHub has a debit of the amount of liquidity he will provide
         // to the swap
-        console2.log("Price Before Swap:",swapContext.beforeSwapSqrtPriceX96 );
-        console2.log("Price After Swap:",swapContext.expectedAfterSwapSqrtPriceX96);
+
         uint256 jitLiquidity = uint256(
             swapContext.beforeSwapSqrtPriceX96.getLiquidityForAmount1(
                 swapContext.expectedAfterSwapSqrtPriceX96,
                 amountToFullfill
             )
         );
-        console2.log("JIT Liquidity Per Swap:", jitLiquidity);
-
         //TODO: This is provisional, because the JITData needs to give the PoolKey not
         // the PoolId
         (, int24 currentTick,,) = poolManager.getSlot0(swapContext.poolKey.toId());
