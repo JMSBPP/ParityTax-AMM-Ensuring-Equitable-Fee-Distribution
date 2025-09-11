@@ -59,7 +59,7 @@ contract MockJITResolver is JITResolverBase{
 
 
 
-    function addLiquidity(SwapContext memory swapContext) external returns(uint256){
+    function addLiquidity(SwapContext memory swapContext) external returns(uint256,uint256){
         //NOTE: This is  place holder, further checks are needed
         
         uint256 amountToFullfill = swapContext.amountOut;
@@ -96,7 +96,7 @@ contract MockJITResolver is JITResolverBase{
         // NOTE: After minting the position our position is the latest tokenId
         // minted, therefore is safe to call the nextTokenId() on the positionManager
         // to query our positionTokenId
-        return (tokenId);
+        return (tokenId, jitLiquidity);
     }
 
 

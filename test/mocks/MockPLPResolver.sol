@@ -24,7 +24,7 @@ contract MockPLPResolver is IPLPResolver, PLPResolverBase{
         PoolKey memory poolKey,
         ModifyLiquidityParams memory liquidityParams,
         uint48 blockNumber
-    ) external override onlyRole(DEFAULT_ADMIN_ROLE) returns(uint256){
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) onlyWithHookInitialized() returns(uint256){
         uint256 tokenId = lpm.nextTokenId();
 
         PositionConfig memory plpPosition = PositionConfig({
@@ -51,7 +51,7 @@ contract MockPLPResolver is IPLPResolver, PLPResolverBase{
         PoolId poolId,
         uint256 tokenId,
         int256 liquidityDelta
-    ) external override onlyRole(DEFAULT_ADMIN_ROLE){
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) onlyWithHookInitialized(){
         
         PositionInfo plpPositionInfo = lpm.positionInfo(tokenId);
         

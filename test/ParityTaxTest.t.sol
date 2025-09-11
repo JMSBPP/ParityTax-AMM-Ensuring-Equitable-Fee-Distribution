@@ -48,7 +48,8 @@ import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
-
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IParityTaxRouter} from "../src/interfaces/IParityTaxRouter.sol";
 
 
 import "./helpers/LiquidityResolversSetUp.sol";
@@ -108,7 +109,6 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
                 lpm,
                 jitResolver,
                 plpResolver,
-                parityTaxRouter,
                 taxController,
                 lpOracle
             ),
@@ -170,10 +170,6 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         );
         vm.stopPrank();
 
-
-
-
-
     }
 
     function test__NoSwaps__EquivalentBehavior() public {
@@ -187,7 +183,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }               
 
-    function test__JIT_Fulfills__ZeroForOneSwap() public {
+    function test__JIT__fulfills_ZeroForOneSwap() public {
 
         //=============  beforeSwap PLP Liquidity ==========
         
@@ -288,15 +284,80 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
 
         console2.log("//======================================================================");
         
-
-
-
-
-
-
     }
 
 
+    function test__plpResolver__AccessControl() public{
+        //======PRE-INITIATE-HOOK-ON-PLP RESOLVER STATE========
+        vm.roll(10_000);
+        assertTrue(plpResolver.hasRole(bytes32(0x00), address(parityTaxHook)));
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                alice,
+                bytes32(0x00)
+            ),
+            address(plpResolver)
+        );
+        vm.startPrank(alice);
+
+        plpResolver.commitLiquidity(
+            key,
+            LIQUIDITY_PARAMS,
+            uint48(vm.getBlockNumber()) + uint48(0x02)
+        );
+
+        vm.stopPrank();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                alice,
+                bytes32(0x00)
+            ),
+            address(plpResolver)
+        );
+        vm.startPrank(alice);
+
+        plpResolver.removeLiquidity(
+            key.toId(),
+            uint256(0x01),
+            REMOVE_LIQUIDITY_PARAMS.liquidityDelta
+        );
+
+        vm.stopPrank();
+    }
+
+    function test__PLP__commitLiquidity() public{
+
+        vm.roll(10_000);
+        assertEq(10_000, vm.getBlockNumber());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IParityTaxRouter.InvalidPLPLiquidityCommitment.selector
+            ),
+            address(parityTaxRouter)
+        );
+        vm.startPrank(alice);
+            parityTaxRouter.modifyLiquidity(
+                key,
+                LIQUIDITY_PARAMS,
+                JIT_COMMITMENT
+            );
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+            parityTaxRouter.modifyLiquidity(
+                key,
+                LIQUIDITY_PARAMS,
+                MIN_PLP_BLOCK_NUMBER_COMMITMENT
+            );
+        vm.stopPrank();
+
+
+    }
 
 
 

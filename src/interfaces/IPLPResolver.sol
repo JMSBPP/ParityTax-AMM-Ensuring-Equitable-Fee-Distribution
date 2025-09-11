@@ -4,7 +4,8 @@ pragma solidity ^0.8.0;
 import {PoolId, PoolKey, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
-interface IPLPResolver{
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+interface IPLPResolver is IAccessControl{
     
 
     error HookHasNotBeenSet();

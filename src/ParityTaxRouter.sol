@@ -29,7 +29,7 @@ import "./LiquidityMetrics.sol";
 
 
 
-contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, LiquidityMetrics{
+contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IParityTaxRouter{
     using SafeCast for *;
     using SqrtPriceMath for uint160;
     using TickMath for uint160;
@@ -45,7 +45,7 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
 
 
  
-    error InvalidPLPLiquidityCommitment();
+
 
     constructor(
         IPoolManager _poolManager,
@@ -71,9 +71,9 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
                 );
         delta = abi.decode(
             poolManager.unlock(
-                abi.encode(
-                   encodedLiquidityCallbackData
-                )
+               
+                encodedLiquidityCallbackData
+                
             ),
             (BalanceDelta)
         );
@@ -97,13 +97,13 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
 
         uint128 plpLiquidity= poolManager.getLiquidity(poolKey.toId());
 
-        (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = simulateSwapOutputOnUnHookedPool(
+        (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = _simulateSwapOutputOnUnHookedPool(
             poolKey,
             swapParams
         );
 
 
-        (uint160 expectedSqrtPriceImpactX96,int24 expectedAfterSwapTick) = simulatePriceImpact(
+        (uint160 expectedSqrtPriceImpactX96,int24 expectedAfterSwapTick) = _simulatePriceImpact(
             poolKey,
             beforeSwapSqrtPriceX96,
             plpLiquidity,
@@ -218,15 +218,18 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
 
             return abi.encode(delta);
         // TODO: bytes length cheching for routing on liquidity modifications
-        } else {
-
+        } else if (rawData.length == LIQUIDITY_COMMITMENT_LENGTH) {
+           
             ModifyLiquidityCallBackData memory data = abi.decode(rawData, (ModifyLiquidityCallBackData));
+            
+            
+           
             (uint128 liquidityBefore,,) = poolManager.getPositionInfo(
                 data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
             );
 
             (delta,) = poolManager.modifyLiquidity(data.key, data.params, data.hookData);
-
+            console2.log(uint256(BalanceDelta.unwrap(delta)));
             (uint128 liquidityAfter,,) = poolManager.getPositionInfo(
                 data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
             );
@@ -252,22 +255,14 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
             if (delta1 > 0) data.key.currency1.take(poolManager, data.sender, uint256(delta1), false);
 
             return abi.encode(delta);
-        } 
+        }
+
+        return abi.encode(delta);
 
         
     }
 
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     /// @dev Taken from @PoolTestBase
     function _fetchBalances(Currency currency, address user, address deltaHolder)
@@ -279,6 +274,11 @@ contract ParityTaxRouter is IParityTaxRouter,IUnlockCallback, SwapMetrics, Liqui
         poolBalance = currency.balanceOf(address(poolManager));
         delta = poolManager.currencyDelta(deltaHolder, currency);
     }
+
+
+
+
+
 
 
 }

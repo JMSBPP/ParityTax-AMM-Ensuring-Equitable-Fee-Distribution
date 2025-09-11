@@ -26,7 +26,6 @@ abstract contract PLPResolverBase is IPLPResolver,ResolverBase, AccessControl{
 
 
     IParityTaxHook parityTaxHook;
-    IParityTaxRouter parityTaxRouter;
 
     
     constructor(

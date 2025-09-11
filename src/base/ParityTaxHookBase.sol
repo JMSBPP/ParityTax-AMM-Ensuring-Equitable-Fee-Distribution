@@ -44,7 +44,6 @@ abstract contract ParityTaxHookBase is BaseHook{
 
     IPLPResolver plpResolver;
     IJITResolver jitResolver;
-    IParityTaxRouter parityTaxRouter;
     IPositionManager lpm;
     ITaxController taxController;
     ILPOracle lpOracle;
@@ -67,14 +66,12 @@ abstract contract ParityTaxHookBase is BaseHook{
         IPositionManager _lpm,
         IJITResolver _jitResolver,
         IPLPResolver _plpResolver,
-        IParityTaxRouter _parityTaxRouter,
         ITaxController _taxController,
         ILPOracle _lpOracle
     ) BaseHook(_poolManager){
         lpm = _lpm;
         jitResolver  = _jitResolver;
         plpResolver = _plpResolver;
-        parityTaxRouter = _parityTaxRouter;
         taxController = _taxController;
         lpOracle = _lpOracle;
     }

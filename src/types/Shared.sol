@@ -12,7 +12,7 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 uint48 constant JIT_COMMITMENT = uint48(0x01);
 uint48 constant  MIN_PLP_BLOCK_NUMBER_COMMITMENT = uint48(0x02);
 uint256 constant SWAP_CALLBACK_DATA_LENGTH = uint256(0x340);
-
+uint256 constant LIQUIDITY_COMMITMENT_LENGTH = uint256(0x1c0);
 
 enum LP_TYPE{
     JIT,

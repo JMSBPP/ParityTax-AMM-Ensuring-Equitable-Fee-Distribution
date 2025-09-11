@@ -19,16 +19,18 @@ import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
 abstract contract TaxControllerBase is ITaxController{
     using PoolIdLibrary for PoolKey;
     using FeeRevenueInfoLibrary for FeeRevenueInfo;
-    ILPOracle lpOracle;
-    IParityTaxRouter router;
+
+
+    ILPOracle _lpOracle;
+    IParityTaxRouter  _router;
 
     constructor(
-        ILPOracle _lpOracle,
-        IParityTaxRouter _router
+        ILPOracle __lpOracle,
+        IParityTaxRouter __router
     )
     {
-        lpOracle = _lpOracle;
-        router = _router;
+        _lpOracle = __lpOracle;
+        _router = __router;
     }
 
     function _getJitTaxLiability(BalanceDelta jitFeeRevenueDelta) internal returns (BalanceDelta){
@@ -38,11 +40,6 @@ abstract contract TaxControllerBase is ITaxController{
     function _getPlpTaxCredit(uint256 plpPositionTokenId) internal returns(BalanceDelta){
 
     }
-// event 
-//TaxFiling 
-//(bytes32 indexed poolId, 
-//uint48 indexed blockCommitment,
-// uint48 indexed currentBlock, BalanceDelta feeRevenueDelta);
 
     function filTaxReport(PoolKey memory poolKey,FeeRevenueInfo feeRevenueInfo) external{
         PoolId poolId = poolKey.toId();
@@ -58,6 +55,16 @@ abstract contract TaxControllerBase is ITaxController{
     function _filTaxReport(PoolKey memory,FeeRevenueInfo) internal virtual{
 
     }
+
+    function router() external returns(IParityTaxRouter){
+        return _router;
+    }
+
+
+    function lpOracle() external returns(ILPOracle){
+        return _lpOracle;
+    }
+
 
 
 

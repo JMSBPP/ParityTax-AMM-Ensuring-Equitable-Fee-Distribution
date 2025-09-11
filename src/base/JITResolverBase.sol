@@ -14,7 +14,6 @@ import {SwapIntent,SwapIntentLibrary} from "../types/SwapIntent.sol";
 import {PoolId,PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 
 abstract contract JITResolverBase is IJITResolver, ResolverBase{
-    using SwapIntentLibrary for bool;
     using SqrtPriceMath for uint160;
     using LiquidityAmounts for uint160;
     using TickMath for uint160;
@@ -32,36 +31,6 @@ abstract contract JITResolverBase is IJITResolver, ResolverBase{
     ) ResolverBase(_poolManager, _lpm){}
 
 
-    // NOTE: This method is to be overwritten
-    // for child contracts
-    
-    function getSwapJITLiquidity(
-        PoolKey memory poolKey,
-        SwapParams memory swapParams,
-        int24 _tickLower,
-        int24 _tickUpper
-    ) public virtual returns(uint128){
-
-        PoolId poolId = poolKey.toId();
-        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
-        uint160 sqrtRatioTickLower = _tickLower.getSqrtPriceAtTick();
-        uint160 sqrtRatioTickUpper = _tickUpper.getSqrtPriceAtTick();
-        SwapIntent swapIntent = swapParams.zeroForOne.swapIntent(swapParams.amountSpecified <0);
-        
-        return sqrtPriceX96.getLiquidityForAmounts(
-            sqrtRatioTickLower,
-            sqrtRatioTickUpper,
-            swapIntent == SwapIntent.EXACT_INPUT_ZERO_FOR_ONE 
-            || swapIntent == SwapIntent.EXACT_OUTPUT_ONE_FOR_ZERO
-             ? uint256(swapParams.amountSpecified)
-             : uint256(0x00),
-            swapIntent == SwapIntent.EXACT_INPUT_ONE_FOR_ZERO
-            || swapIntent == SwapIntent.EXACT_OUTPUT_ZERO_FOR_ONE
-            ? uint256(swapParams.amountSpecified)
-            : uint256(0x00)
-        );
-
-    }
 
 
 }

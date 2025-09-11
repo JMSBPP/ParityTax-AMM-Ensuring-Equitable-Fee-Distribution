@@ -7,7 +7,12 @@ import {FeeRevenueInfo} from "../types/FeeRevenueInfo.sol";
 import {PoolKey, PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 // TODO: This needs to inherit IERC4626
 
-interface ITaxController {
+import {ILPOracle} from "./ILPOracle.sol";
+
+import {IParityTaxRouter} from "./IParityTaxRouter.sol";
+
+
+interface ITaxController{ 
 
     event TaxFiling (bytes32 indexed poolId,uint48 indexed currentBlock, uint48 indexed blockCommitment, BalanceDelta feeRevenueDelta);
     
@@ -17,5 +22,9 @@ interface ITaxController {
     function getJitTaxLiability(BalanceDelta jitFeeRevenueDelta) external returns (BalanceDelta);
     function getPlpTaxCredit(uint256 plpPositionTokenId) external returns(BalanceDelta);
     
-    function filTaxReport(PoolKey memory,FeeRevenueInfo) external;    
+    function filTaxReport(PoolKey memory,FeeRevenueInfo) external;
+
+    function router() external returns(IParityTaxRouter);
+    function lpOracle() external returns(ILPOracle);    
+
 }

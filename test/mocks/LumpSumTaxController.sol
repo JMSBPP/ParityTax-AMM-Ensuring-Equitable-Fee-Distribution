@@ -14,9 +14,9 @@ contract LumpSumTaxController is TaxControllerBase{
     using BalanceDeltaLibrary for BalanceDelta;
 
     constructor(
-        ILPOracle _lpOracle,
-        IParityTaxRouter _router
-    ) TaxControllerBase(_lpOracle, _router){}
+        ILPOracle __lpOracle,
+        IParityTaxRouter __router
+    ) TaxControllerBase(__lpOracle, __router){}
 
 
     function _filTaxReport(PoolKey memory poolKey, FeeRevenueInfo) internal override{

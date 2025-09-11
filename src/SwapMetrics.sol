@@ -26,10 +26,11 @@ import {TickBitmap} from "@uniswap/v4-core/src/libraries/TickBitmap.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 
 import "./types/Shared.sol";
+import "./interfaces/ISwapMetrics.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
 
-contract SwapMetrics {
+abstract contract SwapMetrics is ISwapMetrics{
     using SafeCast for *;
     using SqrtPriceMath for uint160;
     using TickMath for uint160;
@@ -48,19 +49,35 @@ contract SwapMetrics {
     }
 
 
-    
     function compareSwapOutput(
         PoolKey memory hookedKey,
         SwapParams memory swapParams,
         PoolKey memory comparedPoolKey
-    ) public view returns(BalanceDelta delta){
-
+    ) external view returns(BalanceDelta delta){
+        delta = _compareSwapOutput(hookedKey, swapParams, comparedPoolKey);
     }
+
+
+    function _compareSwapOutput(
+        PoolKey memory hookedKey,
+        SwapParams memory swapParams,
+        PoolKey memory comparedPoolKey
+    ) internal virtual view returns(BalanceDelta delta){
+    }
+
 
     function simulateSwapOutputOnUnHookedPool(
         PoolKey memory hookedKey,
         SwapParams memory swapParams
-    ) public returns(BalanceDelta delta, SwapOutput memory swapOutput){
+    ) external returns(BalanceDelta delta, SwapOutput memory swapOutput){
+        (delta, swapOutput) = _simulateSwapOutputOnUnHookedPool(hookedKey, swapParams);
+    }
+
+
+    function _simulateSwapOutputOnUnHookedPool(
+        PoolKey memory hookedKey,
+        SwapParams memory swapParams
+    ) internal virtual returns(BalanceDelta delta, SwapOutput memory swapOutput){
         
         bool isExactInput = swapParams.amountSpecified <0;
         bool zeroForOne = swapParams.zeroForOne;
@@ -103,13 +120,25 @@ contract SwapMetrics {
         
     }
 
+
     function simulatePriceImpact(
         PoolKey memory poolKey,
         uint160 initialSqrtPriceX96,
         uint128 liquidity,
         SwapParams memory swapParams,
         SwapOutput memory swapOutput
-    ) public returns(uint160,int24){
+    ) external view returns(uint160,int24){
+        (uint160 afterSwapPrice, int24 afterSwapTick) = _simulatePriceImpact(poolKey, initialSqrtPriceX96, liquidity, swapParams, swapOutput);
+        return (afterSwapPrice, afterSwapTick);
+    }
+
+    function _simulatePriceImpact(
+        PoolKey memory poolKey,
+        uint160 initialSqrtPriceX96,
+        uint128 liquidity,
+        SwapParams memory swapParams,
+        SwapOutput memory swapOutput
+    ) internal virtual view returns(uint160,int24){
 
         bool isExactInput = swapParams.amountSpecified <0;
         bool zeroForOne = swapParams.zeroForOne;

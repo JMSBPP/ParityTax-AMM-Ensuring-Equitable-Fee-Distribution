@@ -53,7 +53,7 @@ import {
 } from "./types/SwapIntent.sol";
 //TODO: Do we need a manager also for the PLP ?? ...
 
-
+import {ILiquidityMetrics} from "./interfaces/ILiquidityMetrics.sol";
 
 //logging-Debugging
 
@@ -89,7 +89,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         IPositionManager _lpm,
         IJITResolver _jitResolver,
         IPLPResolver _plpResolver,
-        IParityTaxRouter _parityTaxRouter,
         ITaxController _taxController,
         ILPOracle _lpOracle
     ) ParityTaxHookBase(
@@ -97,7 +96,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         _lpm,
         _jitResolver,
         _plpResolver,
-        _parityTaxRouter,
         _taxController,
         _lpOracle
         ) 
@@ -143,12 +141,31 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         bool isExactInput = swapContext.swapParams.amountSpecified <0;
         // NOTE: The JITHub mints the liquidity to fill the swap
 
-        uint256 jitPositionTokenId = jitResolver.addLiquidity(
+        (uint256 jitPositionTokenId,uint256 jitLiquidity) = jitResolver.addLiquidity(
             swapContext
         );
 
-        _tstore_jit_tokenId(jitPositionTokenId);
+        uint128 totalLiquidity = poolManager.getLiquidity(poolId);
+
         
+        _tstore_jit_tokenId(jitPositionTokenId);
+
+        PositionInfo jitPositionInfo = _tload_jit_positionInfo();
+
+        uint128 plpLiquidity =  uint128(taxController.router().getSwapPLPLiquidity(
+            poolKey,
+            jitPositionInfo.tickLower(),
+            jitPositionInfo.tickUpper() 
+        ));
+
+        emit LiquidityOnSwap(
+            PoolId.unwrap(poolId),
+            uint48(block.number),
+            totalLiquidity,
+            uint128(jitLiquidity),
+            plpLiquidity
+        );
+         
 
 
         return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, uint24(0x00));
@@ -259,6 +276,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
             _lockLiquidity(poolId, plpPositionTokenId, plpBlockNumberCommitment);
             _lpTokenIds[lpPositionKey] = plpPositionTokenId;
+
+
+            emit LiquidityCommitted(
+                PoolId.unwrap(poolId),
+                uint48(block.number),
+                plpBlockNumberCommitment,
+                plpPositionTokenId,
+                abi.encode(liquidityParams)
+            );
 
         }
         //==================================================================//
