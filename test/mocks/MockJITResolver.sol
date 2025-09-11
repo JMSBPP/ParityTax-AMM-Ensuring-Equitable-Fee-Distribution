@@ -41,6 +41,7 @@ contract MockJITResolver is JITResolverBase{
     using PositionInfoLibrary for PositionInfo;    
     using SqrtPriceMath for uint160;
     using LiquidityAmounts for uint160;
+    using TickMath for uint160;
     using Address for address;
     using Position for address;
 

@@ -27,7 +27,7 @@ import {QuoterRevert} from "@uniswap/v4-periphery/src/libraries/QuoterRevert.sol
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfaces/IAllowanceTransfer.sol";
 //============================================================================
-import {IParityTaxHook} from "./interfaces/IParityTaxHook.sol";
+import "./interfaces/IParityTaxHook.sol";
 import "./types/Shared.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import "./base/ParityTaxHookBase.sol";
@@ -47,6 +47,10 @@ import {
     FeeRevenueInfo,
     FeeRevenueInfoLibrary
 } from "./types/FeeRevenueInfo.sol";
+import {
+    SwapIntent,
+    SwapIntentLibrary
+} from "./types/SwapIntent.sol";
 //TODO: Do we need a manager also for the PLP ?? ...
 
 
@@ -58,6 +62,7 @@ import {console2} from "forge-std/Test.sol";
 contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     using SafeCast for *;
     using FeeRevenueInfoLibrary for *;
+    using SwapIntentLibrary for *;
     using Position for address;
     using Address for address;
     using QuoterRevert for bytes;
@@ -110,21 +115,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     }
 
 
-// ===================================================================================================
-//                  "Intent: How much of currency1 can I buy given a specified amount of currency0"
-//    "Trader deposits currency0 "             "Trader enters 0"            "Trader receives currency1"   
-//    swapParams.amountSpecified < 0     ^         zeroForOne         -->     amountUnspecified > 0
-//
-//                "Intent: How much of currency0 can I buy given a specified amount of currency1"
-//    "Trader deposits currency1"               "Trader enters 1"         "Trader receives currency0"
-//     swapParams.amountSpecified < 0      ^       !zeroForOne        -->   amountUnspecified > 0
-//
-//                "Intent: How much currency0 must I sell to receive a specified amount of currency1"
-//     swapParams.amountSpecified > 0     ^        zeroForOne        -->   amountUnspecified < 0
-//
-//                "Intent: How much currency1 must I sell to receive a specified amount of currency0"
-//     swapParams.amountSpecified > 0     ^        !zeroForOne       -->   amountUnspecified < 0
-// ====================================================================================================
+
 
     function _beforeSwap(
         address swapRouter ,
@@ -135,9 +126,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     {   
         //NOTE: All this data is passed to the JIT Hub, which returns
         // a bool response acknoledging the amount willing to fulfill
-                
+        PoolId poolId = poolKey.toId();        
         SwapContext memory swapContext = abi.decode(hookData, (SwapContext));
-        
+        // NOTE: This is to be improved to it stores beforeSwap prices on TS
+        // and emits the event on afterSwap for further accuracy
+
+        // on afterSwapPrices
+        _tstore_swap_beforeSwapSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
+        _tstore_swap_beforeSwapExternalSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
+
         if (
             Currency.unwrap(swapContext.poolKey.currency0) != Currency.unwrap(poolKey.currency0) ||
             Currency.unwrap(swapContext.poolKey.currency1) != Currency.unwrap(poolKey.currency1)
@@ -168,10 +165,33 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     ) internal virtual override returns (bytes4, int128)
     {
 
+        //=====================COMMON-BASE=====================//
+        PoolId poolId = poolKey.toId();
+        (uint160 afterSwapSqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) = poolManager.getSlot0(poolId);
+      
+        (uint160 beforeSwapSqrtPriceX96, uint160 beforeSwapExternalSqrtPriceX96) = (
+            _tload_swap_beforeSwapSqrtPriceX96(),
+            _tload_swap_beforeSwapExternalSqrtPriceX96()
+        );
+        // TODO : This is a place holder
+        uint160 afterSwapExternalSqrtPriceX96 = afterSwapSqrtPriceX96;
+
+        //======================================================
         // =====================JIT============================//
         uint256 jitTokenId = _tload_jit_tokenId();
-      
+        
         if (jitTokenId > uint256(0x00)){
+
+            emit PriceImpact(
+                PoolId.unwrap(poolId),
+                uint48(block.number),
+                swapParams.zeroForOne.swapIntent(swapParams.amountSpecified < 0),
+                swapDelta,
+                beforeSwapSqrtPriceX96,
+                beforeSwapExternalSqrtPriceX96, //TODO: This is to be imporoved to include the actual converted external price
+                afterSwapSqrtPriceX96,
+                afterSwapExternalSqrtPriceX96 
+            );
             LiquidityPosition memory _jitLiquidityPosition = getLiquidityPosition(
                 poolKey,
                 LP_TYPE.JIT,
@@ -183,12 +203,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             
             if(_jitLiquidityPosition.liquidity > uint256(0x00)){
                 jitResolver.removeLiquidity(_jitLiquidityPosition);
-                LiquidityPosition memory jitLiquidityPosition =_tload_jit_liquidityPosition();
-
+                LiquidityPosition memory jitLiquidityPosition = _tload_jit_liquidityPosition();
+                //TODO: The jit fee reevenue has been earned on the asset losing appreciation
+                // this needs to be corrected so it converts to a numeraire 
                 FeeRevenueInfo jitFeeRevenueInfo = uint48(block.number).init(
                     JIT_COMMITMENT,
-                    jitLiquidityPosition.feeRevenueOnCurrency0,
-                    jitLiquidityPosition.feeRevenueOnCurrency1
+                    uint80(jitLiquidityPosition.feeRevenueOnCurrency0),
+                    uint80(jitLiquidityPosition.feeRevenueOnCurrency1)
                 );
 
                 taxController.filTaxReport(

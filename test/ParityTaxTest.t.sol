@@ -176,7 +176,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
 
     }
 
-    function test__Unit__noSwapsEquivalentBehavior() public {
+    function test__NoSwaps__EquivalentBehavior() public {
         // add liquidity
         modifyPoolLiquidity(key, -600, 600, 1e18, 0);
         modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
@@ -187,7 +187,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
     }               
 
-    function test__Unit_JITSingleLPShouldFullfillSwapZeroForOne() public {
+    function test__JIT_Fulfills__ZeroForOneSwap() public {
 
         //=============  beforeSwap PLP Liquidity ==========
         
@@ -234,6 +234,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
 
         vm.startPrank(bob);
         
+        
         (BalanceDelta noHookDelta) = swapRouter.swap(
             noHookKey, 
             largeSwapParams, 
@@ -244,6 +245,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         vm.stopPrank();
 
         vm.startPrank(alice);
+
 
         (BalanceDelta hookDelta) = parityTaxRouter.swap(
             key, // Pool with Hook

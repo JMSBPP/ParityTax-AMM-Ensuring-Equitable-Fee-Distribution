@@ -19,7 +19,7 @@ contract LumpSumTaxController is TaxControllerBase{
     ) TaxControllerBase(_lpOracle, _router){}
 
 
-    function filTaxReport(PoolKey memory poolKey, FeeRevenueInfo) external{
+    function _filTaxReport(PoolKey memory poolKey, FeeRevenueInfo) internal override{
     }
 
 

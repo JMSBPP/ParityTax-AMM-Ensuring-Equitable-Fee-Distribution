@@ -17,6 +17,6 @@
       "**/broadcast": true,
       "**/artifacts": true,
       "**/.git": true
-    },
+    }
     "makefile.configureOnOpen": false
 }

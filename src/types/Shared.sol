@@ -17,7 +17,9 @@ uint256 constant SWAP_CALLBACK_DATA_LENGTH = uint256(0x340);
 enum LP_TYPE{
     JIT,
     PLP
+
 }
+
 
 struct SwapOutput{
     uint256 amountIn;
@@ -36,6 +38,14 @@ struct SwapContext {
     uint160 expectedAfterSwapSqrtPriceX96;  
     int24 expectedAfterSwapTick;
 
+}
+
+struct SwapPriceImpactInfo{
+    BalanceDelta swapDelta;
+    uint160 beforeSwapSqrtPriceX96;
+    uint160 beforeSwapExternalSqrtPriceX96;
+    uint160 afterSwapSqrtPriceX96;
+    uint160 afterSwapExternalSqrtPriceX96;
 }
 
 

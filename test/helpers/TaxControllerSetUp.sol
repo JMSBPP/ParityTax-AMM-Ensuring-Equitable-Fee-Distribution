@@ -2,10 +2,13 @@
 pragma solidity ^0.8.0;
 
 
+
+
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {MockLPOracle} from "../mocks/MockLPOracle.sol";
 import {LumpSumTaxController} from "../mocks/LumpSumTaxController.sol";
 import {ParityTaxRouter} from "../../src/ParityTaxRouter.sol";
@@ -19,6 +22,9 @@ contract TaxControllerSetUp is Deployers {
     LumpSumTaxController taxController;
     ParityTaxRouter parityTaxRouter;
     V4Quoter v4Quoter;
+
+    event TaxFiling (bytes32 indexed poolId, uint48 indexed blockCommitment, uint48 indexed currentBlock, BalanceDelta feeRevenueDelta);
+
 
     function deployAndApproveTaxController(
         IPoolManager _manager

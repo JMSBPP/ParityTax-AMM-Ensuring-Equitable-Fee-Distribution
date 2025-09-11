@@ -52,6 +52,9 @@ abstract contract ParityTaxHookBase is BaseHook{
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 constant internal LIQUIDITY_POSITION_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
 
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PRICE_IMPACT")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 constant internal PRICE_IMPACT_LOCATION = 0x9a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
+
 
 
     mapping(PoolId poolId => mapping(uint256 tokenId => uint48 blockNumberCommitment)) internal _plpBlockNumberCommitmnet;
@@ -130,6 +133,21 @@ abstract contract ParityTaxHookBase is BaseHook{
         });
     }
 
+    function _tstore_swap_beforeSwapSqrtPriceX96(uint160 beforeSwapSqrtPriceX96 ) internal{
+        assembly("memory-safe"){
+            tstore(PRICE_IMPACT_LOCATION, beforeSwapSqrtPriceX96)
+        }
+    }
+
+    function _tstore_swap_beforeSwapExternalSqrtPriceX96(uint160 beforeSwapExternalSqrtPriceX96 ) internal{
+        assembly("memory-safe"){
+            tstore(add(PRICE_IMPACT_LOCATION,0x01), beforeSwapExternalSqrtPriceX96)
+        }
+    }
+
+
+
+
     function _tstore_jit_tokenId(uint256 tokenId) internal{
         assembly("memory-safe"){
             tstore(LIQUIDITY_POSITION_LOCATION, tokenId)
@@ -185,6 +203,22 @@ abstract contract ParityTaxHookBase is BaseHook{
             jitLiquidityPosition.feeRevenueOnCurrency0,
             jitLiquidityPosition.feeRevenueOnCurrency1
         );
+    }
+
+    function _tload_swap_beforeSwapSqrtPriceX96() internal returns(uint160){
+        uint256 _beforeSwapSqrtPriceX96;
+        assembly("memory-safe"){
+            _beforeSwapSqrtPriceX96 := tload(PRICE_IMPACT_LOCATION)
+        }
+        return uint160(_beforeSwapSqrtPriceX96);
+    }
+
+    function _tload_swap_beforeSwapExternalSqrtPriceX96() internal returns(uint160){
+        uint256 _beforeSwapExternalSqrtPriceX96;
+        assembly("memory-safe"){
+            _beforeSwapExternalSqrtPriceX96 := tload(add(PRICE_IMPACT_LOCATION,0x01))
+        }
+        return uint160(_beforeSwapExternalSqrtPriceX96);
     }
 
     // NOTE: This function is to be called during JIT Resolver removeLiqudity Flow
