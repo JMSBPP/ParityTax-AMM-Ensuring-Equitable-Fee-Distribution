@@ -17,41 +17,25 @@ contract MockPLPResolver is IPLPResolver, PLPResolverBase{
     
     constructor(
         IPoolManager _poolManager,
-        IPositionManager _lpm
-    ) PLPResolverBase(_poolManager, _lpm){}
+        IPositionManager _lpm,
+        IParityTaxHook _parityTaxHook 
+    ) PLPResolverBase(_poolManager, _lpm, _parityTaxHook){}
 
-    function commitLiquidity(
-        PoolKey memory poolKey,
-        ModifyLiquidityParams memory liquidityParams,
-        uint48 blockNumber
-    ) external override onlyRole(DEFAULT_ADMIN_ROLE) onlyWithHookInitialized() returns(uint256){
-        uint256 tokenId = lpm.nextTokenId();
-
-        PositionConfig memory plpPosition = PositionConfig({
-            poolKey: poolKey,
-            tickLower: liquidityParams.tickLower,
-            tickUpper: liquidityParams.tickUpper
-        });
-
-
-        _mintUnlocked(
-            plpPosition,
-            uint256(liquidityParams.liquidityDelta),
-            address(this),
-            Constants.ZERO_BYTES
-        );
-        
-        return tokenId;
-    }
+    // function _commitLiquidity(
+    //     PoolKey memory poolKey,
+    //     ModifyLiquidityParams memory liquidityParams,
+    //     uint48 blockNumber
+    // ) internal override {
+    // }
     
     //TODO: PLP's do not necesarilly have to burn their position but they can 
     // Do liquidity DECREASE operations that do not empty their positions as long as
     // their position block commitment has already expired
-    function removeLiquidity(
+    function _removeLiquidity(
         PoolId poolId,
         uint256 tokenId,
         int256 liquidityDelta
-    ) external override onlyRole(DEFAULT_ADMIN_ROLE) onlyWithHookInitialized(){
+    ) internal override {
         
         PositionInfo plpPositionInfo = lpm.positionInfo(tokenId);
         

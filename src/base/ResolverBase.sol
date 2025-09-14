@@ -13,19 +13,41 @@ import {
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IParityTaxHook} from "../interfaces/IParityTaxHook.sol";
 import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 
-abstract contract ResolverBase is LiquidityOperations, ImmutableState{
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+
+
+abstract contract ResolverBase is LiquidityOperations, ImmutableState, AccessControl{
     using Planner for Plan;
 
+
+    error HookHasNotBeenSet();
+    error HookHasAlreadyBeenSet();
+
+
+    IParityTaxHook parityTaxHook;
+    
+    
     constructor(
         IPoolManager _poolManager,
-        IPositionManager _lpm
+        IPositionManager _lpm,
+        IParityTaxHook _parityTaxHook
     ) ImmutableState(_poolManager){
         lpm = _lpm;
+        parityTaxHook = _parityTaxHook;
+        _grantRole(DEFAULT_ADMIN_ROLE, address(parityTaxHook));
 
     }
+
+    modifier onlyWithHookInitialized(){
+        if (address(parityTaxHook) == address(0x00)) revert HookHasNotBeenSet();
+        _;
+    }
+
+
 
 
      function _mintUnlocked(

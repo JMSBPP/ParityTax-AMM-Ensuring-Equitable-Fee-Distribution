@@ -10,13 +10,14 @@ import {PoolKey, PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {ILPOracle} from "./ILPOracle.sol";
 
 import {IParityTaxRouter} from "./IParityTaxRouter.sol";
+import {ISubscriber} from "@uniswap/v4-periphery/src/interfaces/ISubscriber.sol";
 
-
-interface ITaxController{ 
+interface ITaxController is ISubscriber{ 
 
     event TaxFiling (bytes32 indexed poolId,uint48 indexed currentBlock, uint48 indexed blockCommitment, BalanceDelta feeRevenueDelta);
     
     function getTaxRate() external returns(uint24);
+
 
 
     function getJitTaxLiability(BalanceDelta jitFeeRevenueDelta) external returns (BalanceDelta);

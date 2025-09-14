@@ -32,9 +32,13 @@ import {IJITResolver} from "../interfaces/IJITResolver.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
 import {ITaxController} from "../interfaces/ITaxController.sol";
 import {ILPOracle} from "../interfaces/ILPOracle.sol";
+import {IParityTaxHook} from "../interfaces/IParityTaxHook.sol";
 //==============================================================
 
-abstract contract ParityTaxHookBase is BaseHook{
+
+import {Exttload} from "@uniswap/v4-core/src/Exttload.sol";
+
+abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
     using SafeCast for *;
     using Position for address;
     using PositionInfoLibrary for PoolKey;
@@ -49,31 +53,47 @@ abstract contract ParityTaxHookBase is BaseHook{
     ILPOracle lpOracle;
 
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant internal LIQUIDITY_POSITION_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
-
+    bytes32 constant internal JIT_LIQUIDITY_POSITION_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PLP_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 constant internal PLP_LIQUIDITY_POSITION_LOCATION = 0x369fcc6be4409721b124e1944af5cd9c5a8ac6c841854a0f264aead4f039bb00;
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PRICE_IMPACT")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 constant internal PRICE_IMPACT_LOCATION = 0x9a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
 
 
+    // TODO: This are to be migrated to enumerable mappings fo iteration ...
+    mapping(PoolId poolId => mapping(address owner => mapping(uint256 tokenId => uint48 blockNumberCommitment))) internal _plpBlockNumberCommitmnet;
+    mapping(PoolId poolId => mapping(address owner => mapping(uint256 tokenId => BalanceDelta delta))) internal _withheldFees;
+    mapping(bytes32 lpPositionKey => uint256 commitment) internal _plpBlockCommitmentLiquidityRouter;
 
-    mapping(PoolId poolId => mapping(uint256 tokenId => uint48 blockNumberCommitment)) internal _plpBlockNumberCommitmnet;
-    mapping(PoolId poolId => mapping(uint256 tokenId => BalanceDelta delta)) internal _withheldFees;
-    mapping(bytes32 lpPositionKey => uint256 lpPositionTokenId) internal _lpTokenIds;
+    modifier onlyPositionManager(address _router){
+        if (_router != address(lpm)) revert InvalidLiquidityRouterCaller();
+        _;
+    }
+
+    modifier onlyPositionManagerForJIT(address _router){
+        if ( _router != address(lpm) && _tload_jit_tokenId() > uint256(0x00) ) revert InvalidLiquidityRouterCaller();
+        _;
+    }
+    
 
 
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
-        IJITResolver _jitResolver,
-        IPLPResolver _plpResolver,
         ITaxController _taxController,
         ILPOracle _lpOracle
     ) BaseHook(_poolManager){
         lpm = _lpm;
-        jitResolver  = _jitResolver;
-        plpResolver = _plpResolver;
         taxController = _taxController;
         lpOracle = _lpOracle;
+    }
+
+    function setLiquidityResolvers(
+        IPLPResolver _plpResolver,
+        IJITResolver _jitResolver
+    ) external {
+        plpResolver = _plpResolver;
+        jitResolver = _jitResolver;
     }
 
 
@@ -99,6 +119,7 @@ abstract contract ParityTaxHookBase is BaseHook{
     function getLiquidityPosition(
         PoolKey memory poolKey,
         LP_TYPE lpType,
+        address owner,
         uint256 tokenId
     ) public view returns (LiquidityPosition memory liquidityPositionData){
         PoolId poolId = poolKey.toId();
@@ -120,7 +141,8 @@ abstract contract ParityTaxHookBase is BaseHook{
 
         liquidityPositionData = LiquidityPosition({
                 lpType: lpType,
-                blockCommitment: lpType == LP_TYPE.PLP ? getPositionBlockNumberCommitment(poolId, tokenId): JIT_COMMITMENT,
+                blockCommitment: lpType == LP_TYPE.PLP ? getPositionBlockNumberCommitment(poolId,owner,tokenId): JIT_COMMITMENT,
+                owner: owner,
                 tokenId: tokenId,
                 positionKey: lpTypePositionKey,
                 positionInfo: positionInfo,
@@ -129,6 +151,40 @@ abstract contract ParityTaxHookBase is BaseHook{
                 feeRevenueOnCurrency1: feeRevenueOn1
         });
     }
+
+    //TODO: This functions are tobe protected to onyl be called by the parityTaxRouter or
+    // the taxController 
+    function tstore_plp_liquidity(int256 liquidityChange) external{
+        _tstore_plp_liquidity(liquidityChange);
+    }
+
+    function tstore_plp_feesAccrued(uint256 feesAccruedOn0, uint256 feesAccruedOn1) external{
+        _tstore_plp_feesAccrued(feesAccruedOn0,feesAccruedOn1);
+    }
+
+
+
+    function _tstore_plp_liquidity(int256 liquidityChange) internal virtual{
+        assembly("memory-safe"){
+            tstore(PLP_LIQUIDITY_POSITION_LOCATION, liquidityChange)
+        }
+    }
+
+    function _tstore_plp_feesAccrued(uint256 feesAccruedOn0, uint256 feesAccruedOn1) internal virtual{
+        assembly("memory-safe"){
+            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x01), feesAccruedOn0)
+            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x02), feesAccruedOn1)
+
+        }
+    }
+
+    function _tstore_plp_tokenId(uint256 tokenId) internal{
+        assembly("memory-safe"){
+            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x03), tokenId)
+        }
+    }
+
+
 
     function _tstore_swap_beforeSwapSqrtPriceX96(uint160 beforeSwapSqrtPriceX96 ) internal{
         assembly("memory-safe"){
@@ -147,7 +203,7 @@ abstract contract ParityTaxHookBase is BaseHook{
 
     function _tstore_jit_tokenId(uint256 tokenId) internal{
         assembly("memory-safe"){
-            tstore(LIQUIDITY_POSITION_LOCATION, tokenId)
+            tstore(JIT_LIQUIDITY_POSITION_LOCATION, tokenId)
         }
     }
 
@@ -156,8 +212,8 @@ abstract contract ParityTaxHookBase is BaseHook{
         uint256 feeRevenueOn1
     ) internal {
         assembly("memory-safe"){
-            tstore(add(LIQUIDITY_POSITION_LOCATION, 0x04), feeRevenueOn0)
-            tstore(add(LIQUIDITY_POSITION_LOCATION, 0x05), feeRevenueOn1)
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x04), feeRevenueOn0)
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x05), feeRevenueOn1)
         }
     }
 
@@ -168,7 +224,7 @@ abstract contract ParityTaxHookBase is BaseHook{
             positionInfo
         ));
         assembly("memory-safe"){
-            tstore(add(LIQUIDITY_POSITION_LOCATION, 0x02), lpPositionInfo)
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02), lpPositionInfo)
         }
     }
 
@@ -176,7 +232,7 @@ abstract contract ParityTaxHookBase is BaseHook{
         uint256 liquidity
     ) internal{
         assembly("memory-safe"){
-            tstore(add(LIQUIDITY_POSITION_LOCATION, 0x03), liquidity)
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x03), liquidity)
         }
     }
 
@@ -184,7 +240,15 @@ abstract contract ParityTaxHookBase is BaseHook{
         bytes32 positionKey
     ) internal{
         assembly("memory-safe"){
-            tstore(add(LIQUIDITY_POSITION_LOCATION, 0x01), positionKey)
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x01), positionKey)
+        }
+    }
+
+    function _tstore_jit_owner(
+        address owner
+    ) internal{
+        assembly("memory-safe"){
+            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x06), owner)
         }
     }
 
@@ -200,6 +264,14 @@ abstract contract ParityTaxHookBase is BaseHook{
             jitLiquidityPosition.feeRevenueOnCurrency0,
             jitLiquidityPosition.feeRevenueOnCurrency1
         );
+        _tstore_jit_owner(jitLiquidityPosition.owner);
+    }
+
+    function _tload_plp_tokenId() internal view returns(uint256 tokenId){
+        assembly("memory-safe"){
+            tokenId := tload(add(PLP_LIQUIDITY_POSITION_LOCATION, 0x03))
+        }
+
     }
 
     function _tload_swap_beforeSwapSqrtPriceX96() internal returns(uint160){
@@ -221,14 +293,14 @@ abstract contract ParityTaxHookBase is BaseHook{
     // NOTE: This function is to be called during JIT Resolver removeLiqudity Flow
     function _tload_jit_tokenId() internal view returns(uint256 jitTokenId){
         assembly("memory-safe"){
-            jitTokenId := tload(LIQUIDITY_POSITION_LOCATION)
+            jitTokenId := tload(JIT_LIQUIDITY_POSITION_LOCATION)
         }
     }
 
     function _tload_jit_positionInfo() internal view returns(PositionInfo jitPositionInfo){
         bytes32 positionInfo;
         assembly("memory-safe"){
-            positionInfo := tload(add(LIQUIDITY_POSITION_LOCATION, 0x02))
+            positionInfo := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02))
         
         }
         jitPositionInfo = PositionInfo.wrap(uint256(positionInfo));
@@ -236,13 +308,13 @@ abstract contract ParityTaxHookBase is BaseHook{
 
     function _tload_jit_positionKey() internal view returns(bytes32 jitPositionKey){
         assembly("memory-safe"){
-            jitPositionKey := tload(add(LIQUIDITY_POSITION_LOCATION, 0x01))
+            jitPositionKey := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x01))
         }
     }
 
     function _tload_jit_liquidity() internal view returns(uint256 jitLiquidity){
         assembly("memory-safe"){
-            jitLiquidity := tload(add(LIQUIDITY_POSITION_LOCATION, 0x03))
+            jitLiquidity := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x03))
         }
     }
 
@@ -251,12 +323,20 @@ abstract contract ParityTaxHookBase is BaseHook{
         uint256 feesOn1;
 
         assembly("memory-safe"){
-            feesOn0 := tload(add(LIQUIDITY_POSITION_LOCATION, 0x04))
-            feesOn1 := tload(add(LIQUIDITY_POSITION_LOCATION, 0x05))
+            feesOn0 := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x04))
+            feesOn1 := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x05))
         }
 
         return (feesOn0, feesOn1);
     }
+
+    function _tload_jit_owner() internal view returns(address owner){
+        assembly("memory-safe"){
+            owner := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x06))
+        }
+    }
+
+
 
     function _tload_jit_liquidityPosition() internal returns(LiquidityPosition memory jitLiquidityPosition){
         (uint256 feesOn0,uint256 feesOn1) = _tload_jit_feeRevenue();
@@ -264,6 +344,7 @@ abstract contract ParityTaxHookBase is BaseHook{
         jitLiquidityPosition = LiquidityPosition({
             lpType: LP_TYPE.JIT,
             blockCommitment: JIT_COMMITMENT,
+            owner: _tload_jit_owner(),
             tokenId: _tload_jit_tokenId(),
             positionKey: _tload_jit_positionKey(),
             positionInfo: _tload_jit_positionInfo(),
@@ -291,18 +372,20 @@ abstract contract ParityTaxHookBase is BaseHook{
     function _lockLiquidity(
         PoolId poolId,
         uint256 tokenId,
+        address owner,
         uint48 blockNumberCommitment
     ) internal virtual {
-        _plpBlockNumberCommitmnet[poolId][tokenId] =blockNumberCommitment; 
+        _plpBlockNumberCommitmnet[poolId][owner][tokenId] =blockNumberCommitment; 
     }
 
     function _withholdFeeRevenue(
         PoolKey memory poolKey,
+        address owner,
         uint256 lpPositionTokenId,
         BalanceDelta feeRevenueDelta
     ) internal virtual {
         PoolId poolId = poolKey.toId();
-         _withheldFees[poolId][lpPositionTokenId] = _withheldFees[poolId][lpPositionTokenId] + feeRevenueDelta;
+         _withheldFees[poolId][owner][lpPositionTokenId] = _withheldFees[poolId][owner][lpPositionTokenId] + feeRevenueDelta;
 
         poolKey.currency0.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount0())), true);
         poolKey.currency1.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount1())), true);
@@ -310,30 +393,26 @@ abstract contract ParityTaxHookBase is BaseHook{
 
 
 
-    function getPositionBlockNumberCommitment(
-        PoolId poolId,
-        uint256 tokenId
-    ) public virtual view returns(uint48){
-        return _plpBlockNumberCommitmnet[poolId][tokenId];
-    }
 
     function _clearPositionBlockNumberCommitment(
         PoolId poolId,
+        address owner,
         uint256 tokenId
     ) internal virtual {
-        _plpBlockNumberCommitmnet[poolId][tokenId] = uint48(0x00);
+        _plpBlockNumberCommitmnet[poolId][owner][tokenId] = NO_COMMITMENT;
     }
 
     function _remitFeeRevenue(
         PoolKey memory poolKey,
+        address owner,
         uint256 tokenId
     ) internal virtual returns(BalanceDelta withheldFees) {
         
         PoolId poolId = poolKey.toId();
         
-        withheldFees = getWithheldFees(poolId, tokenId);
+        withheldFees = getWithheldFees(poolId,owner,tokenId);
         
-        _withheldFees[poolId][tokenId] = BalanceDeltaLibrary.ZERO_DELTA;
+        _withheldFees[poolId][owner][tokenId] = BalanceDeltaLibrary.ZERO_DELTA;
 
         if (withheldFees.amount0() > 0) {
             poolKey.currency0.settle(poolManager, address(this), uint256(uint128(withheldFees.amount0())), true);
@@ -349,9 +428,24 @@ abstract contract ParityTaxHookBase is BaseHook{
     //     return metrics.sqrtPriceImpactX96;
     // }
 
-    function getWithheldFees(PoolId poolId, uint256 tokenId) public view virtual returns (BalanceDelta) {
-        return _withheldFees[poolId][tokenId];
+    function getPositionBlockNumberCommitment(
+        PoolId poolId,
+        address owner,
+        uint256 tokenId
+    ) public virtual view returns(uint48){
+        return _plpBlockNumberCommitmnet[poolId][owner][tokenId];
     }
+
+
+
+    function getWithheldFees(
+        PoolId poolId, 
+        address owner,
+        uint256 tokenId
+    ) public view virtual returns (BalanceDelta) {
+        return _withheldFees[poolId][owner][tokenId];
+    }
+
 
 
     //TODO: This is a place holder, to be implemented
@@ -359,8 +453,14 @@ abstract contract ParityTaxHookBase is BaseHook{
         return 1;
     }
 
-
-
     
+
+    function positionManager() external returns(IPositionManager){
+        return lpm;
+    }
+
+    function TaxController() external returns(ITaxController){
+        return taxController;
+    }
 
 }

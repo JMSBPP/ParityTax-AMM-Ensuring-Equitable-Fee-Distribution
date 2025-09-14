@@ -9,10 +9,12 @@ import {MockJITResolver} from "../mocks/MockJITResolver.sol";
 import {MockPLPResolver} from "../mocks/MockPLPResolver.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IParityTaxHook} from "../../src/interfaces/IParityTaxHook.sol";
 import {
     PosmTestSetup,
     IWETH9,
-    IAllowanceTransfer
+    IAllowanceTransfer,
+    PositionConfig
 } from "@uniswap/v4-periphery/test/shared/PosmTestSetup.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -30,15 +32,18 @@ contract LiquidityResolversSetUp is PosmTestSetup{
 
     function deployAndApproveResolvers(
         IPoolManager _poolManager,
-        IPositionManager _lpm
+        IPositionManager _lpm,
+        IParityTaxHook _parityTaxHook
     ) internal {
         jitResolver = new MockJITResolver(
             manager,
-            lpm
+            lpm,
+            _parityTaxHook
         );
         plpResolver = new MockPLPResolver(
             manager,
-            lpm    
+            lpm,
+            _parityTaxHook   
         );
         approvePosmFor(address(jitResolver));
         approvePosmFor(address(jitResolver));

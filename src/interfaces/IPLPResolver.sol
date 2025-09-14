@@ -5,17 +5,17 @@ import {PoolId, PoolKey, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+
 interface IPLPResolver is IAccessControl{
     
 
-    error HookHasNotBeenSet();
-    error HookHasAlreadyBeenSet();
 
     error InvalidCommitment___MustBeGreaterThanCurrentBlock();
     
     function commitLiquidity(
         PoolKey memory poolKey,
         ModifyLiquidityParams memory liquidityParams,
+        address committer,
         uint48 blockNumber
     ) external returns(uint256);
 

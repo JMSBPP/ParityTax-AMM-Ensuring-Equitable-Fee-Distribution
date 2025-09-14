@@ -6,9 +6,10 @@ import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/Pool
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {ISwapMetrics} from  "./ISwapMetrics.sol";
 import {ILiquidityMetrics} from "./ILiquidityMetrics.sol";
+import {ISubscriber} from "@uniswap/v4-periphery/src/interfaces/ISubscriber.sol";
 
-interface IParityTaxRouter is ISwapMetrics , ILiquidityMetrics{
-    error InvalidPLPLiquidityCommitment();
+
+interface IParityTaxRouter is ISwapMetrics , ILiquidityMetrics, ISubscriber{
     
     function swap(
         PoolKey memory poolKey,
@@ -20,4 +21,6 @@ interface IParityTaxRouter is ISwapMetrics , ILiquidityMetrics{
         ModifyLiquidityParams memory liquidityParams,
         uint48 plpLiquidityBlockCommitment 
     ) external payable returns (BalanceDelta delta);
+    
+
 }

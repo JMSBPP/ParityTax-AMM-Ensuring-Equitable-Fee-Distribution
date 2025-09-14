@@ -26,11 +26,17 @@ import {console2} from "forge-std/Test.sol";
 
 import "./SwapMetrics.sol";
 import "./LiquidityMetrics.sol";
+import "./LiquiditySubscriptions.sol";
+import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
+
+import {IParityTaxHook} from "./interfaces/IParityTaxHook.sol";
 
 
 
-contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IParityTaxRouter{
+
+contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, LiquiditySubscriptions, IParityTaxRouter{
     using SafeCast for *;
+    using Position for address;
     using SqrtPriceMath for uint160;
     using TickMath for uint160;
     using TickMath for int24;
@@ -44,23 +50,30 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IPar
     
 
 
- 
-
-
     constructor(
         IPoolManager _poolManager,
-        IV4Quoter _v4Quoter
-    ) SwapMetrics(_v4Quoter) LiquidityMetrics(_poolManager){
-        
-    }
+        IV4Quoter _v4Quoter,
+        IParityTaxHook _parityTaxHook
+    ) SwapMetrics(_v4Quoter) LiquidityMetrics(_poolManager) LiquiditySubscriptions(_parityTaxHook){}
 
     function modifyLiquidity(
         PoolKey memory poolKey,
         ModifyLiquidityParams memory liquidityParams,
-        uint48 plpLiquidityBlockCommitment 
+        uint48 _plpLiquidityBlockCommitment 
     ) external payable returns (BalanceDelta delta){
-        if (plpLiquidityBlockCommitment < MIN_PLP_BLOCK_NUMBER_COMMITMENT) revert InvalidPLPLiquidityCommitment();
-        bytes memory hookData = abi.encode(plpLiquidityBlockCommitment);
+        PoolId poolId = poolKey.toId();
+        //NOTE There needs to be a mechanism for handling when a PLP already has a position
+        // Let's query the poolManager for the position of the PLP 
+        uint256 tokenId = uint256(liquidityParams.salt);
+        uint48 plpLiquidityBlockCommitment = _plpLiquidityCommitments[poolId][msg.sender][tokenId] > NO_COMMITMENT ? _plpLiquidityCommitments[poolId][msg.sender][tokenId] : _plpLiquidityBlockCommitment;
+
+        
+        Commitment memory plpLiquidityBlockCommitmentData = Commitment({
+            committer: msg.sender,
+            blockNumberCommitment: plpLiquidityBlockCommitment
+        });
+
+        bytes memory hookData = abi.encode(plpLiquidityBlockCommitmentData);
         bytes memory encodedLiquidityCallbackData = abi.encode(
                     ModifyLiquidityCallBackData(
                         msg.sender,
@@ -69,6 +82,7 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IPar
                         hookData
                     )
                 );
+
         delta = abi.decode(
             poolManager.unlock(
                
@@ -77,6 +91,12 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IPar
             ),
             (BalanceDelta)
         );
+
+        // parityTaxHook.positionManager().subscribe(
+        //     parityTaxHook.positionManager().nextTokenId(),
+        //     address(this),
+        //     Constants.ZERO_BYTES //TODO: What important data can it pass to the tax controller
+        // );
 
     }
 
@@ -218,7 +238,9 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IPar
 
             return abi.encode(delta);
         // TODO: bytes length cheching for routing on liquidity modifications
+        // NOTE: This is actually the check for add PLP liquidity entry point
         } else if (rawData.length == LIQUIDITY_COMMITMENT_LENGTH) {
+        
            
             ModifyLiquidityCallBackData memory data = abi.decode(rawData, (ModifyLiquidityCallBackData));
             
@@ -228,8 +250,9 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, IPar
                 data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
             );
 
+            //NOTE: Let's pass the msg.sender as the hook data
+
             (delta,) = poolManager.modifyLiquidity(data.key, data.params, data.hookData);
-            console2.log(uint256(BalanceDelta.unwrap(delta)));
             (uint128 liquidityAfter,,) = poolManager.getPositionInfo(
                 data.key.toId(), address(this), data.params.tickLower, data.params.tickUpper, data.params.salt
             );

@@ -15,7 +15,9 @@ import {PoolKey,PoolId,PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.so
 
 import {ILPOracle} from "../interfaces/ILPOracle.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
+import {ISubscriber} from "@uniswap/v4-periphery/src/interfaces/ISubscriber.sol";
 
+import "../types/Shared.sol"; 
 abstract contract TaxControllerBase is ITaxController{
     using PoolIdLibrary for PoolKey;
     using FeeRevenueInfoLibrary for FeeRevenueInfo;
@@ -43,13 +45,15 @@ abstract contract TaxControllerBase is ITaxController{
 
     function filTaxReport(PoolKey memory poolKey,FeeRevenueInfo feeRevenueInfo) external{
         PoolId poolId = poolKey.toId();
+        _filTaxReport(poolKey, feeRevenueInfo);
         emit TaxFiling (
             PoolId.unwrap(poolId),
             feeRevenueInfo.startBlock(),
             feeRevenueInfo.commitment(),
             feeRevenueInfo.toBalanceDelta()           
         );
-        _filTaxReport(poolKey, feeRevenueInfo);
+        
+
     }
 
     function _filTaxReport(PoolKey memory,FeeRevenueInfo) internal virtual{
@@ -69,6 +73,8 @@ abstract contract TaxControllerBase is ITaxController{
 
 
 
-
-    
+    function notifyBurn(uint256 tokenId, address owner, PositionInfo info, uint256 liquidity, BalanceDelta feesAccrued) external{}
+    function notifyModifyLiquidity(uint256 tokenId, int256 liquidityChange, BalanceDelta feesAccrued) external{}
+    function notifySubscribe(uint256 tokenId, bytes memory data) external{}
+    function notifyUnsubscribe(uint256 tokenId) external{} 
 }

@@ -10,47 +10,72 @@ import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
 
 import "../types/Shared.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import "./ResolverBase.sol";
 
-abstract contract PLPResolverBase is IPLPResolver,ResolverBase, AccessControl{
+abstract contract PLPResolverBase is IPLPResolver,ResolverBase{
     
     struct YieldGenerator{
         IERC4626 yieldOnCurrency0;
         IERC4626 yieldOnCurrency1;
     }
-    //keccak256("EXCECUTOR_ROLE")
-    bytes32 constant EXCECUTOR_ROLE = 0x0338ac0c1e3cf2299a976fd2902e19234ca77788bc707be23f61be34208d979d;
-
+    
     mapping(PoolId => YieldGenerator) pairYieldGenerator;
 
 
-    IParityTaxHook parityTaxHook;
-
+    
     
     constructor(
         IPoolManager _poolManager,
-        IPositionManager _lpm
-    ) ResolverBase(_poolManager, _lpm){
-    }
-
-    modifier onlyWithHookInitialized(){
-        if (address(parityTaxHook) == address(0x00)) revert HookHasNotBeenSet();
-        _;
-    }
-
-
-    //TODO: This function is to be called only once
-    // and only by the protocol deployer
-    function setParityTaxHook(
+        IPositionManager _lpm,
         IParityTaxHook _parityTaxHook
-    ) external {
-        if (address(parityTaxHook) != address(0x00)) revert HookHasAlreadyBeenSet();
-        parityTaxHook = _parityTaxHook;
-        _grantRole(DEFAULT_ADMIN_ROLE, address(parityTaxHook));
-        
+    ) ResolverBase(_poolManager, _lpm,_parityTaxHook){
     }
 
+    function commitLiquidity(
+        PoolKey memory poolKey,
+        ModifyLiquidityParams memory liquidityParams,
+        address committer,
+        uint48 blockNumber
+    ) external onlyWithHookInitialized() onlyRole(DEFAULT_ADMIN_ROLE) returns(uint256){
+        //NOTE Associates the committer with the owner of the position
+        uint256 tokenId = lpm.nextTokenId();
+
+        PositionConfig memory plpPosition = PositionConfig({
+            poolKey: poolKey,
+            tickLower: liquidityParams.tickLower,
+            tickUpper: liquidityParams.tickUpper
+        });
+
+        _mintUnlocked(
+            plpPosition,
+            uint256(liquidityParams.liquidityDelta),
+            committer,
+            Constants.ZERO_BYTES
+        );
+        _commitLiquidity(poolKey, liquidityParams, committer, blockNumber);
+        return tokenId;
+    }
+
+
+    function removeLiquidity(
+        PoolId poolId,
+        uint256 tokenId,
+        int256 liquidityDelta
+    ) external onlyWithHookInitialized() onlyRole(DEFAULT_ADMIN_ROLE){}
+    
+
+    function _commitLiquidity(
+        PoolKey memory poolKey,
+        ModifyLiquidityParams memory liquidityParams,
+        address committer,
+        uint48 blockNumber
+    ) internal virtual returns(uint256){}
+
+    function _removeLiquidity(
+        PoolId poolId,
+        uint256 tokenId,
+        int256 liquidityDelta
+    ) internal virtual{}
 
     
 

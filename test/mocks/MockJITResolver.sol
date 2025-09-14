@@ -54,12 +54,13 @@ contract MockJITResolver is JITResolverBase{
 
     constructor(
         IPoolManager _manager,
-        IPositionManager _lpm
-    ) JITResolverBase (_manager, _lpm) {}
+        IPositionManager _lpm,
+        IParityTaxHook _parityTaxHook
+    ) JITResolverBase (_manager, _lpm, _parityTaxHook) {}
 
 
 
-    function addLiquidity(SwapContext memory swapContext) external returns(uint256,uint256){
+    function _addLiquidity(SwapContext memory swapContext) internal override returns(uint256,uint256){
         //NOTE: This is  place holder, further checks are needed
         
         uint256 amountToFullfill = swapContext.amountOut;
@@ -100,12 +101,9 @@ contract MockJITResolver is JITResolverBase{
     }
 
 
-    function removeLiquidity (LiquidityPosition memory jitLiquidityPosition) external{
-        _removeLiquidity(jitLiquidityPosition.tokenId);
-    }
 
 
-    function _removeLiquidity(uint256 tokenId) internal{
+    function _removeLiquidity(uint256 tokenId) internal override{
      
 
         PositionInfo jitPositionInfo = lpm.positionInfo(tokenId);

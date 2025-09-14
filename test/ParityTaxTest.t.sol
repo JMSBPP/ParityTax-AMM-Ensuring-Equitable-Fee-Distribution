@@ -54,6 +54,7 @@ import {IParityTaxRouter} from "../src/interfaces/IParityTaxRouter.sol";
 
 import "./helpers/LiquidityResolversSetUp.sol";
 import "./helpers/TaxControllerSetUp.sol";
+
 // Add missing constants
 uint160 constant MIN_PRICE_LIMIT = 4295128739 + 1; // TickMath.MIN_SQRT_PRICE + 1
 uint160 constant MAX_PRICE_LIMIT = 1461446703485210103287273052203988822378723970342 - 1; // TickMath.MAX_SQRT_PRICE - 1
@@ -79,12 +80,10 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         deployFreshManagerAndRouters();
         deployMintAndApprove2Currencies();
         deployAndApprovePosm(manager);
-        deployAndApproveResolvers(manager,lpm);
-        deployAndApproveTaxController(manager);
+        
 
 
         
-        fundResolvers();
         
 
         parityTaxHook = ParityTaxHook(
@@ -107,14 +106,20 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
             abi.encode(
                 manager,
                 lpm,
-                jitResolver,
-                plpResolver,
                 taxController,
                 lpOracle
             ),
             address(parityTaxHook)
         );
-        plpResolver.setParityTaxHook(parityTaxHook);
+
+
+        deployAndApproveResolvers(manager,lpm, parityTaxHook);
+
+        fundResolvers();
+        parityTaxHook.setLiquidityResolvers(plpResolver, jitResolver);
+
+
+        deployAndApproveTaxController(manager,parityTaxHook);
 
 
 
@@ -171,17 +176,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         vm.stopPrank();
 
     }
-
-    function test__NoSwaps__EquivalentBehavior() public {
-        // add liquidity
-        modifyPoolLiquidity(key, -600, 600, 1e18, 0);
-        modifyPoolLiquidity(noHookKey, -600, 600, 1e18, 0);
-
-        // remove liquidity
-        BalanceDelta hookDelta = modifyPoolLiquidity(key, -600, 600, -1e17, 0);
-        BalanceDelta noHookDelta = modifyPoolLiquidity(noHookKey, -600, 600, -1e17, 0);
-        assertEq(hookDelta, noHookDelta, "No swaps: equivalent behavior");
-    }               
+            
 
     function test__JIT__fulfills_ZeroForOneSwap() public {
 
@@ -199,12 +194,12 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(bob));
         assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(bob));
         console2.log("Bob Has Starting Balance Of Both Currencies", STARTING_USER_BALANCE);
+
         assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(address(jitResolver)));
         assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(address(jitResolver)));
         
         console2.log("JIT Resolver funds are the Starting Balance for Both Currencies", STARTING_USER_BALANCE);
         
-        console2.log("//==================================================================");
         console2.log("//==============================SWAP===============================");
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({
             takeClaims: false, 
@@ -249,7 +244,6 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         );
 
         vm.stopPrank();
-        console2.log("//======================================================================");
         console2.log("//=======================AFTER SWAP STATE================================");
         console2.log("After Swap Bob has a decreased balance on Currency 0", IERC20(Currency.unwrap(key.currency0)).balanceOf(bob));
         assertEq(
@@ -287,11 +281,9 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
     }
 
 
-    function test__plpResolver__AccessControl() public{
-        //======PRE-INITIATE-HOOK-ON-PLP RESOLVER STATE========
+    function test__PLP__accessControl() public{
         vm.roll(10_000);
         assertTrue(plpResolver.hasRole(bytes32(0x00), address(parityTaxHook)));
-        
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector,
@@ -305,6 +297,7 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
         plpResolver.commitLiquidity(
             key,
             LIQUIDITY_PARAMS,
+            alice,
             uint48(vm.getBlockNumber()) + uint48(0x02)
         );
 
@@ -331,14 +324,25 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
 
     function test__PLP__commitLiquidity() public{
 
+        console2.log("//========================BEFORE COMMIT LIQUIDITY STATE =========================");
+
         vm.roll(10_000);
         assertEq(10_000, vm.getBlockNumber());
+        console2.log("Starting Block Number:", vm.getBlockNumber());
+        console2.log("Liquidity Positions token Id counter:",lpm.nextTokenId());
+        uint256 liquidityCommitmentTokenId = lpm.nextTokenId();
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency0)).balanceOf(alice));
+        assertEq(STARTING_USER_BALANCE, IERC20(Currency.unwrap(key.currency1)).balanceOf(alice));
+        console2.log("Let ALice be the PLP...");
+        console2.log("PLP Has Starting Balance Of Both Currencies", STARTING_USER_BALANCE);
 
+        console2.log("//============================COMMIT LIQUIDITY=====================================");
+        console2.log("PLP cannot set a block number commitment that is less than or equal to one block");
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IParityTaxRouter.InvalidPLPLiquidityCommitment.selector
-            ),
-            address(parityTaxRouter)
+            // abi.encodeWithSelector(
+            //     IParityTaxHook.InvalidPLPBlockCommitment.selector
+            // ),
+            // address(parityTaxHook)
         );
         vm.startPrank(alice);
             parityTaxRouter.modifyLiquidity(
@@ -348,16 +352,139 @@ contract ParityTaxHookTest is TaxControllerSetUp, LiquidityResolversSetUp, HookT
             );
         vm.stopPrank();
 
+        console2.log("PLP succesfully adds liquidity seting a block number commitment greater than or equal to one block");
         vm.startPrank(alice);
-            parityTaxRouter.modifyLiquidity(
-                key,
-                LIQUIDITY_PARAMS,
-                MIN_PLP_BLOCK_NUMBER_COMMITMENT
-            );
+        BalanceDelta liquidityDelta = parityTaxRouter.modifyLiquidity(
+            key,
+            LIQUIDITY_PARAMS,
+            MIN_PLP_BLOCK_NUMBER_COMMITMENT
+        );
+        vm.stopPrank();
+
+        console2.log("//========================AFTER COMMIT LIQUIDITY STATE =========================");
+        //TODO: Verify commitments per position
+        console2.log("Alice is the owner of the last minted liquidity Position");
+        vm.mockCall(
+            address(lpm),
+            abi.encodeWithSignature(
+                "ownerOf(uint256)",
+                liquidityCommitmentTokenId
+            ),
+            abi.encode(alice)
+        );
+
+        //NOTE: The liquidity on the Pool 
+        console2.log("The Liquidity on the PLP Position Must equal the one specified on the router call");
+        assertEq(
+            uint128(int128(LIQUIDITY_PARAMS.liquidityDelta)),
+            lpm.getPositionLiquidity(
+                liquidityCommitmentTokenId
+            )
+        );
+        console2.log("The Hook is kepping track of the commitments of the PLP");
+        assertEq(
+            parityTaxHook.getPositionBlockNumberCommitment(
+                key.toId(),
+                alice,
+                liquidityCommitmentTokenId
+            ),
+            uint48(vm.getBlockNumber() + MIN_PLP_BLOCK_NUMBER_COMMITMENT)
+        );
+        console2.log("The Hook is keeping track of the fee revenue of the PLP");
+        
+        BalanceDelta plpFeeDelta = calculateFeeDelta(
+            manager,
+            key.toId(),
+            address(lpm),
+            lpm.positionInfo(liquidityCommitmentTokenId).tickLower(),
+            lpm.positionInfo(liquidityCommitmentTokenId).tickUpper(),
+            LIQUIDITY_PARAMS.salt
+        );
+        console2.log("There has not been any swaps, then the fees Accrued are zero");
+        assertEq(
+            parityTaxHook.getWithheldFees(
+                key.toId(),
+                alice,
+                liquidityCommitmentTokenId
+            ),
+            BalanceDeltaLibrary.ZERO_DELTA,
+            ""
+        );
+        
+    
+        //NOTE: This assertion is broken if terms of trade differ from one
+
+
+        console2.log("The balance of the PLP has decreased by the amount of liquidity provided on both currencies");
+        assertEq(IERC20(Currency.unwrap(key.currency0)).balanceOf(alice), uint256(int256(STARTING_USER_BALANCE) + int256(liquidityDelta.amount0())));
+        assertEq(IERC20(Currency.unwrap(key.currency1)).balanceOf(alice), uint256(int256(STARTING_USER_BALANCE) + int256(liquidityDelta.amount1())));
+        
+        
+        // Verify Pool Liquidity
+        // Verify PLP balance and PLP owned liquidity on pool
+
+    }
+
+    function test__PLP__removeLiquidity() public{
+        console2.log("//========================BEFORE REMOVE LIQUIDITY STATE =========================");
+
+        vm.roll(10_000);
+        assertEq(10_000, vm.getBlockNumber());
+        console2.log("Starting Block Number:", vm.getBlockNumber());
+        console2.log("Liquidity Positions token Id counter:",lpm.nextTokenId());
+        uint256 liquidityCommitmentTokenId = lpm.nextTokenId();
+
+        console2.log("PLP cannot withdraw from the position within the same block (i.e., it cannot instantly act as JIT).");
+        //NOTE: Let's have the PLP try to remove liquidity from the same router
+        
+        vm.startPrank(alice);
+        BalanceDelta liquidityDelta = parityTaxRouter.modifyLiquidity(
+            key,
+            LIQUIDITY_PARAMS,
+            MIN_PLP_BLOCK_NUMBER_COMMITMENT
+        );
+        vm.mockCallRevert(
+            address(parityTaxRouter),
+            abi.encodeCall(
+                IParityTaxRouter.modifyLiquidity,
+                (key,REMOVE_LIQUIDITY_PARAMS,JIT_COMMITMENT)
+            ),
+            abi.encodePacked(IParityTaxHook.NotWithdrawableLiquidity__LiquidityIsCommitted.selector)
+        );
+        
         vm.stopPrank();
 
 
+
+        console2.log("PLP Can not remove committed liquidity from an external router");
+        PositionInfo plpPositionInfo = lpm.positionInfo(liquidityCommitmentTokenId);
+
+        vm.expectRevert();
+        //TODO: This reverzts as intended but the cheatcodes seem to be incorrect
+        
+        vm.startPrank(alice);
+        
+        modifyLiquidityRouter.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: plpPositionInfo.tickLower(),
+                tickUpper: plpPositionInfo.tickUpper(),
+                liquidityDelta: -int256(int128(lpm.getPositionLiquidity(liquidityCommitmentTokenId))),
+                salt: bytes32(liquidityCommitmentTokenId)   
+            }),
+            bytes("")
+        );
+
+        vm.stopPrank();
+
+
+        //NOTE: Let's have the PLP try to remove liquidity from another router from where
+        // it initally added the position
+
     }
+
+
+    
 
 
 

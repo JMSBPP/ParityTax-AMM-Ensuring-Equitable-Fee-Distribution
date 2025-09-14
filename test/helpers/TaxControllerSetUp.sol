@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IParityTaxHook} from "../../src/interfaces/IParityTaxHook.sol";
 import {Constants} from "@uniswap/v4-core/test/utils/Constants.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
@@ -27,7 +28,8 @@ contract TaxControllerSetUp is Deployers {
 
 
     function deployAndApproveTaxController(
-        IPoolManager _manager
+        IPoolManager _manager,
+        IParityTaxHook _parityTaxHook
     ) internal{
         
         v4Quoter = new V4Quoter(
@@ -36,7 +38,8 @@ contract TaxControllerSetUp is Deployers {
 
         parityTaxRouter = new ParityTaxRouter(
             _manager,
-            IV4Quoter(address(v4Quoter))
+            IV4Quoter(address(v4Quoter)),
+            _parityTaxHook
         );
 
         lpOracle = new MockLPOracle();
