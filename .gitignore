@@ -29,8 +29,6 @@ spec/
 .env
 node_modules
 
-# Assets
-assets/
 
 # Package lock files (optional - uncomment if you want to exclude)
 # package-lock.json
