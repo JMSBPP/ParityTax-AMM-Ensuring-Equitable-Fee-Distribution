@@ -29,7 +29,6 @@ contract LiquidityResolversSetUp is PosmTestSetup{
 
 
 
-
     function deployAndApproveResolvers(
         IPoolManager _poolManager,
         IPositionManager _lpm,

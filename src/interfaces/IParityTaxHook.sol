@@ -11,7 +11,7 @@ import "../types/SwapIntent.sol";
 import "./ISwapMetrics.sol";
 import "./ILiquidityMetrics.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
-import {ITaxController} from "./ITaxController.sol";
+import {IFiscalPolicy} from "./IFiscalPolicy.sol";
 import {IExttload} from "@uniswap/v4-core/src/interfaces/IExttload.sol";
 import {IPLPResolver} from "./IPLPResolver.sol";
 import {IJITResolver} from "./IJITResolver.sol";
@@ -32,7 +32,13 @@ interface IParityTaxHook is IExttload{
     );
 
 
-    event LiquidityOnSwap(bytes32 indexed poolId, uint48 indexed blockNumber, uint128 totalLiquidity, uint128 jitLiquidity, uint128 plpLiquidity);
+    event LiquidityOnSwap(
+        bytes32 indexed poolId,
+        uint48 indexed blockNumber,
+        uint128 totalLiquidity,
+        uint128 jitLiquidity,
+        uint128 plpLiquidity
+    );
     
     event LiquidityCommitted(
         bytes32 indexed poolId,
@@ -42,6 +48,14 @@ interface IParityTaxHook is IExttload{
         uint256 tokenId,
         bytes liquidityParams
     ) anonymous;
+
+    event Remittance (
+        bytes32 indexed poolId,
+        uint48 indexed currentBlock,
+        uint48 indexed blockCommitment,
+        BalanceDelta feeRevenueDelta
+    );
+
     
     
     error AmountOutGreaterThanSwapAmountOut();
@@ -64,11 +78,15 @@ interface IParityTaxHook is IExttload{
 
     function positionManager() external returns(IPositionManager);
  
-    function TaxController() external returns(ITaxController);
+    function FiscalPolicy() external returns(IFiscalPolicy);
 
     function setLiquidityResolvers(
         IPLPResolver _plpResolver,
         IJITResolver _jitResolver
+    ) external;
+
+    function setFiscalPolicy(
+        IFiscalPolicy _fiscalPolicy
     ) external;
 
 
@@ -78,11 +96,6 @@ interface IParityTaxHook is IExttload{
         uint256 tokenId
     ) external view returns(uint48);
 
-    function getWithheldFees(
-        PoolId poolId, 
-        address owner,
-        uint256 tokenId
-    ) external view returns (BalanceDelta);
 
 
 

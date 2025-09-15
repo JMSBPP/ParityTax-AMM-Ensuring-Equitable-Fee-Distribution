@@ -30,7 +30,7 @@ import "./types/Shared.sol";
 import "./interfaces/ILiquidityMetrics.sol";
 
 
-contract LiquidityMetrics is ILiquidityMetrics, ImmutableState {
+contract LiquidityMetrics is ILiquidityMetrics {
     using SwapIntentLibrary for bool;
     using LiquidityAmounts for uint160;
     using SqrtPriceMath for uint160;
@@ -40,9 +40,12 @@ contract LiquidityMetrics is ILiquidityMetrics, ImmutableState {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
+    IPoolManager manager;
     constructor(
         IPoolManager _poolManager
-    ) ImmutableState(_poolManager){}
+    ) {
+        manager = _poolManager;
+    }
 
     function getSwapPLPLiquidity(
         PoolKey memory poolKey,
@@ -72,7 +75,7 @@ contract LiquidityMetrics is ILiquidityMetrics, ImmutableState {
         int128 totalLiquidity;
 
         while (currentTick <= tickUpper){
-            (uint128 currentTickLiquidity,int128 currentTickLiquidityDelta) = poolManager.getTickLiquidity(
+            (uint128 currentTickLiquidity,int128 currentTickLiquidityDelta) = manager.getTickLiquidity(
                 poolId,
                 currentTick
             );
@@ -109,7 +112,7 @@ contract LiquidityMetrics is ILiquidityMetrics, ImmutableState {
     ) internal virtual returns(uint128){
 
         PoolId poolId = poolKey.toId();
-        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
+        (uint160 sqrtPriceX96,,,) = manager.getSlot0(poolId);
         uint160 sqrtRatioTickLower = _tickLower.getSqrtPriceAtTick();
         uint160 sqrtRatioTickUpper = _tickUpper.getSqrtPriceAtTick();
         SwapIntent swapIntent = swapParams.zeroForOne.swapIntent(swapParams.amountSpecified <0);

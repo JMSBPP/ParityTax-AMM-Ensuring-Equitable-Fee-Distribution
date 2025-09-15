@@ -40,7 +40,7 @@ abstract contract JITResolverBase is IJITResolver, ResolverBase{
         //NOTE: The Hook needs to be the msg.sender
         //TODO: Further security checks using introspection for this ERC165
         
-        _addLiquidity(swapContext);
+        return _addLiquidity(swapContext);
     }
 
     function removeLiquidity(LiquidityPosition memory liquidityPosition) onlyWithHookInitialized() onlyRole(DEFAULT_ADMIN_ROLE) external{

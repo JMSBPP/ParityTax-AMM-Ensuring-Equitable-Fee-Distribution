@@ -31,3 +31,12 @@
 [submodule "lib/balancer-v3-monorepo"]
 	path = lib/balancer-v3-monorepo
 	url = https://github.com/balancer/balancer-v3-monorepo
+[submodule "lib/reactive-smart-contract-demos"]
+	path = lib/reactive-smart-contract-demos
+	url = https://github.com/Reactive-Network/reactive-smart-contract-demos
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/Vectorized/solady
+[submodule "lib/Non-Locking-FlashLoan"]
+	path = lib/Non-Locking-FlashLoan
+	url = https://github.com/Maniveer007/Non-Locking-FlashLoan

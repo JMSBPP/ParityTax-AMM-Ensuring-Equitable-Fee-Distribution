@@ -31,10 +31,10 @@ import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 
 import {IParityTaxHook} from "./interfaces/IParityTaxHook.sol";
 
+import {ImmutableState} from "@uniswap/v4-periphery/src/base/ImmutableState.sol";
 
 
-
-contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, LiquiditySubscriptions, IParityTaxRouter{
+contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, LiquiditySubscriptions, ImmutableState,IParityTaxRouter{
     using SafeCast for *;
     using Position for address;
     using SqrtPriceMath for uint160;
@@ -54,7 +54,7 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
         IPoolManager _poolManager,
         IV4Quoter _v4Quoter,
         IParityTaxHook _parityTaxHook
-    ) SwapMetrics(_v4Quoter) LiquidityMetrics(_poolManager) LiquiditySubscriptions(_parityTaxHook){}
+    ) SwapMetrics(_v4Quoter) LiquidityMetrics(_poolManager) LiquiditySubscriptions(_parityTaxHook) ImmutableState(_poolManager){}
 
     function modifyLiquidity(
         PoolKey memory poolKey,

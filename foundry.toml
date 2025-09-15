@@ -6,6 +6,7 @@ solc_version = "0.8.26"
 evm_version = "cancun"
 via_ir = true
 ffi = true
+auto_detect_remappings=true
 fs_permissions = [
     { access = "read-write", path = ".forge-snapshots/" }, 
     { access = "read", path = "foundry-out/" }
@@ -15,14 +16,17 @@ remappings = [
     "@uniswap/v4-periphery/=lib/v4-periphery/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@openzeppelin-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/",
     "@solmate/=lib/solmate/src/",
     "@balancer-labs/v3-interfaces/=lib/balancer-v3-monorepo/pkg/interfaces/",
     "@uniswap-hooks/=lib/uniswap-hooks/",
+    "@reactive-network/=lib/reactive-smart-contract-demos/lib/reactive-lib/src/",
     "hardhat/=node_modules/hardhat/",
     "forge-std/=lib/forge-std/src",
     "permit2/=lib/v4-periphery/lib/permit2/",
     "v4-core/=lib/v4-periphery/lib/v4-core/",
-    "solmate/=lib/solmate/"
+    "solmate/=lib/solmate/",
+    "solady/=lib/solady/src/"
 ]
 
 [profile.rpc-endpoints]

@@ -87,12 +87,10 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
-        ITaxController _taxController,
         ILPOracle _lpOracle
     ) ParityTaxHookBase(
         _poolManager,
         _lpm,
-        _taxController,
         _lpOracle
         ) 
     {
@@ -148,7 +146,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
         PositionInfo jitPositionInfo = _tload_jit_positionInfo();
 
-        // uint128 plpLiquidity =  uint128(taxController.router().getSwapPLPLiquidity(
+        // uint128 plpLiquidity =  uint128(fiscalPolicy.router().getSwapPLPLiquidity(
         //     poolKey,
         //     jitPositionInfo.tickLower(),
         //     jitPositionInfo.tickUpper() 
@@ -194,6 +192,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         //======================================================
         // =====================JIT============================//
         uint256 jitTokenId = _tload_jit_tokenId();
+        console2.log("JIT Token ID:", jitTokenId);
         
         if (jitTokenId > uint256(0x00)){
 
@@ -228,9 +227,17 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                     uint80(jitLiquidityPosition.feeRevenueOnCurrency1)
                 );
 
-                taxController.filTaxReport(
-                    poolKey,
+                fiscalPolicy.remit(
+                    poolId,
                     jitFeeRevenueInfo
+                    
+                );
+
+                emit Remittance(
+                    PoolId.unwrap(poolId),
+                    uint48(block.number),
+                    JIT_COMMITMENT,
+                    jitFeeRevenueInfo.toBalanceDelta()
                 );
 
 
@@ -372,7 +379,30 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             );
             uint256 plpPositionTokenId = _tload_plp_tokenId();
 
-            _withholdFeeRevenue(poolKey,plpCommitment.committer,plpPositionTokenId,feeDelta);
+            FeeRevenueInfo plpFeeRevenueInfo = uint48(block.number).init(
+                plpCommitment.blockNumberCommitment + uint48(block.number),
+                uint80(int80(feeDelta.amount0())),
+                uint80(int80(feeDelta.amount1()))
+            );
+
+            console2.log("Fiscal Policy Address:", address(fiscalPolicy));
+
+            fiscalPolicy.remit(
+                poolId,
+                plpFeeRevenueInfo
+                
+            );
+
+            emit Remittance(
+                PoolId.unwrap(poolId),
+                uint48(block.number),
+                plpCommitment.blockNumberCommitment + uint48(block.number),
+                plpFeeRevenueInfo.toBalanceDelta()
+            );
+
+
+
+
         }
         //==========================================================//
 
@@ -414,7 +444,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         );
         //=============================================PLP========================================================//
         //============================REMOVING FROM POSITION MANAGER=====================================
-        if (uint256(liquidityParams.salt) > uint256(0x00)){
+        if (uint256(liquidityParams.salt) > uint256(0x00) && _tload_jit_tokenId() == uint256(0x00)){
             uint256 tokenId = uint256(liquidityParams.salt);
             address positionOwner = abi.decode(
                 address(lpm).functionStaticCall(
@@ -490,19 +520,19 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         // //============================JIT=================================//
         // //NOTE: This tokenId is just for internal reference becasue the positionManager
         // // burns the position before modifyingLiquidity
-        // uint256 jitTokenId = _tload_jit_tokenId();
+        uint256 jitTokenId = _tload_jit_tokenId();
         
-        // if (jitTokenId > uint256(0x00)){        
-        //     _tstore_jit_feeRevenue(
-        //         uint256(feeRevenueDelta.amount0().toUint128()), 
-        //         uint256(feeRevenueDelta.amount1().toUint128())
-        //     );
-        // }
+        if (jitTokenId > uint256(0x00)){        
+            _tstore_jit_feeRevenue(
+                uint256(feeRevenueDelta.amount0().toUint128()), 
+                uint256(feeRevenueDelta.amount1().toUint128())
+            );
+        }
 
         // if (jitLiquidityPosition.liquidity > uint256(0x00)){
         // //NOTE: This informs the tax controller what kind of LP this is
-        //     taxController.fillJITTaxReturn(taxableFeeRevenueIncomeDelta, JIT_COMMITMNET);
-        //     BalanceDelta jitTaxLiabilityDelta = taxController.getJitTaxLiability(taxableFeeRevenueIncomeDelta);
+        //     fiscalPolicy.fillJITTaxReturn(taxableFeeRevenueIncomeDelta, JIT_COMMITMNET);
+        //     BalanceDelta jitTaxLiabilityDelta = fiscalPolicy.getJitTaxLiability(taxableFeeRevenueIncomeDelta);
             
         //     //NOTE If there is a tax liability to be applied but there are no active liquidity positions in range to
         //     // receive the donation, then the liquidity removal is not possible and the offset must be awaited.
@@ -519,6 +549,20 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
         return (IHooks.afterRemoveLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
  
+    }
+
+
+    //TODO: This is where accrueCredit gets called and assigns
+    // the right rewards to PLP's based on their commitment
+
+    function _afterDonate(
+        address, 
+        PoolKey calldata,
+        uint256,
+        uint256, 
+        bytes calldata
+    ) internal virtual override returns (bytes4){
+        return IHooks.afterDonate.selector;
     }
 
 

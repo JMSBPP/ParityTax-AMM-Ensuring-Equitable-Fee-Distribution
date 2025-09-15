@@ -30,15 +30,19 @@ import "../types/Shared.sol";
 import {IPLPResolver} from "../interfaces/IPLPResolver.sol";
 import {IJITResolver} from "../interfaces/IJITResolver.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
-import {ITaxController} from "../interfaces/ITaxController.sol";
+import {IFiscalPolicy} from "../interfaces/IFiscalPolicy.sol";
 import {ILPOracle} from "../interfaces/ILPOracle.sol";
 import {IParityTaxHook} from "../interfaces/IParityTaxHook.sol";
 //==============================================================
 
 
 import {Exttload} from "@uniswap/v4-core/src/Exttload.sol";
+import {LiquidityMetrics} from "../LiquidityMetrics.sol";
 
-abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
+
+abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, LiquidityMetrics{
+
+
     using SafeCast for *;
     using Position for address;
     using PositionInfoLibrary for PoolKey;
@@ -49,21 +53,21 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
     IPLPResolver plpResolver;
     IJITResolver jitResolver;
     IPositionManager lpm;
-    ITaxController taxController;
+    IFiscalPolicy fiscalPolicy;
     ILPOracle lpOracle;
 
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.JIT_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant internal JIT_LIQUIDITY_POSITION_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
+    bytes32 constant public JIT_LIQUIDITY_POSITION_LOCATION = 0xea3262c41a64b3c1fbce2786641b7f7461a1dc7c180ec16bb38fbe7e610def00;
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PLP_TRANSIENT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant internal PLP_LIQUIDITY_POSITION_LOCATION = 0x369fcc6be4409721b124e1944af5cd9c5a8ac6c841854a0f264aead4f039bb00;
+    bytes32 constant public PLP_LIQUIDITY_POSITION_LOCATION = 0x369fcc6be4409721b124e1944af5cd9c5a8ac6c841854a0f264aead4f039bb00;
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PRICE_IMPACT")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant internal PRICE_IMPACT_LOCATION = 0x9a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
+    bytes32 constant public PRICE_IMPACT_LOCATION = 0x9a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
 
 
     // TODO: This are to be migrated to enumerable mappings fo iteration ...
     mapping(PoolId poolId => mapping(address owner => mapping(uint256 tokenId => uint48 blockNumberCommitment))) internal _plpBlockNumberCommitmnet;
-    mapping(PoolId poolId => mapping(address owner => mapping(uint256 tokenId => BalanceDelta delta))) internal _withheldFees;
-    mapping(bytes32 lpPositionKey => uint256 commitment) internal _plpBlockCommitmentLiquidityRouter;
+    // mapping(PoolId poolId => mapping(address owner => mapping(uint256 tokenId => BalanceDelta delta))) internal _withheldFees;
+
 
     modifier onlyPositionManager(address _router){
         if (_router != address(lpm)) revert InvalidLiquidityRouterCaller();
@@ -80,11 +84,9 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
-        ITaxController _taxController,
         ILPOracle _lpOracle
-    ) BaseHook(_poolManager){
+    ) BaseHook(_poolManager) LiquidityMetrics(_poolManager){
         lpm = _lpm;
-        taxController = _taxController;
         lpOracle = _lpOracle;
     }
 
@@ -94,6 +96,12 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
     ) external {
         plpResolver = _plpResolver;
         jitResolver = _jitResolver;
+    }
+
+    function setFiscalPolicy(
+        IFiscalPolicy _fiscalPolicy
+    ) external {
+        fiscalPolicy = _fiscalPolicy;
     }
 
 
@@ -108,7 +116,7 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
             beforeSwap: true,            //NOTE:
             afterSwap: true,             //NOTE:
             beforeDonate: false,
-            afterDonate: false,
+            afterDonate: true,       //NOTE: It allows for custom tax income distribution mechanisms among PLP;s
             beforeSwapReturnDelta:false,  
             afterSwapReturnDelta: false,
             afterAddLiquidityReturnDelta: true, //NOTE:
@@ -378,18 +386,18 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
         _plpBlockNumberCommitmnet[poolId][owner][tokenId] =blockNumberCommitment; 
     }
 
-    function _withholdFeeRevenue(
-        PoolKey memory poolKey,
-        address owner,
-        uint256 lpPositionTokenId,
-        BalanceDelta feeRevenueDelta
-    ) internal virtual {
-        PoolId poolId = poolKey.toId();
-         _withheldFees[poolId][owner][lpPositionTokenId] = _withheldFees[poolId][owner][lpPositionTokenId] + feeRevenueDelta;
+    // function _withholdFeeRevenue(
+    //     PoolKey memory poolKey,
+    //     address owner,
+    //     uint256 lpPositionTokenId,
+    //     BalanceDelta feeRevenueDelta
+    // ) internal virtual {
+    //     PoolId poolId = poolKey.toId();
+    //      _withheldFees[poolId][owner][lpPositionTokenId] = _withheldFees[poolId][owner][lpPositionTokenId] + feeRevenueDelta;
 
-        poolKey.currency0.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount0())), true);
-        poolKey.currency1.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount1())), true);
-    }
+    //     poolKey.currency0.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount0())), true);
+    //     poolKey.currency1.take(poolManager, address(this), uint256(uint128(feeRevenueDelta.amount1())), true);
+    // }
 
 
 
@@ -402,26 +410,26 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
         _plpBlockNumberCommitmnet[poolId][owner][tokenId] = NO_COMMITMENT;
     }
 
-    function _remitFeeRevenue(
-        PoolKey memory poolKey,
-        address owner,
-        uint256 tokenId
-    ) internal virtual returns(BalanceDelta withheldFees) {
+    // function _remitFeeRevenue(
+    //     PoolKey memory poolKey,
+    //     address owner,
+    //     uint256 tokenId
+    // ) internal virtual returns(BalanceDelta withheldFees) {
         
-        PoolId poolId = poolKey.toId();
+    //     PoolId poolId = poolKey.toId();
         
-        withheldFees = getWithheldFees(poolId,owner,tokenId);
+    //     withheldFees = _withheldFees[poolId][owner][tokenId];
         
-        _withheldFees[poolId][owner][tokenId] = BalanceDeltaLibrary.ZERO_DELTA;
+    //     _withheldFees[poolId][owner][tokenId] = BalanceDeltaLibrary.ZERO_DELTA;
 
-        if (withheldFees.amount0() > 0) {
-            poolKey.currency0.settle(poolManager, address(this), uint256(uint128(withheldFees.amount0())), true);
-        }
-        if (withheldFees.amount1() > 0) {
-            poolKey.currency1.settle(poolManager, address(this), uint256(uint128(withheldFees.amount1())), true);
-        }
+    //     if (withheldFees.amount0() > 0) {
+    //         poolKey.currency0.settle(poolManager, address(this), uint256(uint128(withheldFees.amount0())), true);
+    //     }
+    //     if (withheldFees.amount1() > 0) {
+    //         poolKey.currency1.settle(poolManager, address(this), uint256(uint128(withheldFees.amount1())), true);
+    //     }
 
-    }
+    // }
 
 
     // function getSqrtPriceImpactX96() public view returns(uint160[] memory){
@@ -438,13 +446,7 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
 
 
 
-    function getWithheldFees(
-        PoolId poolId, 
-        address owner,
-        uint256 tokenId
-    ) public view virtual returns (BalanceDelta) {
-        return _withheldFees[poolId][owner][tokenId];
-    }
+
 
 
 
@@ -459,8 +461,8 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook{
         return lpm;
     }
 
-    function TaxController() external returns(ITaxController){
-        return taxController;
+    function FiscalPolicy() external returns(IFiscalPolicy){
+        return fiscalPolicy;
     }
 
 }
