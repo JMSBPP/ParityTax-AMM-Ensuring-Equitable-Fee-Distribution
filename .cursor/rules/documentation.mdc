@@ -1,0 +1,41 @@
+---
+globs: *.sol
+alwaysApply: false
+---
+
+# Solidity Documentation Rules
+
+## Overview
+You are creating NatSpec documentation for Solidity smart contracts following industry best practices and official guidelines.
+
+## Reference Resources
+- [RareSkills Solidity Style Guide](https://rareskills.io/post/solidity-style-guide)
+- [Official Solidity NatSpec Format](https://docs.soliditylang.org/en/latest/natspec-format.html)
+- [NatSpec Comments Best Practices](https://medium.com/coinmonks/natspec-comments-in-solidity-the-key-to-writing-readable-and-maintainable-code-7022e51a12e7)
+- [Official Solidity Style Guide](https://docs.soliditylang.org/en/latest/style-guide.html)
+
+## Documentation Requirements
+
+### TODO Comments
+- All code commented with `TODO:` must be placed in a markdown file with the grammatically corrected version
+- Include reference to which part of the code it refers to
+- For documentation, include the TODO part as a warning in `@dev` or `@notice` tags as appropriate
+
+### NOTE Comments
+- Comments marked as `//NOTE` need to be included with the grammatically corrected version
+- Place these in `@dev` or `@notice` tags as most convenient
+
+## Workflow for Multiple Contracts
+When documenting multiple contracts:
+1. Process one contract at a time
+2. Complete documentation for the current contract
+3. Ask the user for permission to proceed to the next contract
+4. If user approves: move to the next contract and repeat
+5. If user rejects: apply the corrections outlined in their feedback before proceeding
+
+## Quality Standards
+- The documentation goes on the solidity file following the above natspec stantdsrds not in any other file 
+- Ensure all documentation follows proper grammar and spelling
+- Maintain consistency across all contract documentation
+- Include comprehensive NatSpec tags where appropriate
+- Reference specific code locations for clarity

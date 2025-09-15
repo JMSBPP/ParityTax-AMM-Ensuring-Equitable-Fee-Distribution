@@ -30,6 +30,13 @@ import "./interfaces/ISwapMetrics.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
 
+/**
+ * @title SwapMetrics
+ * @author ParityTax Team
+ * @notice Abstract contract for calculating swap metrics and price impact analysis
+ * @dev Provides functions to compare swap outputs between hooked and unhooked pools,
+ * simulate price impact, and analyze swap performance metrics
+ */
 abstract contract SwapMetrics is ISwapMetrics{
     using SafeCast for *;
     using SqrtPriceMath for uint160;
@@ -38,8 +45,14 @@ abstract contract SwapMetrics is ISwapMetrics{
     using TickBitmap for int24;
     using StateLibrary for IPoolManager;
 
+    /// @notice The V4Quoter contract for simulating swap outputs
     IV4Quoter v4Quoter;
 
+    /**
+     * @notice Initializes the SwapMetrics contract
+     * @dev Sets up the V4Quoter for swap simulation functionality
+     * @param _v4Quoter The Uniswap V4 quoter contract for price calculations
+     */
     constructor(
         IV4Quoter _v4Quoter
     )
@@ -49,6 +62,9 @@ abstract contract SwapMetrics is ISwapMetrics{
     }
 
 
+    /**
+     * @inheritdoc ISwapMetrics
+     */
     function compareSwapOutput(
         PoolKey memory hookedKey,
         SwapParams memory swapParams,
@@ -58,6 +74,14 @@ abstract contract SwapMetrics is ISwapMetrics{
     }
 
 
+    /**
+     * @notice Internal function to compare swap outputs between different pool configurations
+     * @dev Virtual function to be implemented by derived contracts for specific comparison logic
+     * @param hookedKey The pool key with hooks enabled
+     * @param swapParams The swap parameters for the comparison
+     * @param comparedPoolKey The pool key to compare against
+     * @return delta The balance delta representing the difference in swap outputs
+     */
     function _compareSwapOutput(
         PoolKey memory hookedKey,
         SwapParams memory swapParams,
@@ -66,6 +90,9 @@ abstract contract SwapMetrics is ISwapMetrics{
     }
 
 
+    /**
+     * @inheritdoc ISwapMetrics
+     */
     function simulateSwapOutputOnUnHookedPool(
         PoolKey memory hookedKey,
         SwapParams memory swapParams
@@ -74,6 +101,14 @@ abstract contract SwapMetrics is ISwapMetrics{
     }
 
 
+    /**
+     * @notice Internal function to simulate swap output on an unhooked pool
+     * @dev Creates a pool key without hooks and simulates the swap using V4Quoter
+     * @param hookedKey The original pool key with hooks
+     * @param swapParams The swap parameters for simulation
+     * @return delta The balance delta representing the swap impact
+     * @return swapOutput The simulated swap output with amount in and out
+     */
     function _simulateSwapOutputOnUnHookedPool(
         PoolKey memory hookedKey,
         SwapParams memory swapParams
@@ -121,6 +156,9 @@ abstract contract SwapMetrics is ISwapMetrics{
     }
 
 
+    /**
+     * @inheritdoc ISwapMetrics
+     */
     function simulatePriceImpact(
         PoolKey memory poolKey,
         uint160 initialSqrtPriceX96,
@@ -132,6 +170,19 @@ abstract contract SwapMetrics is ISwapMetrics{
         return (afterSwapPrice, afterSwapTick);
     }
 
+    /**
+     * @notice Internal function to simulate price impact of a swap
+     * @dev Calculates the expected price and tick after a swap based on liquidity and swap parameters
+     * @param poolKey The pool configuration data
+     * @param initialSqrtPriceX96 The initial sqrt price before the swap
+     * @param liquidity The available liquidity for the swap
+     * @param swapParams The swap parameters
+     * @param swapOutput The expected swap output amounts
+     * @return expectedAfterSwapSqrtPriceX96 The expected sqrt price after the swap
+     * @return expectedAfterSwapTick The expected tick after the swap
+     * @dev NOTE: The tick of such after price needs to be rounded to the nearest tick
+     * based on the tickSpacing of the pool
+     */
     function _simulatePriceImpact(
         PoolKey memory poolKey,
         uint160 initialSqrtPriceX96,

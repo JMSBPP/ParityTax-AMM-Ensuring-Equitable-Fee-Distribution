@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+/**
+ * @title ParityTaxRouter
+ * @author ParityTax Team
+ * @notice Router contract for executing swaps and liquidity operations with ParityTax hook integration
+ * @dev This router handles both swap and liquidity modification operations, integrating with the ParityTax hook system
+ * for equitable fee distribution between JIT and PLP providers
+ */
+
 
 
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
@@ -49,21 +57,35 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
     using CurrencySettler for Currency;
     
 
-
+    /**
+     * @notice Initializes the ParityTaxRouter with required dependencies
+     * @dev Sets up the pool manager, quoter, and parity tax hook for router operations
+     * @param _poolManager The Uniswap V4 pool manager contract
+     * @param _v4Quoter The V4 quoter for price calculations
+     * @param _parityTaxHook The ParityTax hook contract for fee distribution
+     */
     constructor(
         IPoolManager _poolManager,
         IV4Quoter _v4Quoter,
         IParityTaxHook _parityTaxHook
     ) SwapMetrics(_v4Quoter) LiquidityMetrics(_poolManager) LiquiditySubscriptions(_parityTaxHook) ImmutableState(_poolManager){}
 
+    /**
+     * @notice Modifies liquidity in a pool with PLP commitment handling
+     * @dev Handles both adding and removing liquidity with proper commitment validation for PLP providers
+     * @param poolKey Pool configuration data including currencies and fee tier
+     * @param liquidityParams Liquidity modification parameters including amount and tick range
+     * @param _plpLiquidityBlockCommitment Block commitment for PLP liquidity (used if no existing commitment)
+     * @return delta The balance delta resulting from the liquidity modification
+     * @dev There needs to be a mechanism for handling when a PLP already has a position. Let's query the poolManager for the position of the PLP
+     * @dev WARNING: What important data can it pass to the tax controller for subscription management
+     */
     function modifyLiquidity(
         PoolKey memory poolKey,
         ModifyLiquidityParams memory liquidityParams,
         uint48 _plpLiquidityBlockCommitment 
     ) external payable returns (BalanceDelta delta){
         PoolId poolId = poolKey.toId();
-        //NOTE There needs to be a mechanism for handling when a PLP already has a position
-        // Let's query the poolManager for the position of the PLP 
         uint256 tokenId = uint256(liquidityParams.salt);
         uint48 plpLiquidityBlockCommitment = _plpLiquidityCommitments[poolId][msg.sender][tokenId] > NO_COMMITMENT ? _plpLiquidityCommitments[poolId][msg.sender][tokenId] : _plpLiquidityBlockCommitment;
 
@@ -92,16 +114,18 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
             (BalanceDelta)
         );
 
-        // parityTaxHook.positionManager().subscribe(
-        //     parityTaxHook.positionManager().nextTokenId(),
-        //     address(this),
-        //     Constants.ZERO_BYTES //TODO: What important data can it pass to the tax controller
-        // );
-
     }
 
 
 
+    /**
+     * @notice Executes a swap with ParityTax hook integration and price impact simulation
+     * @dev Simulates swap output, calculates price impact, and executes swap with hook data
+     * @param poolKey Pool configuration data including currencies and fee tier
+     * @param swapParams Swap parameters including amount and direction
+     * @return delta The balance delta resulting from the swap
+     * @dev What we need is the PLP liquidity on the range where the swap will happen
+     */
     function swap(
         PoolKey memory poolKey,
         SwapParams memory swapParams
@@ -112,9 +136,6 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
         bool zeroForOne = swapParams.zeroForOne;
 
         
-        //NOTE: What we need is the PLP liqudity on the range where the
-        // swap will happen
-
         uint128 plpLiquidity= poolManager.getLiquidity(poolKey.toId());
 
         (BalanceDelta noHookSwapDelta, SwapOutput memory noHookSwapOutput) = _simulateSwapOutputOnUnHookedPool(
@@ -163,10 +184,25 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
         if (ethBalance > 0) CurrencyLibrary.ADDRESS_ZERO.transfer(msg.sender, ethBalance);
     }
 
+    /**
+     * @notice External unlock callback function called by the pool manager
+     * @dev Entry point for pool manager callbacks during swap and liquidity operations
+     * @param data Encoded callback data containing operation details
+     * @return Encoded result data from the callback operation
+     */
     function unlockCallback(bytes calldata data) external onlyPoolManager returns (bytes memory) {
         return _unlockCallback(data);
     }
 
+    /**
+     * @notice Internal unlock callback handler for swap and liquidity operations
+     * @dev Routes between swap and liquidity modification callbacks based on data length
+     * @param rawData Encoded callback data containing operation type and parameters
+     * @return Encoded result data from the callback operation
+     * @dev WARNING: Bytes length checking for routing on liquidity modifications
+     * @dev This is actually the check for add PLP liquidity entry point
+     * @dev Let's pass the msg.sender as the hook data
+     */
     function _unlockCallback(bytes calldata rawData) internal virtual returns (bytes memory) {
         require(msg.sender == address(poolManager));
         BalanceDelta delta;
@@ -287,7 +323,17 @@ contract ParityTaxRouter is IUnlockCallback, SwapMetrics, LiquidityMetrics, Liqu
 
 
     
-    /// @dev Taken from @PoolTestBase
+    /**
+     * @notice Fetches balance information for a currency across user, pool, and delta holder
+     * @dev Utility function for balance tracking during operations
+     * @param currency The currency to fetch balances for
+     * @param user The user address to check balance
+     * @param deltaHolder The delta holder address for currency delta calculation
+     * @return userBalance The user's currency balance
+     * @return poolBalance The pool's currency balance
+     * @return delta The currency delta for the delta holder
+     * @dev Taken from @PoolTestBase
+     */
     function _fetchBalances(Currency currency, address user, address deltaHolder)
         internal
         view

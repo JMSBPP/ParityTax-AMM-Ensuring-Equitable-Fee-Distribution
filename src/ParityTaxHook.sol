@@ -1,6 +1,14 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+/**
+ * @title ParityTaxHook
+ * @author ParityTax Team
+ * @notice Main hook contract implementing Uniswap V4's hook system for equitable fee distribution
+ * @dev This contract manages liquidity commitments, fee collection, and tax distribution between JIT and PLP providers
+ * @dev The _afterRemoveLiquidity function is heavily inspired by LiquidityPenaltyHook.sol from OpenZeppelin Uniswap Hooks
+ */
+
 //=================================================================
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -81,9 +89,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     using CurrencyDelta for Currency;
     
 
-
-    //TODO: The ParityTaxRouter is not needed as any router that calls the swap/modifyLiquidity
-    // with the right hookData and no claims is valid
+    /**
+     * @notice Initializes the ParityTaxHook with required dependencies
+     * @dev Sets up the pool manager, position manager, and LP oracle for hook operations
+     * @param _poolManager The Uniswap V4 pool manager contract
+     * @param _lpm The position manager for liquidity operations
+     * @param _lpOracle Oracle for liquidity price information
+     * @dev WARNING: The ParityTaxRouter is not needed as any router that calls the swap/modifyLiquidity
+     * with the right hookData and no claims is valid
+     */
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
@@ -97,8 +111,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     }
 
-
-
+    /**
+     * @notice Handles pre-initialization logic for new pools
+     * @dev WARNING: Here the deployer sets governance that can update the fiscal policy tax calculation
+     * and also manager oracle dependencies initialization
+     */
     function _beforeInitialize(
         address,
         PoolKey calldata,
@@ -109,6 +126,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
 
 
+    /**
+     * @notice Executes before swap logic including JIT liquidity addition and price tracking
+     * @dev Handles JIT liquidity provision and stores pre-swap price data for accurate tracking
+     * @dev All this data is passed to the JIT Resolver, which returns the JIT liquidity that is willing to fulfill
+     * @dev This is to be improved to store beforeSwap prices on transient storage and emit the event on afterSwap for further accuracy
+     * @dev WARNING: This is a placeholder implementation. Correct calculation needs to be done for PLP liquidity determination
+     */
     function _beforeSwap(
         address swapRouter ,
         PoolKey calldata poolKey, 
@@ -116,14 +140,10 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         bytes calldata hookData
     ) internal virtual override returns (bytes4, BeforeSwapDelta, uint24)
     {   
-        //NOTE: All this data is passed to the JIT Hub, which returns
-        // a bool response acknoledging the amount willing to fulfill
         PoolId poolId = poolKey.toId();        
         SwapContext memory swapContext = abi.decode(hookData, (SwapContext));
-        // NOTE: This is to be improved to it stores beforeSwap prices on TS
-        // and emits the event on afterSwap for further accuracy
 
-        // on afterSwapPrices
+        // Store pre-swap prices in transient storage for afterSwap processing
         _tstore_swap_beforeSwapSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
         _tstore_swap_beforeSwapExternalSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
 
@@ -133,8 +153,8 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         ) revert CurrencyMissmatch();
         
         bool isExactInput = swapContext.swapParams.amountSpecified <0;
-        // NOTE: The JITHub mints the liquidity to fill the swap
 
+        // Add JIT liquidity through resolver
         (uint256 jitPositionTokenId,uint256 jitLiquidity) = jitResolver.addLiquidity(
             swapContext
         );
@@ -146,12 +166,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
         PositionInfo jitPositionInfo = _tload_jit_positionInfo();
 
-        // uint128 plpLiquidity =  uint128(fiscalPolicy.router().getSwapPLPLiquidity(
-        //     poolKey,
-        //     jitPositionInfo.tickLower(),
-        //     jitPositionInfo.tickUpper() 
-        // ));
-        // TODO: This is a place holder, correct calculation needs to be done 
         uint128 plpLiquidity = totalLiquidity - uint128(jitLiquidity);
 
         emit LiquidityOnSwap(
@@ -169,6 +183,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     
 
 
+    /**
+     * @notice Handles post-swap operations including JIT liquidity removal and fee collection
+     * @dev Processes JIT liquidity removal, calculates fee revenue, and remits to fiscal policy
+     * @dev WARNING: This is a placeholder implementation for external price calculation
+     * @dev WARNING: This is to be improved to include the actual converted external price
+     * @dev WARNING: The JIT fee revenue has been earned on the asset losing appreciation. This needs to be corrected so it converts to a numeraire
+     */
     function _afterSwap(
         address swapRouter,
         PoolKey calldata poolKey,
@@ -186,7 +207,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             _tload_swap_beforeSwapSqrtPriceX96(),
             _tload_swap_beforeSwapExternalSqrtPriceX96()
         );
-        // TODO : This is a place holder
         uint160 afterSwapExternalSqrtPriceX96 = afterSwapSqrtPriceX96;
 
         //======================================================
@@ -202,7 +222,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                 swapParams.zeroForOne.swapIntent(swapParams.amountSpecified < 0),
                 swapDelta,
                 beforeSwapSqrtPriceX96,
-                beforeSwapExternalSqrtPriceX96, //TODO: This is to be imporoved to include the actual converted external price
+                beforeSwapExternalSqrtPriceX96,
                 afterSwapSqrtPriceX96,
                 afterSwapExternalSqrtPriceX96 
             );
@@ -219,8 +239,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             if(_jitLiquidityPosition.liquidity > uint256(0x00)){
                 jitResolver.removeLiquidity(_jitLiquidityPosition);
                 LiquidityPosition memory jitLiquidityPosition = _tload_jit_liquidityPosition();
-                //TODO: The jit fee reevenue has been earned on the asset losing appreciation
-                // this needs to be corrected so it converts to a numeraire 
                 FeeRevenueInfo jitFeeRevenueInfo = uint48(block.number).init(
                     JIT_COMMITMENT,
                     uint80(jitLiquidityPosition.feeRevenueOnCurrency0),
@@ -249,6 +267,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         return (IHooks.afterSwap.selector, int128(0x00));
     }
 
+    /**
+     * @notice Manages liquidity addition with commitment validation and JIT/PLP routing
+     * @dev Handles both JIT and PLP liquidity commitments based on hook data and current state
+     * @dev This applies for hooks where the user provides valid hookData. This needs to be considered
+     */
     function _beforeAddLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -354,8 +377,13 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     
 
+    /**
+     * @notice Handles post-liquidity addition fee collection and remittance
+     * @dev Processes PLP fee revenue and remits to fiscal policy, stores JIT fee revenue in transient storage
+     * @dev This needs to be the position manager associated with the liquidity operator
+     */
     function _afterAddLiquidity(
-        address liquidityRouter, //This needs to be the posm associated with the liquidity operator
+        address liquidityRouter,
         PoolKey calldata poolKey,
         ModifyLiquidityParams calldata liquidityParams,
         BalanceDelta,
@@ -424,6 +452,10 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
 
 
+    /**
+     * @notice Validates liquidity removal permissions and commitment compliance
+     * @dev Handles PLP liquidity removal validation and commitment expiration checks
+     */
     function _beforeRemoveLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -494,6 +526,14 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
 
 
+    /**
+     * @notice Handles post-liquidity removal operations and fee processing
+     * @dev Processes JIT fee revenue and handles tax calculations for liquidity removal
+     * @dev This tokenId is just for internal reference because the positionManager burns the position before modifyingLiquidity
+     * @dev This informs the tax controller what kind of LP this is
+     * @dev If there is a tax liability to be applied but there are no active liquidity positions in range to receive the donation, then the liquidity removal is not possible and the offset must be awaited
+     * @dev WARNING: This is where accrueCredit gets called and assigns the right rewards to PLPs based on their commitment
+     */
     function _afterRemoveLiquidity(
         address liquidityRouter,
         PoolKey calldata poolKey,
@@ -552,9 +592,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
     }
 
 
-    //TODO: This is where accrueCredit gets called and assigns
-    // the right rewards to PLP's based on their commitment
-
+    /**
+     * @notice Handles post-donation operations for credit accrual and PLP rewards
+     * @dev Processes donations and assigns rewards to PLPs based on their commitment
+     * @dev WARNING: This is where accrueCredit gets called and assigns the right rewards to PLPs based on their commitment
+     */
     function _afterDonate(
         address, 
         PoolKey calldata,

@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+/**
+ * @title LiquidityMetrics
+ * @author ParityTax Team
+ * @notice Contract for calculating liquidity metrics for PLP and JIT providers
+ * @dev Provides functions to calculate available liquidity for swaps across different tick ranges
+ * and liquidity provider types (PLP and JIT)
+ */
+
 import  "@uniswap/v4-core/src/types/BalanceDelta.sol";
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -29,7 +37,7 @@ import {SwapIntent,SwapIntentLibrary} from "./types/SwapIntent.sol";
 import "./types/Shared.sol";
 import "./interfaces/ILiquidityMetrics.sol";
 
-
+//TODO: This is better as a library 
 contract LiquidityMetrics is ILiquidityMetrics {
     using SwapIntentLibrary for bool;
     using LiquidityAmounts for uint160;
@@ -40,13 +48,23 @@ contract LiquidityMetrics is ILiquidityMetrics {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
+    /// @notice The pool manager contract for accessing pool state
     IPoolManager manager;
+    
+    /**
+     * @notice Initializes the LiquidityMetrics contract
+     * @dev Sets up the pool manager for liquidity calculations
+     * @param _poolManager The Uniswap V4 pool manager contract
+     */
     constructor(
         IPoolManager _poolManager
     ) {
         manager = _poolManager;
     }
 
+    /**
+     * @inheritdoc ILiquidityMetrics
+     */
     function getSwapPLPLiquidity(
         PoolKey memory poolKey,
         int24 _tickLower,
@@ -56,12 +74,20 @@ contract LiquidityMetrics is ILiquidityMetrics {
         return swapPLPLiquidity;
     }
 
+    /**
+     * @notice Internal function to calculate PLP liquidity across a tick range
+     * @dev Iterates through ticks in the specified range and aggregates liquidity
+     * @param poolKey Pool configuration data including currencies and fee tier
+     * @param _tickLower The lower tick boundary for the liquidity calculation
+     * @param _tickUpper The upper tick boundary for the liquidity calculation
+     * @return The total PLP liquidity available in the specified tick range
+     * @dev Make sure ticks are in order before processing
+     */
     function _getSwapPLPLiquidity(
         PoolKey memory poolKey,
         int24 _tickLower,
         int24 _tickUpper 
     ) internal virtual view returns(uint128){
-        //NOTE: Make sure ticks are in order
         (int24 tickLower, int24 tickUpper) = _tickUpper < _tickLower ? (
             _tickUpper,
             _tickLower
@@ -92,6 +118,9 @@ contract LiquidityMetrics is ILiquidityMetrics {
         return uint128(totalLiquidity);
 
     }
+    /**
+     * @inheritdoc ILiquidityMetrics
+     */
     function getSwapJITLiquidity(
         PoolKey memory poolKey,
         SwapParams memory swapParams,
@@ -102,8 +131,16 @@ contract LiquidityMetrics is ILiquidityMetrics {
         return swapJITLiquidity;
     }
 
-    //TODO: This function logic is incorrect
-
+    /**
+     * @notice Internal function to calculate JIT liquidity for a swap
+     * @dev Calculates the liquidity required for a JIT provider to fulfill a swap
+     * @param poolKey Pool configuration data including currencies and fee tier
+     * @param swapParams Swap parameters including amount and direction
+     * @param _tickLower The lower tick boundary for the liquidity calculation
+     * @param _tickUpper The upper tick boundary for the liquidity calculation
+     * @return The JIT liquidity required for the specified swap
+     * @dev WARNING: This function logic is incorrect and needs to be fixed
+     */
     function _getSwapJITLiquidity(
         PoolKey memory poolKey,
         SwapParams memory swapParams,

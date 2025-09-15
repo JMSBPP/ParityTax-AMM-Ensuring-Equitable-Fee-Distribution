@@ -13,6 +13,27 @@ foundry-out/
 # Docs
 docs/
 
+# AI utilities and generated content
+aiUtils/
+
+# Reference files (PDFs)
+refs/
+
+# Specification files (if they contain sensitive info)
+spec/
+
 # Dotenv file
 .env
 node_modules
+
+# Package lock files (optional - uncomment if you want to exclude)
+# package-lock.json
+
+# Hardhat config (if not needed in repo)
+# hardhat.config.ts
+
+# Setup scripts (if not needed in repo)
+# set_up_hardhat.sh
+
+# Makefile (if not needed in repo)
+# Makefile
