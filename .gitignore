@@ -1,5 +1,7 @@
 /.github
 /.vscode
+/.cursor
+aiUtils/foundryAssistant/out/
 
 # Compiler files
 cache/
@@ -15,6 +17,7 @@ docs/
 
 # AI utilities and generated content
 aiUtils/
+!aiUtils/foundryAssistant/out/
 
 # Reference files (PDFs)
 refs/
@@ -25,6 +28,9 @@ spec/
 # Dotenv file
 .env
 node_modules
+
+# Assets
+assets/
 
 # Package lock files (optional - uncomment if you want to exclude)
 # package-lock.json
