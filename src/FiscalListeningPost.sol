@@ -27,7 +27,7 @@ import "./libraries/FiscalLogDispatcher.sol";
  * and swap activities to calculate and apply optimal tax rates.
  * @dev Inherits from AbstractReactive for reactive network integration and Multicallable for batch operations
  */
-abstract contract FiscalListeningPost is AbstractReactive, Multicallable{
+contract FiscalListeningPost is AbstractReactive{
     using SubscriptionBatchCall for IParityTaxHook;
     using FiscalLogDispatcher for IReactive.LogRecord;
 

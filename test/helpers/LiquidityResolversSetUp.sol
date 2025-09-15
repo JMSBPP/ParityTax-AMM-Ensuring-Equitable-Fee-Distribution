@@ -45,10 +45,8 @@ contract LiquidityResolversSetUp is PosmTestSetup{
             _parityTaxHook   
         );
         approvePosmFor(address(jitResolver));
-        approvePosmFor(address(jitResolver));
         approvePosmFor(address(plpResolver));
-        approvePosmFor(address(plpResolver));
-
+        
     }
 
 

@@ -144,8 +144,10 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         SwapContext memory swapContext = abi.decode(hookData, (SwapContext));
 
         // Store pre-swap prices in transient storage for afterSwap processing
-        _tstore_swap_beforeSwapSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
-        _tstore_swap_beforeSwapExternalSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
+        {
+            _tstore_swap_beforeSwapSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
+            _tstore_swap_beforeSwapExternalSqrtPriceX96(swapContext.beforeSwapSqrtPriceX96);
+        }
 
         if (
             Currency.unwrap(swapContext.poolKey.currency0) != Currency.unwrap(poolKey.currency0) ||
@@ -160,9 +162,12 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         );
 
         uint128 totalLiquidity = poolManager.getLiquidity(poolId);
+        {
+            _tstore_jit_tokenId(jitPositionTokenId);    
+        }
 
+    
         
-        _tstore_jit_tokenId(jitPositionTokenId);
 
         PositionInfo jitPositionInfo = _tload_jit_positionInfo();
 
@@ -289,9 +294,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         //=================================================================
         
         
-
-
-
         //NOTE: This applies for hooks where the user puts valid hookData. This needs to be considered 
         uint256 jitTokenId = _tload_jit_tokenId();
 

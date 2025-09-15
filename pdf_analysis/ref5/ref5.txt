@@ -1,0 +1,2934 @@
+An Economic Model of a Decentralized Exchange with
+Concentrated Liquidity∗
+Joel Hasbrouck† Thomas J. Rivera‡ Fahad Saleh§
+Abstract
+We develop an economic model of a decentralized exchange with concentrated liquidity (i.e., Uniswap V3) with a particular focus on the economics of liquidity provision.
+We demonstrate that providing liquidity for a risky/risk-free asset pool is comparable
+to investing in a covered call except that the call option therein is sold at intrinsic
+rather than market value. Hence, when providing liquidity, liquidity providers forgo
+the time premium of the call option in exchange for fees and thus equilibrium liquidity provision decreases in the time premium. Finally, we provide an expression for
+equilibrium liquidity provision which is useful for empirical work.
+
+Keywords: Decentralized Exchange, DEX, Automated Market Makers, AMM, Concentrated Liquidity, Uniswap V3
+
+∗
+We thank Agostino Capponi, Campbell Harvey, Ruizhe Jia, Ciamac Moallemi, Christine Parlour, Talis
+Putnins, Adriano Rampini, Tim Roughgarden, Gideon Saar, Vish Viswanathan, Anthony Zhang and seminar
+participants at Duke University, Monash University, University of California at Santa Barbara, University
+of Melbourne, University of Oklahoma, and the University of Sydney for valuable comments.
+†
+New York University Stern School of Business. Email: jh4@stern.nyu.edu
+‡
+McGill University. Email: thomas.rivera@mcgill.ca
+§
+University of Florida. Email: fahad.saleh@ufl.edu
+
+1
+
+Introduction
+A decentralized exchange (DEX) is an innovation that allows investors to exchange digital
+
+assets without an intermediary, relying instead on blockchain technology. DEXs are particularly characterized by liquidity providers and liquidity demanders who interact through a
+smart contract (akin to a computer application) deployed on a blockchain without any designated market-marker or centralized limit order book. The first successful design of a DEX
+(e.g., Uniswap v1/v2) enables investors to provide liquidity but with the restriction that any
+liquidity provided must be spread uniformly across all price levels. More pointedly, this initial design did not allow the liquidity provider any discretion regarding the execution prices
+at which the provided liquidity would be used (see Adams et al. 2020). While innovative, the
+aforementioned design suffers from inefficiencies because it results in a substantial amount
+of liquidity being provided at price levels that are unlikely to be reached. To overcome those
+inefficiencies, a new design for liquidity provision, termed concentrated liquidity, was developed and introduced in Uniswap v3. Concentrated liquidity provision allows investors to
+provide liquidity that is available for trade only when the price of trade falls within certain
+exogenous price intervals chosen by the liquidity provider. The success of this design can be
+seen from the fact that currently over 80% of Uniswap’s $32bn average monthly volume is
+generated from assets traded on Uniswap v3 pools.1 The aim of this paper is to shed light
+on this new DEX design by studying equilibrium liquidity provision within this new context
+of concentrated liquidity.
+Formally, our paper puts forth an economic model of a DEX with concentrated liquidity
+provision (e.g., Uniswap v3). In doing so, we make two primary contributions. First, we characterize the investment profile for a liquidity provider at a DEX with concentrated liquidity,
+demonstrating that the portfolio characteristics of concentrated liquidity provision can be
+directly linked to that of a covered call trading strategy. Second, we derive the equilibrium
+1
+
+Average monthly volume and v2/v3 percentage breakdown are based on June 2023-2024 monthly
+Uniswap Ethereum volume data provided by https://app.uniswap.org/explore/pools/ethereum
+
+1
+
+distribution of liquidity provision for a DEX with concentrated liquidity, demonstrating that
+liquidity provision to a specific interval decreases with the time premium of an associated
+call option on the risky asset.
+To provide more detail, we examine a continuous time model with a single DEX that
+facilitates trading of a risky asset, hereafter ETH, against a risk-free asset, hereafter USDC.2
+Our model consists of investors with identical investment horizons and traders with exogenous trading demand. All investors have access to the risk-free asset, USDC, and can lend
+and borrow that asset at an exogenous risk-free rate. At the beginning of the investment
+horizon, investors optimally allocate capital across DEX liquidity provision and a portfolio
+of risky assets. As in practice, we assume that the DEX partitions the positive real line into
+intervals which represent the set of intervals within which the liquidity providers can choose
+to invest. We allow that investors can invest in any subset of price intervals.
+After investors make liquidity provision decisions, traders arrive sequentially and trade
+at the DEX. Each trader pays a proportional fee on her trading volume where the proportional fee is pre-specified by the DEX as in practice. These fees are distributed pro-rata
+to the investors who provided liquidity to the price interval that contains the trades. At
+the conclusion of the investment horizon, all investors liquidate their investments and realize their pay offs. We assume that, over the investment horizon, ETH-USDC prices at
+non-DEX venues (e.g., at centralized exchanges) follow an exogenous generalized diffusion
+process which reflects innovations in public information. In contrast, ETH-USDC prices at
+the DEX follow a mechanical pricing function known as a Constant Product Automated
+Market Maker (CPAMM) function (see John et al. 2023 for details). We assume that arbitrage traders immediately exploit any price dislocations between the DEX and non-DEX
+trading venues, thereby maintaining alignment between ETH-USDC prices at the DEX and
+the ETH-USDC price at non-DEX venues in equilibrium.
+2
+
+ETH represents ether, the native cryptoasset of the Ethereum blockchain (a risky crypto-asset) while
+USDC represents USD coin, a stable coin pegged to the US dollar. ETH-USDC is typically the most actively
+traded token pair at decentralized exchanges such as Uniswap.
+
+2
+
+Crucially, our model contrasts with prior work that assumes that any DEX liquidity
+provision must necessarily apply uniformly across all price levels. Note that early DEX
+deployments (e.g., Uniswap v1/v2) impose this latter condition but recent DEX deployments
+(e.g., Uniswap v3) allow for concentrated liquidity provision as per our model.
+As referenced, our two primary contributions are to characterize the investment profile
+for a liquidity provider and to derive the equilibrium distribution of liquidity provision,
+each within the context of a DEX with concentrated liquidity. The first result is put forth in
+Proposition 5.1 and highlights that liquidity providers face a return which is approximated by
+that from an associated ETH-USDC covered call investment portfolio (i.e., long ETH, short
+ETH call option priced in USDC ). Of particular note, excluding fees, Proposition 5.1 shows
+that providing liquidity at a DEX is dominated by investing in an associated covered call
+portfolio. We clarify that this sub-optimality of DEX liquidity provision (without fees) arises
+because the liquidity provider effectively foregoes the time premium associated with a call
+option when providing liquidity at a DEX with concentrated liquidity. In turn, our second
+main result, Proposition 5.5, demonstrates that equilibrium liquidity provision decreases
+with the time premium associated with a particular ETH call option priced in USDC. This
+latter result is related to the former result in that liquidity providers internalize the lost
+value of the time premium which lowers the equilibrium level of liquidity provision.
+To understand our first main result, it is important to recognize that DEX liquidity provision, in general, is akin to investment in a dynamic portfolio of the DEX inventory (minus
+an arbitrage cost, LVR, first identified by Milionis et al. 2022). Specializing to the context
+of a DEX with concentrated liquidity provision, liquidity provision can be conceptualized as
+a set of investments in each of the price intervals for which the liquidity provider provides
+inventory. Notably, providing liquidity to any price interval is equivalent to investing in a
+dynamic ETH-USDC portfolio minus LVR. We show that the dynamic ETH portfolio weight
+weakly decreases for each portfolio corresponding to a given price interval (Proposition 5.4).
+In particular, the ETH portfolio weight for liquidity provision to an interval is unity when
+
+3
+
+ETH-USDC prices are below that interval and zero when ETH-USDC prices exceed the interval. Within the price interval, the ETH portfolio weight continuously and monotonically
+decreases from unity to zero as the ETH-USDC price moves through the interval, thereby
+highlighting the two way nature of concentrated liquidity provision.
+Importantly, as the length of a price interval specified by the DEX vanishes, the aforementioned portfolio weights exactly match those for an ETH-USDC covered call investment
+at termination where the associated call strike price is contained within the price interval in
+which liquidity is provided. To be more explicit, fix a price interval and consider a covered
+call with strike price in that interval. First note that regardless of the initial price when liquidity is provided, whenever the terminal price is above (below) the price interval, then the
+liquidity provider’s portfolio consists solely of ETH (USDC). Next, note that whenever the
+ETH-USDC price is below that price interval, the price is necessarily below the call option’s
+strike price. Consequently, when the ETH-USDC price is below the interval at termination,
+then the associated call option is worthless, implying that the ETH-USDC covered call investment reduces to a portfolio with an ETH weight of unity. This is equivalent to the ETH
+portfolio weight for providing liquidity to the same interval when the price at termination is
+below that interval because in that case the liquidity provider’s portfolio consists of solely
+ETH. In contrast, in the case whereby the ETH-USDC price is above the price interval,
+then the ETH-USDC price is necessarily above the call option’s strike price. Thus, when
+the ETH-USDC price is above the interval at termination, then the ETH-USDC call would
+be exercised at termination, implying that the covered call investment reduces to a USDC
+position (i.e., ETH portfolio weight of zero) whereby the ETH is purchased from the covered
+call investor for the USDC value of the strike price. This is equivalent to the ETH portfolio
+weight for providing liquidity to the same interval when the price at termination is above
+that interval because in that case the liquidity provider’s portfolio consists of solely USDC.
+Summarizing the prior discussion, the pay off from liquidity provision to a given price
+interval exactly matches the terminal pay off from a covered call investment with a strike price
+
+4
+
+within that price interval except for in the case when the ETH-USDC price at termination
+is within that price interval. In turn, as discussed, when the price grid specified by the DEX
+is especially refined (as in practice), the pay off for liquidity provision is approximately that
+of the associated covered call investment.
+Crucially, the prior discussion focuses on the termination pay off and not the overall investment return. A key point of Proposition 5.1 is that, without fees, returns from providing
+liquidity at a DEX with concentrated liquidity is not only approximated by a covered call
+investment but rather it is dominated by a covered call investment. This sub-optimality for
+liquidity provision at the DEX arises not because of the terminal pay off but rather because
+of the cash flow at inception. More explicitly, investing in an ETH-USDC covered call entails
+buying ETH but also receiving the sales proceeds from an ETH-USDC call option. However, in Proposition 5.1, we demonstrate that providing liquidity to a DEX would be akin
+to initiating the covered call investment portfolio while foregoing the time premium of the
+underlying call option when selling the call. In turn, without trading fees, the overall return
+from liquidity provision to a DEX with concentrated liquidity is necessarily dominated by
+an investment in an associated covered call. While these results hold for any level of DEX
+fees, they provide a clear equilibrium implication: the risk-adjusted expected equilibrium
+fees that an investor earns from providing positive liquidity to a particular interval must
+weakly exceed the time value of the associated call option that is given up when forgoing
+investing instead in the associated covered call portfolio.
+Our second main result, Proposition 5.5, demonstrates that equilibrium liquidity provision decreases with the time premium of an ETH-USDC call option possessing a strike price
+within the price interval for which liquidity is provided. In particular, as discussed, providing
+liquidity at a DEX is a sub-optimal investment (without fees) because it entails sacrificing
+the time premium from a call option. Thus, the cost of liquidity provision increases with the
+time premium of the call option associated with providing liquidity. Further, fee revenues
+are shared pro-rata across all liquidity provided to a particular interval. Hence, when the
+
+5
+
+time premium increases (all else equal), then liquidity providers internalize this higher cost
+of liquidity provision which forces equilibrium liquidity provision to decrease to ensure that
+the pro-rata share of fees increases to off-set this cost.
+A notable implication of our work is that a spot volatility parameter is not, in general,
+sufficient to assess liquidity provision at a DEX with concentrated liquidity. Rather, at a
+DEX with concentrated liquidity, it is specifically the time premium of a call option which
+is relevant. Within a constant volatility model, the time premium of a call option arises
+entirely due to the constant volatility parameter which always corresponds to spot volatility.
+Nonetheless, within richer models, other economic characteristics become relevant implying
+that the relationship between the shape of liquidity provision across price intervals and spot
+volatility (among other parameters of the price process) can be ambiguous. For this reason,
+we contrast the constant volatility case with the seminal stochastic volatility model of Heston
+(1993) in Sections 6.1 and 6.2.
+In broad terms, our paper relates to the literature examining the economics of blockchain.
+Makarov and Schoar (2022), John et al. (2022), and John et al. (2023) provide surveys of
+that literature. That literature includes many strands of work including blockchain economic security (e.g., Biais et al. 2019, Saleh 2021 and Chiu and Koeppl 2022), blockchain
+microstructure elements (e.g., Easley et al. 2019, Huberman et al. 2021 and Lehar and Parlour 2020), smart contracts (e.g., Cong and He 2019) and tokenomics (e.g., Cong et al. 2021
+and Mayer 2022). More recently, a literature examining Decentralized Finance (DeFi) applications on blockchain has emerged, and our work contributes especially to that strand of
+work. In more detail, the DeFi literature particularly examines lending platforms (see, e.g.,
+Chiu et al. 2022, Lehar and Parlour 2022, Chaudhary et al. 2023, Rivera et al. 2023) and
+DEXs, whereby our contribution is to the latter.
+The literature on DEXs is young but quickly growing. The early literature on decentralized exchanges includes Aoyagi (2020), Aoyagi and Ito (2021), Capponi and Jia (2021), Lehar
+and Parlour (2021), Park (2021), Hasbrouck et al. (2022) and Milionis et al. (2022). Apart
+
+6
+
+from Milionis et al. (2022), all the aforementioned papers focus on settings with uniform
+liquidity provision as per the practice of many early DEX deployments (e.g., Uniswap v1
+and v2). Thus, our contribution relative to those works is that we study a new type of DEX,
+namely a DEX with concentrated liquidity provision. It is noteworthy that Milionis et al.
+(2022) study a setting that subsumes concentrated liquidity but consider a model with an
+exogenous level of liquidity provision, whereas our contribution arises from deriving liquidity
+provision endogenously. Relatedly, an important contribution of our work is to provide a
+simple expression for equilibrium liquidity provision for any price interval.
+While we are the first to study an equilibrium model of a DEX with concentrated liquidity provision, there exist other papers that either examine this specific setting empirically
+or out-of-equilibrium (i.e., with exogenous liquidity provision). With regard to empirical
+work, complementary to our work is the work of Barbon and Ranaldo (2022), Lehar et al.
+(2022) and Caparros et al. (2023), each of which conduct empirical analysis on Uniswap
+v3 (a DEX that allows for concentrated liquidity provision). Of note, Lehar et al. (2022)
+also provide theoretical analysis but focus on competition across markets, abstracting from
+concentrated liquidity provision within a single market. With regard to works also studying
+a DEX with concentrated liquidity provision in a theoretical context, Neuder et al. (2021),
+Heimbach et al. (2022), Cartea et al. (2023) and Deng et al. (2023) theoretically examine
+the return profile for a single investor. Our work differs from those works in that we provide
+an equilibrium analysis with endogenously derived aggregate liquidity provision whereas the
+referenced papers abstract from equilibrium asset pricing conditions and take aggregate DEX
+liquidity provision as exogenous.
+Our general characterization of liquidity provision in terms of options extended to incoming traders relates to earlier developments in traditional equity market structure. Copeland
+and Galai (1983, CG) show that when a market maker (MM) makes a bid and ask they are
+essentially writing a put and a call (at different exercise prices, a strangle). Execution of
+an incoming sell order against the bid is equivalent to the exercise of the MM’s put (or, on
+
+7
+
+the ask side, the call). The paper establishes a connection between liquidity and volatility,
+and it is considered foundational. In CG the taking of the MM’s liquidity is tantamount
+to an exercise that extinguishes one of the options. A sale at the bid (for the full quantity
+at the bid), for example, followed by a purchase at the ask (for the full quantity) removes
+the MM’s liquidity. In the automated maket maker (AMM) considered here, however, the
+structure of the pricing function implies that, even after execution, liquidity (and the AMM’s
+exposure to risk) persist. Ignoring fees, a sale followed by the purchase of the same quantity
+restores the AMM to its initial position, with the same exposure to subsequent order flow.
+The persistence and pricing implied by the AMM are associated with option payoffs and
+valuations that differ from those encountered in the CG case.
+
+2
+
+Institutional Detail Regarding Uniswap v3
+
+Before stating our formal economic model, we first clarify the mechanics of a DEX with
+concentrated liquidity. More explicitly, within this section, we explain the mechanics of the
+most prominent DEX that offers concentrated liquidity provision, Uniswap v3. As an aside,
+our model exposition in Section 3 is largely self-contained so that a reader may skip this
+section with minimal loss in clarity with regard to our formal analysis.
+Uniswap v3 launched in 2021 and is currently one of the largest and most successful
+decentralized exchange designs to date, generating an average in excess of $32bn monthly
+trading volume over the previous year from June 2023 - June 2024. The v3 design was envisioned to be a universal AMM, allowing for more flexible pricing due to the concentrated
+liquidity design when compared to pre-existing AMMs that required all liquidity to be uniformly spread across all prices. The success of this design has been demonstrated in Barbon
+and Ranaldo (2022) who demonstrate that the launch of v3 had a positive impact on DEX
+market quality by significantly lowering transaction costs, thereby making DEXs more competitive with centralized exchanges. Importantly, the success of Uniswap v3 crucially relies
+
+8
+
+on the improvement of equilibrium liquidity provision when liquidity providers are given the
+flexibility to allocate their liquidity across different price intervals, motivating the study of
+this paper.
+The Uniswap v3 specification governs exchanges between two cryptoassets. For expositional simplicity, we assume the two cryptoassets are ETH (a risky cryptoasset) and USDC
+(a USD stablecoin), with prices stated in terms of USDC per ETH token. The price space
+is partitioned into a set of intervals. Each price interval corresponds to the range defined by
+adjacent values on a price grid which is given as follows:
+
+Ψk “ p1 ` ∆qk
+
+(1)
+
+for all k P Z and with ∆ ą 0 determining the geometric width of each price interval (i.e.,
+Ψk`1
+“ 1 ` ∆ for all i).
+Ψk
+
+Associated with each interval is a portfolio of ETH and USDC contributed by liquidity
+suppliers. The ETH and USDC in this portfolio are available for exchange in that ETH
+buyers provide USDC as payment in return for ETH, whereas ETH sellers provide ETH in
+return for USDC as payment. To provide more detail regarding the mechanics of trades,
+Uniswap v3 determines pricing by requiring the following invariant hold at all times:
+´
+a ¯
+Li ¯´
+U SDCi,t ` Li Ψi “ L2i
+ET Hi,t ` ?
+Ψi`1
+
+(2)
+
+where ET Hi,t denotes the ETH inventory in price interval i at time t, U SDCi,t denotes the
+USDC inventory in price interval i at time t and Li ě 0 denotes an endogenous marketdetermined quantity, generally termed “liquidity” by practitioners.3
+To see how Equation (2) determines pricing, note that trading δET H ETH alters the
+3
+
+We note that although Uniswap v3 pricing is designed to ensure that this particular AMM invariant
+holds, it is possible to use the v3 concentrated liquidity design to approximate pricing generated by other
+AMM invariants used in practice through the proper specification of liquidity provision as demonstrated by
+https://www.paradigm.xyz/2021/06/uniswap-v3-the-universal-amm.
+
+9
+
+ETH inventory from ET Hi,t to ET Hi,t ´ δET H where we use the convention that δET H ą 0
+corresponds to an ETH buy while δET H ă 0 corresponds to an ETH sell. Importantly, by
+altering the ETH inventory level, trading ETH alters the first term on the left hand side of
+Equation (2) and thus requires an offsetting adjustment to the second term on the left hand
+side of Equation (2) (i.e., to USDC inventory) so as to maintain Equation (2) after the trade.
+In more detail, an ETH buy (i.e., δET H ą 0) reduces ETH inventory and thereby requires an
+off-setting increase in USDC inventory of δU SDC ą 0, whereas an ETH sale (i.e., δET H ă 0)
+increases ETH inventory and thereby requires an off-setting decrease of USDC inventory by
+δU SDC ă 0. More formally, an ETH trade not only alters ETH inventory to ET Hi,t ´ δET H
+but, to maintain Equation (2), it must be accompanied by an alteration in USDC inventory
+to U SDCi,t ` δU SDC where δU SDC can be derived by imposing the invariant in Equation (2)
+with ETH and USDC inventory levels updated to those after the trade:
+´
+a ¯
+Li ¯´
+U SDCi,t ` δU SDC ` Li Ψi “ L2i
+ET Hi,t ´ δET H ` ?
+Ψi`1
+
+(3)
+
+When δET H ą 0, the additional USDC inventory of δU SDC ą 0 is deemed as the payment
+for the ETH buy. Similarly, when δET H ă 0, the reduction in USDC inventory is deemed as
+the proceeds from the ETH sale. In turn, given that interpretation, it is easy to compute
+the (average) price of an ETH trade of δET H by solving for δU SDC and then taking the price
+SDC
+). More explicitly, Equation (2) and (3)
+as the amount of USDC per unit ETH (i.e., δδUET
+H
+
+collectively imply the following average price, PtDEX pδET H q, for trading δET H ETH:4
+
+PtDEX pδET H q “
+
+?
+U SDCi,t ` Li Ψi
+,
+ET Hi,t ` ?Li ´ δET H
+
+´
+`
+δET H P rδi,t
+, δi,t
+s
+
+(4)
+
+Ψi`1
+
+´
+`
+´
+where δET H is restricted to the domain rδi,t
+, δi,t
+s with δi,t
+ď 0 representing the largest ETH
+4
+
+Note that Equation (4) is identical to the pricing for uniform liquidity provision derived in John et al.
+(2023) except that the true inventory levels, ET Hi,t and U SDCi,t , are inflated by additive factors. More
+1
+1
+explicitly, ET Hi,t is replaced by ET Hi,t
+“ ET Hi,t ` ? Li whereas U SDCi,t is replaced by U SDCi,t
+“
+Ψi`1
+?
+1
+1
+U SDCi,t ` Li Ψi . In practice, ET Hi,t and U SDCi,t are generally referred to as “virtual” inventory.
+
+10
+
+`
+sale feasible at time t within price interval i and δi,t
+ě 0 representing the largest ETH buy
+
+feasible at time t within price interval i. To provide further context, the largest feasible ETH
+buy is the ETH quantity that would fully deplete the ETH inventory within the price interval
+`
+(i.e., δi,t
+“ ET Hi,t ), whereas the largest feasible ETH sale is the ETH sale that would fully
+´
+´
+q| ď U SDCi,t ). If a
+deplete the USDC inventory within the interval (i.e., |δi,t
+ˆ PtDEX pδi,t
+´
+`
+trader wishes to place an order larger than δET H P rδi,t
+, δi,t
+s, then the maximum feasible
+
+trade is executed within the price interval i, and the remainder of the trading volume is
+`
+executed within other price intervals. More explicitly, if the trader wishes to trade δ ą δi,t
+,
+`
+then a trade size of δi,t
+is executed within price interval i and the remainder of the trade is
+
+executed within price intervals above price interval i; similarly, if the trader wishes to trade
+´
+´
+is executed within price interval i and the remainder of the
+, then a trade size of δi,t
+δ ă δi,t
+
+trade is executed within price intervals below price interval i.
+Crucially, note that, as per Equation (4), trading alters the ETH-USDC price in the
+direction of the trade with an ETH buy increasing the ETH-USDC price and an ETH sell
+decreasing the ETH-USDC price (i.e., dδdP
+ą 0 in Equation 4). Uniswap v3 is particularly
+ET H
+specified such that the ETH-USDC price moves continuously upwards through a price interval
+due to ETH buying; the buying depletes the ETH inventory, and the ETH-USDC price enters
+the adjacent upper interval exactly when the initial interval possesses zero ETH inventory.
+Similarly, the ETH-USDC price moves continuously downward through a price interval due
+to ETH selling; the selling depletes the USDC inventory, and the ETH-USDC price enters
+the adjacent lower interval exactly when the initial interval possesses zero USDC inventory.
+Given Li , Uniswap v3 is simply a mechanical rule. There is no presumption that the
+rule represents an optimal market structure. Nonetheless, Li is not an exogenous parameter;
+rather, it is an endogenous economic quantity determined by the level of investment from
+liquidity providers. An important contribution of our work is that we depart from prior
+literature by deriving Li as an equilibrium object rather than taking it as exogenous.
+
+11
+
+3
+
+A Model of Concentrated Liquidity Provision
+We model a single investment horizon from time t “ 0 to t “ T . At t “ 0, investors arrive
+
+and allocate their capital across all available investment opportunities. At t “ T , investors
+liquidate their investments and realize their payoffs. We assume that investors select their
+portfolios at t “ 0 to maximize their expected utility.5
+
+3.1
+
+Assets
+
+There exist two assets: a risk-free asset (USDC) and a risky asset (ETH). USDC is the
+numeraire and may be borrowed or lent at the exogenous risk-free rate r ą 0. In contrast,
+ETH is a risky asset with ETH-USDC prices tPt uTt“0 evolving according to an exogenous
+continuous time diffusion process given by:
+dPt
+“ r dt ` σt dBtQ
+Pt
+
+(5)
+
+where tBtQ uTt“0 denotes a Brownian motion under the risk-neutral measure Q while tσt uTt“0
+denotes a non-negative process for instantaneous ETH return volatility.6 We require that
+tσt uTt“0 is such that tPt uTt“0 is non-negative, fully supported on R` and further that there
+exists a continuous function f pp, tq which gives the density of pt :“ logpPt q at value p; we also
+1
+2
+
+T
+ş
+
+require Ere 0
+
+σt2 dt
+
+s ă 8. Note that all these regularity conditions are satisfied by geometric
+
+Brownian motion (i.e., σt “ σ ą 0), the most common special case of Equation (5).
+5
+
+In a frictionless setting, the assumption of a homogeneous investment horizon T across all LPs arises
+endogenously. In particular, when there are no capital re-allocation costs (i.e., no gas fees), then all LPs
+optimally re-allocate capital at the shortest horizon possible. Within the context of a blockchain, this
+shortest horizon possible is the time for a single block and it is uniform across all LPs as per our model.
+Nonetheless, since there exist capital re-allocation costs in practice, we suggest that researchers using our
+model for empirical work should consider T as a parameter to be calibrated based on real-world data. For
+example, empirical researchers could set T as the mean or median horizon for investor re-allocation.
+6
+Note that it is possible to consider risky-risky asset pairs by denominating one of the risky assets as the
+numeraire. In that setting, it is necessary to specify that the non-numeraire asset follows a price process
+with a zero drift term (i.e., r “ 0) because the price is denominated in a risky numeraire asset. This comes
+from the fact that both risky assets will follow a price process with drift r ą 0, equal to the risk free rate,
+when denominated in the risk-free asset price.
+
+12
+
+3.2
+
+Decentralized Exchange (DEX)
+
+We model a single Decentralized Exchange (DEX) which allows for the trading of ETH
+against USDC and operates as described in Section 2. Investors may invest in the DEX
+by providing liquidity to the DEX which facilitates the DEX’s trading activity. In more
+detail, an investor providing liquidity to the DEX means that the investor provides the DEX
+with ETH and USDC inventory which is then used by the DEX to meet demand for traders
+buying or selling ETH against USDC.
+The DEX partitions the feasible range of ETH-USDC prices into exogenous intervals
+and each investor may concentrate her liquidity provision on any subset of those intervals.
+Providing liquidity to a particular price interval implies that the investor’s inventory can be
+used for trading at the DEX only if that trading occurs at ETH-USDC prices within that
+specific price interval. In turn, an investor providing liquidity to a particular price interval
+does not improve liquidity for traders when ETH-USDC prices are outside that price interval.
+We let price interval i P Z correspond to interval rΨi , Ψi`1 s where, as in practice, each
+interval endpoint is given explicitly by Ψk “ p1 ` ∆qk with ∆ ą 0 determining the geometric
+“ 1 ` ∆ for all k). For clarity, it is often useful to
+width of each price interval (i.e., ΨΨk`1
+k
+distinguish components that are fee-based from those where fees are excluded or ignored
+whereby we utilize the term “ex-fee”. Following this distinction, the gross return from
+providing liquidity to interval i, RDEX,i , is given as follows:
+RDEX,i “ RPi &L ` ϕi
+
+(6)
+
+where RPi &L denotes the ex-fee gross return on the liquidity providers inventory for price
+interval i and ϕi denotes the fees accrued by liquidity providers within price interval i for
+providing a unit of inventory capital to price interval i. We subsequently clarify how RPi &L
+and ϕi are each determined.
+
+13
+
+3.2.1
+
+Ex-Fee Return to Liquidity Providers, RPi &L
+
+As noted earlier, the liquidity provided to the DEX for any particular price interval is
+provided as inventory in the form of ETH and USDC and thus the liquidity provided for
+any particular price interval constitutes a portfolio of ETH and USDC. Notably, when an
+investor provides liquidity at a particular price interval, she becomes a pro-rata owner of
+the portfolio associated with that price interval, which we refer to as the liquidity portfolio
+for that price interval. In turn, the ex-fee gross return to an investor for providing liquidity
+to price interval i, RPi &L , is the gross liquidity portfolio return, which is given explicitly as
+follows:
+RPi &L “
+
+Πi,T
+Πi,0
+
+(7)
+
+with Πi,t denoting the liquidity portfolio value of inventory associated with price interval i.
+Since the liquidity portfolio consists of only ETH and USDC, Πi,t is the sum of the market
+value of ETH and USDC in the portfolio, which is given explicitly as follows:
+
+Πi,t “ U SDCi,t ` ET Hi,t ˆ Pt
+
+(8)
+
+where U SDCi,t denotes the inventory of USDC within price interval i at time t, and ET Hi,t
+denotes the inventory of ETH within price interval i at time t.
+The value of inventory, Πi,t , fluctuates not only due to fluctuations of ETH-USDC prices
+(i.e., changes in Pt ) but also due to changes in the quantity of ETH and USDC associated
+with the price interval (i.e., changes in ET Hi,t and U SDCi,t ). In particular, trading at the
+DEX, when prices are within price interval i, leads to changes in the quantity of ETH and
+USDC associated with price interval i. For example, buying ETH against USDC at a DEX
+entails removing ETH inventory from the DEX in exchange for depositing USDC inventory
+to the DEX, with the quantity of USDC deposited corresponding to the dollar price paid
+for the ETH removed. As per Uniswap v3, we assume that the DEX employs a a Constant
+Product Automated Market Maker (CPAMM) for pricing (see Section 2). We also assume
+14
+
+that the ETH-USDC prices at the DEX remain aligned with the true value of ETH-USDC
+prices due to arbitrage trading. In that case, the quantity of USDC, U SDCi,t , and the
+quantity of ETH, ET Hi,t , in price interval i at time t are given explicitly as follows:7
+
+U SDCi,t “
+
+´ 1
+1 ¯
+ˆ Li
+ET Hi,t “ b
+´?
+Ψ
+i`1
+P̃i,t
+
+´b
+a ¯
+P̃i,t ´ Ψi ˆ Li ,
+
+(9)
+
+where Li is an endogenous quantity that practitioners refer to as the “liquidity” for price
+interval i that is proportional to the dollar value of the liquidity provided to interval i, while
+P̃i,t denotes the projection of the ETH-USDC price onto interval i given by:
+$
+’
+’
+’
+Ψi`1
+’
+’
+’
+&
+P̃i,t “
+
+Pt
+’
+’
+’
+’
+’
+’
+%Ψi
+
+if Pt ą Ψi`1
+if Pt P rΨi , Ψi`1 s
+
+(10)
+
+if Pt ă Ψi
+
+Equations (7) - (10) then imply that RPi &L is given explicitly as follows:
+´b
+¯
+? ¯ ´ 1
+1
+?
+?
+ˆ PT
+´
+P̃i,T ´ Ψi `
+Ψi`1
+P̃i,T
+RPi &L “ ´b
+¯
+´
+¯
+?
+P̃i,0 ´ Ψi ` ?1 ´ ? 1
+ˆ P0
+P̃i,0
+
+3.2.2
+
+(11)
+
+Ψi`1
+
+Fees Accrued to Liquidity Providers, ϕi
+
+We assume that the DEX charges a proportional trading fee, η ě 0, for all liquidity traders,
+but we follow Milionis et al. (2022) and abstract from arbitrage trading fees for tractability.
+We further assume that liquidity traders trade continuously over time with volume V ą 0
+per unit time. Notably, our assumptions collectively imply that the DEX price aligns with
+the CEX price at all times t. Then, the cumulative fees accrued for price interval i, Φi , from
+7
+
+Formally, Equation (9) follows directly from the equations that define the Uniswap v3 protocol, Equations
+(2) and (4), when imposing the additional requirement that the marginal ETH-USDC DEX price aligns with
+the price at other trading venues (i.e., lim PtDEX pδq “ Pt for all t where PtDEX pδq is defined explicitly in
+δÑ0`
+
+Equation 4).
+
+15
+
+time 0 to time T is given as follows:8
+żT
+η ˆ V ˆ IpPt P rΨi , Ψi`1 sq dt
+
+Φi “
+
+(12)
+
+0
+
+where Ip¨q denotes an indicator variable. As an aside, we note that our continuous liquidity
+trading assumption precludes large trades that push the DEX price outside of the current
+interval. Although not exact to practice, our continuous liquidity trading assumption can
+be seen as a simplification to capture dynamics from liquidity pools with non-trivial levels
+of liquidity.
+Within a DEX with concentrated liquidity, the total fees, Φi , are distributed pro-rata
+among the liquidity providers for the price interval i. In turn, since the total investment by
+liquidity providers is given by the portfolio value of assets associated with the price interval
+at t “ 0, the fees accrued for a unit of investment capital to price interval i, ϕi , is therefore
+given explicitly as follows:
+
+ϕi “
+
+4
+
+Φi
+Πi,0
+
+(13)
+
+Model Solution
+
+Under the risk-neutral measure, Q, all assets must generate the same pay off as a risk-free
+‹
+investment. Explicitly, letting RDEX,i
+denote the equilibrium rate of return from investing
+8
+
+Note that we can easily allow for a generalized expression for trading volume that both varies with state
+variables and also exhibits that higher inventory in any given interval leads to lower price impacts (see e.g.,
+Hasbrouck et al. 2022). More explicitly, we could assume that trading volume per unit time to interval
+i, Vi,t , takes the functional form Vi,t “ At ¨ pΠi,0 qα where tAt uTt“0 is an exogenous stochastic process that
+depends on the model’s state variables and α P p0, 1q. Under this generalized trading volume specification,
+all our results hold exactly except for Proposition 5.5. Regarding Proposition 5.5, if At “ A ą 0, then the
+equilibrium liquidity provision expression will be only slightly modified and will remain easy-to-compute.
+Alternatively, if one would like to allow for tAt uTt“0 to follow a non-degenerate stochastic process, then one
+may employ an exponential-affine form in the state variables. In such a case, Duffie et al. (2000) provide
+methods to compute the risk-adjusted expected fees which would then enable computation of equilibrium
+liquidity provision.
+
+16
+
+in price interval i at the DEX, the following equation must hold for all i:9
+
+‹
+s “ erT
+EQ rRDEX,i
+
+(14)
+
+Then, applying Equations (6) and (13) to Equation (14) yields:
+
+EQ rRPi &L s `
+
+EQ rΦi s
+“ erT
+Π‹i,0
+
+(15)
+
+where Π‹i,0 refers to the dollar value of equilibrium investment to price interval i. Note that
+both the expected ex-fee return from investing in price interval i, RPi &L , and the expected
+total fees accrued in price interval i, Φi , are exogenous (see Equations 11 and 12). In turn,
+the endogenous equilibrium investment, Π‹i,0 , can be derived directly from Equation (15).
+Furthermore, all other endogenous quantities can be determined from Π‹i,0 . More formally,
+the following result provides an explicit solution for all endogenous quantities.
+Proposition 4.1. Equilibrium Model Solution
+The equilibrium investment, Π‹i,0 , for each interval i P Z is given explicitly as follows:
+
+Π‹i,0 “
+
+EQ rΦi s
+erT ´ EQ rRPi &L s
+
+(16)
+
+where the Q-measure total expected fee revenue for interval i, EQ rΦi s, is given explicitly as
+follows:
+żT
+EQ rΦi s “ η ˆ V ˆ
+
+QpPt P rΨi , Ψi`1 sq dt
+
+(17)
+
+0
+9
+
+Equation 14 abstracts from re-positioning costs. In practice, such costs arise as fees paid to the blockchain
+validators, known as gas fees. Notably, gas fees are invariant to the investment level and thus are not
+especially significant for large investors. Moreover, gas fees depend on the blockchain scale and vanish as
+the blockchain’s scale diverges (see Huberman et al. 2021 and John et al. 2021). Given the focus on scaling
+blockchains in practice, we view our model as a suitable long-run model of liquidity provision. For an
+economic analysis of the implications of re-positioning costs, the interested reader may consult Lehar et al.
+(2022).
+
+17
+
+In turn, the equilibrium liquidity, L‹i , for each interval i is given explicitly as follows:
+L‹i “
+
+Π‹i,0
+γi
+
+(18)
+
+with γi is defined as follows:
+´b
+a ¯ ´ 1
+1 ¯
+γi “
+ˆ P0
+P̃i,0 ´ Ψi ` b
+´?
+Ψ
+i`1
+P̃i,0
+
+(19)
+
+‹
+‹
+Finally, the equilibrium quantities of USDC, U SDCi,t
+, and ETH, ET Hi,t
+, in price inter-
+
+val i at time t are given as follows:
+
+‹
+U SDCi,t
+“
+
+5
+
+´b
+a ¯
+P̃i,t ´ Ψi ˆ L‹i ,
+
+‹
+ET Hi,t
+“
+
+´
+
+1 ¯
+1
+?
+b
+´
+ˆ L‹i
+Ψi`1
+P̃i,t
+
+(20)
+
+Results
+
+We offer two main results. First we show that the ex-fee return from providing liquidity
+to a price interval is approximated by the return to a specific covered call (Section 5.1).
+More precisely, we show that liquidity provision is approximated by buying the underlying
+(ETH) and selling an ETH call option with a strike price that lies within the interval,
+a combination that constitutes a covered call. Crucially, we show that the ex-fee return
+from providing liquidity to a price interval is dominated by the return from a particular
+covered call with the shortfall in the liquidity provision return stemming from the call time
+premium. That is, investing in liquidity provision implicitly values the call at its intrinsic
+value, forgoing its time premium. This discount implies that the ex-fee return to liquidity
+provision is dominated by the direct covered call investment in which the call value includes
+the time premium. In Section 5.2 we place this result in the context of related literature.
+
+18
+
+Section 5.3 establishes our second main result, a simple expression for equilibrium liquidity
+provision in any price interval at a DEX that supports concentrated liquidity. In line with
+our first result, equilibrium liquidity decreases in the time premium of the implicit written
+call.
+To establish and interpret these results, we consider limiting cases in which the DEX price
+interval converges to a single price. That is, the geometric width of the interval, ∆ Ñ 0` .
+As ∆ is generally on the order of a few basis points, this approximates the case where ∆ is
+positive but small.
+
+5.1
+
+Covered Call Approximates DEX Liquidity Provision
+
+Our first main result establishes that the ex-fee return from providing liquidity to a DEX
+that supports concentrated liquidity is intrinsically linked to the return from investing in an
+associated covered call portfolio:
+Proposition 5.1. Consider an arbitrary sequence of price intervals, tip∆n , P qunPN , such
+that lim ∆n “ 0 where each price interval is selected to contain P for each ∆ pi.e., P P
+nÑ8
+
+rΨip∆,P q , Ψip∆,P q`1 sq. Within that context, the ex-fee realized gross return for DEX liquidity
+provision at price level P converges to the realized gross return from an ETH-USDC covered
+call investment with strike price P under the condition that the call option is sold at its
+intrinsic value:
+
+ip∆,P q
+
+lim` RP &L “
+
+∆Ñ0
+
+PT ´ CI pPT , P q
+P0 ´ CI pP0 , P q
+
+(21)
+
+where CI pPt , Kq :“ pPt ´ Kq` denotes the intrinsic value of the call option where the intrinsic value is defined as the payout from exercising an otherwise equivalent American option
+immediately.
+A key implication of Proposition 5.1, is that while providing liquidity generates an ex-fee
+return similar to a covered call investment, there is a distinct difference owing to the fact
+19
+
+that liquidity provision effectively entails selling the same call option as the covered call
+investment, but at a price equal to the intrinsic value of the option rather than the market
+value. To further elaborate, note that an ETH-USDC covered call entails a long position
+in ETH and a short position in an ETH-USDC call option. This implies that the covered
+call market value is the difference between the ETH price and the call option price. More
+formally, when the ETH-USDC call option has strike price P , then the market value of an
+associated covered call at time t P r0, T s, denoted CovCallt , is given as follows:
+
+CovCallt “
+
+t on
+looP
+mo
+ETH price at t
+
+´ CpP,
+t, T | Ft q
+looooooomooooooon
+
+(22)
+
+Call price at t
+
+where CpK, t, T | Ft q :“ e´rpT ´tq EQ rpPT ´ Kq` | Ft s denotes the time t market value of a
+call option with maturity T and strike price K given the information set Ft as of time t.
+In turn, the gross return at time t “ T from investing in a covered call (with strike P and
+expiration T ) initiated at time t “ 0 is given as follows:
+
+RCovCall “
+
+PT ´ CpP, T, T | FT q
+CovCallT
+“
+CovCall0
+P0 ´ CpP, 0, T | F0 q
+
+(23)
+
+Notably, at termination (i.e., at t “ T ), the call option market value reduces to its
+intrinsic value:
+CpP, T, T | FT q “ CI pPT , P q :“ pPT ´ P q`
+
+(24)
+
+Thus, Equations (23) and (24) imply that the terminal gross return generated by the covered
+call investment initiated at time t “ 0 can be re-written as follows:
+
+RCovCall “
+
+CovCallT
+PT ´ CI pPT , P q
+“
+CovCall0
+P0 ´ CpP, 0, T | F0 q
+
+(25)
+
+Crucially, the gross return for a covered call in Equation (25) matches the gross return
+for DEX liquidity provision at the price level P in Equation (21) except for the valuation
+of the call option in the denominator. More explicitly, Equation (21) subtracts the t “ 0
+20
+
+call option intrinsic value, CI pP0 , P q, in the denominator whereas Equation (25) subtracts
+the t “ 0 call option market value, CpP, 0, T | F0 q which highlights the key difference in the
+returns from (ex-fee) liquidity provision v.s. this covered call strategy.
+To provide intuition on why there is a difference in the returns from liquidity provision and
+the associated covered call, note that when a covered call investment is initiated, the investor
+sells a call option at time t “ 0 and employs the sale proceeds to finance a long position
+in the risky asset. As implied by the numerators of Equations (21) and (25) matching,
+the terminal payoff from liquidity provision and the associated covered call investment are
+the same. Thus, the difference in the returns from liquidity provision and the covered call
+investment arises due to the difference of the denominators of Equations (21) and (25) and
+can be interpreted as the difference in the cost of initiating a liquidity position v.s. the
+cost of initiating the covered call position. Crucially, the market value of a call option is
+higher than its intrinsic value and thus effectively initiating the covered call investment by
+providing liquidity entails foregoing this difference between the call option market value and
+its intrinsic value, known as the time premium of the option. In other words, if instead of
+providing DEX liquidity, an investor chose to invest in the associated covered call portfolio,
+then they would earn the call option’s time premium at inception of the position while
+maintaining the same terminal payoffs as when providing DEX liquidity. In turn, the gross
+return from providing liquidity at price P at a DEX that supports concentrated liquidity is
+lower than that from investing in the associated covered call portfolio (excluding fees). We
+formalize this point with the following result:
+Proposition 5.2. Consider an arbitrary sequence of price intervals, tip∆n , P qunPN , such
+that lim ∆n “ 0 where each price interval is selected to contain P for each ∆ pi.e., P P
+nÑ8
+
+rΨip∆,P q , Ψip∆,P q`1 sq. Within that context, the ex-fee realized gross return for DEX liquidity
+provision to price level P converges to a value that is lower than the realized gross return
+from an ETH-USDC covered call investment with strike price P :
+
+21
+
+ip∆,P q
+
+lim RP &L ď RCovCall
+
+∆Ñ0`
+
+(26)
+
+where RCovCall is defined in Equation (25).
+Finally, note that while the condition (26) holds no matter the fee revenues earned from
+providing DEX liquidity, it is important to understand that the difference in these investment
+returns must be overcome in any equilibrium (with positive DEX liquidity). In particular,
+this difference is overcome by ensuring that each investor earns sufficient fees, risk-adjusted
+and in expectation, to offset the difference in their ex-fee return relative to the covered call
+return. Thus, one natural implication of Proposition 5.2 is that the risk-adjusted expected
+fees per unit of capital invested when providing liquidity at a particular price level P must
+weakly exceed the time value of the associated call option in order to justify DEX liquidity
+provision. Thus, when the time value of the associated option, CpP, 0, T |F0 q ´ CI pP0 , P q,
+increases (resp. decreases), then the equilibrium liquidity provided at the price level P
+must decrease (resp. increase) to ensure that the pro-rata share of fees earned increases
+(resp. decrease). We revisit this point in Section 5.3 when we discuss equilibrium liquidity
+provision.
+
+5.2
+
+Relationship To Prior Literature
+
+Proposition 5.1 can be understood also through the lens of prior work. More explicitly, it
+is well-known that providing liquidity to a DEX is akin to investing in a dynamic portfolio
+of the underlying assets being traded by the DEX (see, e.g., Milionis et al. 2022). In the
+remainder of this section, we formally re-establish that result in the context of a DEX
+that supports concentrated liquidity. Thereafter, we show that when the DEX supports
+concentrated liquidity then the portfolio dynamics resemble the dynamics for a covered call
+investment as per Proposition 5.1.
+Our next result shows that, for each price interval i, the instantaneous ex-fee liquidity
+
+22
+
+dΠ‹
+
+provision return, Π‹i,t , evolves as follows:
+i,t
+
+Proposition 5.3. Liquidity Provision Is Investing in ETH-USDC Portfolio
+The instantaneous ex-fee return from providing liquidity to price interval i is given as follows:
+dΠ‹i,t
+li,t
+‹ dPt
+“ ωi,t
+´ ‹ dt
+‹
+Πi,t
+Pt
+Πi,t
+
+(27)
+
+‹
+where ωi,t
+denotes the equilibrium proportion of the inventory invested in ETH:
+
+‹
+ωi,t
+“
+
+‹
+‹
+ET Hi,t
+ˆ Pt
+ET Hi,t
+ˆ Pt
+“
+‹
+‹
+‹
+Πi,t
+U SDCi,t ` ET Hi,t
+ˆ Pt
+
+(28)
+
+and li,t denotes the instantaneous loss-versus-rebalancing pLVRq, given explicitly as follows:
+$
+?
+’
+‹ 2
+’
+& Li σt Pt
+4
+
+li,t “
+’
+’
+%0
+
+if Pt P rΨi , Ψi`1 s
+
+(29)
+
+otherwise
+
+Explicitly, Equation (27) states that the instantaneous ex-fee liquidity provision return,
+dΠ‹i,t
+, evolves akin to an ETH-USDC portfolio with an ETH portfolio weight that equals
+Π‹i,t
+
+exactly the DEX inventory value of ETH as a proportion of the total DEX inventory value
+‹
+“
+(i.e., ωi,t
+
+‹ ˆP
+ET Hi,t
+t
+).
+Π‹i,t
+
+There is also a loss beyond the ETH-USDC portfolio instantaneous
+
+l
+
+return, Πi,t‹ . This loss corresponds to the loss-versus-rebalancing (LVR) of Milionis et al.
+i,t
+
+(2022) and occurs because arbitrage trades occur at the DEX at stale prices which imposes
+losses on the liquidity providers.
+To understand Proposition 5.3, it is important to recognize that liquidity providers for
+price interval i are pro-rata owners of the inventory associated with that price interval. Thus,
+the ex-fee return for providing liquidity for a price interval of ETH-USDC corresponds to
+the return from an ETH-USDC portfolio because the inventory for that price interval is a
+combination of ETH and USDC. In particular, as per Equation (27), an investor providing
+dΠ‹
+
+liquidity for price interval i experiences an instantaneous return, Π‹i,t , proportional to instani,t
+
+23
+
+t
+taneous ETH returns, dP
+, exactly to the extent that ETH is weighted within the inventory
+Pt
+
+‹
+for price interval i, as given by the weight ωi,t
+.
+
+A particularly important feature of concentrated liquidity is that this design implies par‹
+. Our next result clarifies those dynamics:
+ticular dynamics for the ETH portfolio weight, ωi,t
+
+Proposition 5.4. ETH Portfolio Weight Declines Monotonically From Unity to Zero
+When the ETH-USDC price level is below the price interval pi.e., Pt ă Ψi q, then the liquidity
+portfolio is equivalent to holding ETH directly:
+
+‹
+Pt ă Ψi ùñ ωi,t
+“1
+
+(30)
+
+When the ETH-USDC price level is within the price interval pi.e., Pt P rΨi , Ψi`1 sq, then
+the liquidity portfolio is equivalent to holding an ETH-USDC portfolio with dynamic weighting:
+
+‹
+Pt P rΨi , Ψi`1 s ùñ ωi,t
+“ ωi‹ pPt q
+
+(31)
+
+where ωi‹ : rΨi , Ψi`1 s ÞÑ r0, 1s is a continuous and monotonically decreasing function that
+satisfies ωi‹ pΨi q “ 1 and ωi‹ pΨi`1 q “ 0.
+When the ETH-USDC price level is above the price interval pi.e., Pt ą Ψi`1 q, then the
+liquidity portfolio is equivalent to holding USDC directly:
+
+‹
+Pt ą Ψi`1 ùñ ωi,t
+“0
+
+(32)
+
+Proposition 5.4 establishes that the ETH portfolio weight specifically evolves as a decreasing function of the ETH-USDC price, Pt . In more detail, the ETH portfolio weight is
+unity when the ETH-USDC price is fully below the interval but then declines continuously to
+zero as the ETH-USDC price moves through the interval and finally remains zero thereafter
+when the ETH-USDC price is fully above the interval. It is noteworthy that this result would
+24
+
+not hold if we were to assume uniform liquidity provision; more explicitly, under uniform
+‹
+liquidity provision and a CPAMM (e.g., Uniswap v1 and v2), ωi,t
+is constant and does not
+
+depend on Pt (see, e.g., Angeris et al. 2021).10
+Proposition 5.4 is derived for arbitrary ∆, but it is useful to consider the implication of
+this result when taking ∆ Ñ 0` to understand how this result relates to Proposition 5.1. In
+what follows, we clarify that taking ∆ Ñ 0` reveals that the terminal pay off of the portfolio
+matches that of a covered call investment as per Proposition 5.1. To be more explicit, as
+discussed, when ∆ Ñ 0` , then each DEX price interval collapses to a singleton price P .
+‹
+Ñ 1 as ∆ Ñ 0` whenever Pt ă P , and Equation (32)
+Moreover, Equation (30) implies ωi,t
+‹
+implies ωi,t
+Ñ 0 as ∆ Ñ 0` whenever Pt ą P . Crucially, the terminal pay off, implied
+‹
+, equates exactly with that for an ETH-USDC
+by the terminal ETH portfolio weight ωi,T
+
+covered call with strike price P as per the discussion in Section 5.1. In more detail, when a
+call option expires out of the money, then the call option is worthless so that the associated
+covered call portfolio reduces to a portfolio with only a long position in the risky asset, and
+‹
+this is akin to ωi,t
+Ñ 1 as ∆ Ñ 0` whenever Pt ă P . Similarly, when a call option expires
+
+in the money, then the associated covered call portfolio reduces to a portfolio without the
+risky asset (i.e., to only $P of the non-risky asset) because the call option is exercised and
+the risky asset within the covered call portfolio is therefore sold for the strike price. This
+‹
+Ñ 0 as ∆ Ñ 0` whenever Pt ą P .
+latter relationship for a covered call is akin to ωi,t
+
+5.3
+
+Equilibrium Liquidity Provision and Time Premium
+
+Our second main result provides a simple expression for equilibrium liquidity provision:
+Proposition 5.5. Equilibrium Liquidity Provision as ∆ Ñ 0`
+Given a fixed price level P , we consider an arbitrary sequence of price intervals, tip∆n , P qunPN ,
+10
+
+To provide additional context, a CPAMM is a special case within a broader class of AMMs known as
+Geometric Mean Market Makers (G3Ms). Notably, under uniform liquidity provision, all G3Ms possess
+static portfolio weights (see, e.g., Angeris and Chitra 2020 and Evans 2021). Proposition 5.4 demonstrates
+that this static portfolio weights result does not hold under concentrated liquidity thereby highlighting an
+important difference between uniform liquidity and concentrated liquidity.
+
+25
+
+such that lim ∆n “ 0 where each price interval is selected to contain P for each ∆ pi.e.,
+nÑ8
+
+P P rΨip∆,P q , Ψip∆,P q`1 sq. In turn, we apply Proposition 4.1 to construct the associated liquidity provision sequence, tΠ‹ip∆n ,P q unPN , and we thereby derive the limiting liquidity provision,
+Π‹ pP q, for each price level, P , as follows:
+
+Π‹ pP q :“ lim`
+∆Ñ0
+
+1 ‹
+“
+Π
+∆ ip∆,P q,0
+
+T
+ş
+e´rT ˆ η ˆ V ˆ mintP0 , P u ˆ f pp, tq dt
+0
+
+Time Premium
+
+(33)
+
+where f pp, tq denotes the Q-measure density of p :“ logpP q and Time Premium refers to the
+option time premium at initiation pi.e., t “ 0q for an ETH-USDC call option with strike P ,
+given explicitly as follows:
+
+Time Premium :“ CpP, 0, T | F0 q ´ CI pP0 , P q
+
+(34)
+
+where, as before, CpK, t, T | Ft q :“ e´rpT ´tq EQ rpPT ´ Kq` | Ft s and CI pPt , P q :“ pPt ´ P q` .
+Within Proposition 5.5, we take ∆ Ñ 0` to derive a simple expression for equilibrium
+liquidity provision in Equation (33). Crucially, since ∆ is small in practice, Equation (33)
+implies the following reasonable approximation for equilibrium liquidity provision for any
+price interval i, Π‹i,0 :
+
+Π‹i,0 « Π‹
+
+¯
+´a
+Ψi ¨ Ψi`1 ˆ ∆
+
+(35)
+
+where the function Π‹ p¨q is given explicitly by the right-hand-side of Equation (33) while
+?
+Ψi ¨ Ψi`1 denotes the geometric average of the price interval i.
+Two notable implications arise from Proposition 5.5. First, for all intervals i, equilibrium
+liquidity provision decreases in the time premium of the associated call option. More formally, Equation (33) shows explicitly that Π‹ pP q decreases in the call option time premium,
+Time Premium :“ CpP, 0, T | F0 q´CI pP0 , P q, all else equal. Secondly, for all intervals i, equilibrium liquidity provision increases with the Q-expected time that the price spends within
+26
+
+the interval where liquidity is being provided. More formally, Lemma A.4 and Tonelli’s
+Theorem imply that the Q-expected time that the price spends within the interval scaled
+T
+ş
+by ∆1 converges to f pp, tq dt.11 In turn, for small ∆, the Q-expected time that the price
+0
+
+T
+ş
+spends within interval i is approximately equal to f pp, tq dtˆ∆, an expression that appears
+0
+
+explicitly in the liquidity provision expression provided by Equation (35).
+To expand on the first implication, as clarified by Propositions 5.1 and 5.2, providing
+liquidity at a DEX with concentrated liquidity entails entering into a covered call pay off
+but sacrificing the time premium of the call option therein at initiation. As discussed above,
+investors must be compensated in the form of risk-adjusted expected fees for sacrificing
+this time premium when providing DEX liquidity provision. Otherwise, it would always
+be optimal to invest in the associated covered call portfolio rather than investing in DEX
+liquidity. Investors internalize this cost so that, keeping total risk-adjusted expected fees
+fixed, equilibrium liquidity provision must decrease in the call option time premium. More
+explicitly, when the call option time premium is higher, then the loss incurred by investors
+from the lost time premium is higher (all else equal) and thus equilibrium liquidity provision
+is lower as per Proposition 5.5.
+To expand on the second implication, liquidity providers receive fees only when trading
+activity occurs in the interval for which they provided liquidity. Investors internalize this
+fact ex-ante and thus equilibrium liquidity provision increases in the Q-expected time that
+the price spends within the interval. More concretely, a higher amount of time that the
+price spends in the interval under the Q-measure implies higher risk-adjusted trading fees
+in expectation. Then, since these trading fees are paid to liquidity providers, the higher
+risk-adjusted trading fees lead to higher equilibrium liquidity provision (all else equal) as per
+Proposition 5.5.
+11
+
+T
+T
+ş
+ş
+1 Q
+Explicitly, ∆
+E r IpPt P rΨi , Ψi`1 sq dts Ñ f pp, tq dt as ∆ Ñ 0`
+0
+
+0
+
+27
+
+6
+
+Discussion
+
+Our analysis offers a variety of economic implications. Most crucially, via Proposition 5.5
+and Equation (35), we provide a theory to explain the distribution of liquidity provision
+across price intervals. Some notable predictions are as follows:
+(I) All-else-equal, liquidity provision for a price interval decreases with the time premium
+of a call option with strike equal to the geometric average of the price interval.
+(II) All-else-equal, liquidity provision for a price interval increases with the Q-expected
+time spent in the price interval.
+(III) The relationship between the shape of liquidity provision (across price intervals) and
+the underlying parameters of the price process can be ambiguous.
+(I) and (II) are discussed in Section 5.3, so, for brevity, we discuss only (III) here. To
+that end, (III) highlights that the relationship of liquidity provision across intervals can have
+ambiguous relationships with respect to the underlying parameters of the price process. As
+an example, within a constant volatility model (i.e., a model such that σt “ σ0 for all t),
+an increase in volatility spreads the terminal distribution for ETH-USDC prices, thereby
+increasing the Q-expected time spent in price intervals far away from the current price.
+Consequently, an increase in volatility exerts upward pressure on liquidity provision for price
+intervals sufficiently far from the current price. Nonetheless, this increase in volatility also
+increases the time premium of the associated call options, thereby creating downward pressure on liquidity provision and thus implying that the effect of increased volatility upon
+liquidity provision is ambiguous (especially for price intervals sufficiently far away from the
+current price). Compounding the ambiguous nature of our predictions, volatility is not generally constant (see, e.g., Engle 1982), and our theory accommodates more general models
+of stochastic volatility (e.g., Heston 1993). In these more realistic settings, the underlying
+option theory is less well-understood and the effects of changes to the underlying parameters on equilibrium liquidity provision is commensurately more ambiguous. An important
+28
+
+contribution of our work is to provide a model from which such questions can be investigated empirically. To aid future researchers in that context, we subsequently clarify how
+our model specializes to two seminal models; a constant volatility model and a stochastic
+volatility model.
+
+6.1
+
+Specializing to Black and Scholes (1973)
+
+Our analysis can be specialized to the model of Black and Scholes (1973) with the restriction
+of constant volatility wherein we specify a parameter σ ą 0 such that @t : σt “ σ. Crucially,
+σ is the volatility level at all times t under this specialization.
+Within this setting, equilibrium liquidity provision can be calculated from Equations
+(33) and (35) just as in the general case. Nonetheless, the advantage of the specialization
+to constant volatility is that f pp, tq and Time Premium, both of which appear in Equation
+(33), can be calculated in closed-form. More explicitly, f pp, tq is given as follows:
+
+f pp, tq “ fN pp; p0 ` pr ´
+
+σ2
+qt, σ 2 tq
+2
+
+(36)
+
+where fN p¨; µ, vq refers to the density of a normal random variable with mean µ and
+variance v. Additionally, the time premium is given by Equation (34) where CpK, t, T | Ft q
+is given in closed-form as follows:
+
+CpK, t, T | Ft q “ Pt ¨ FN pd` q ´ K ¨ e´rpT ´tqq ¨ FN pd´ q
+
+(37)
+
+where FN denotes the cumulative distribution function for a standard normal random
+variable and d˘ is given explicitly as follows:
+´
+¯
+` Pt ˘ `
+1
+σ2 ˘
+` r˘
+pT ´ tq
+d˘ “ ?
+log
+K
+2
+σ T ´t
+
+29
+
+(38)
+
+6.2
+
+Specializing to Heston (1993)
+
+Our model reduces to that of Heston (1993) when specifying that the stochastic variance
+process, tσt2 uTt“0 follows a Cox-Ingersoll-Ross model (see Cox et al. 1985):
+
+dσt2 “ paQ ´ bQ ¨ σt2 qdt ` ζ ¨ σt dWtQ
+
+(39)
+
+where tWtQ uTt“0 is a Brownian motion under the risk-neutral measure Q that possesses a
+fixed correlation of ρ P p´1, 1q with tBtQ uTt“0 . Within Equation (39), ζ ą 0 is a model
+parameter that is proportional to the instantaneous volatility of the stochastic variance
+process. Moreover, aQ and bQ are functions of primitive model parameters as follows:
+
+aQ “ κ ¨ θ,
+
+bQ “ κ ` λ
+
+(40)
+
+with κ ą 0 being the mean-reversion rate parameter for the stochastic variance process
+under the physical measure, θ ą 0 being the mean variance level parameter for the stochastic
+variance process under the physical measure and λ ą 0 being a parameter that is proportional
+to the market price of stochastic volatility risk.
+Crucially, although Equation (39) introduces stochastic volatility, Heston (1993) demonstrates that call option prices remain available in closed-form. This is an important result for
+our purpose because the call option time premium enters our equilibrium liquidity provision
+solution in Equation (33) and the time premium can be computed in closed-form so long as
+call option prices can be computed in closed-form as per Equation (34). Explicitly, the call
+option price at time t, CpK, t, T | Ft q, is given in closed-form as follows:
+CpK, t, T | Ft q “ Pt ¨ Q̃pPT ě K | Pt “ x, σt2 “ vq ´ K ¨ e´rpT ´tq ¨ QpPT ě K | Pt “ x, σt2 “ vq
+(41)
+where Q denotes the risk-neutral measure and Q̃ denotes a distinct probability measure. Importantly, as discussed in Heston (1993), the probabilities in Equation (41) can be recovered
+
+30
+
+through inversion of the conditional characteristic function of logpPT q under the appropriate
+measure as follows:
+1 1
+MpPT ě K | Pt “ x, σt2 “ vq “ `
+2
+
+ż8
+
+π
+
+´ e´iz logpKq EM reiz logpPT q | P “ x, σ 2 “ vs ¯
+t
+t
+Re
+dz
+iz
+
+0
+
+(42)
+where M P tQ̃, Qu corresponds to the relevant measure and Rep¨q denotes the projection
+of a complex number into the real line (i.e., Repa ` biq “ a). Heston (1993) derives the
+conditional characteristic functions as follows:
+
+EM reiz logpPT q | Pt “ x, σt2 “ vs “ eCM pT ´t;zq`DM pT ´t;zq¨v`iz logpxq
+
+(43)
+
+where CM pτ ; ηq and DM pτ ; ηq are given as follows:
+aM
+CM pτ, zq “ rziτ ` 2
+ζ
+
+ˆ
+
+ˆ
+pbM ´ ρζiz ` dM qτ ´ 2 log
+
+bM ´ ρζiz ` dM
+DM pτ ; zq “
+ζ2
+
+ˆ
+
+1 ´ gM edM τ
+1 ´ gM
+
+1 ´ edM τ
+1 ´ gM edM τ
+
+˙˙
+(44)
+
+˙
+(45)
+
+and gM and dM are given as follows:
+
+gM “
+
+bM ´ ρζiz ` dM
+,
+bM ´ ρζiz ´ dM
+
+dM “
+
+a
+pρζiz ´ bM q2 ` ζ 2 p2uM zi ´ z 2 q
+
+(46)
+
+Moreover, aQ̃ , bQ̃ , uQ̃ and uQ are given in terms of model parameters as follows:
+
+aQ̃ “ κ ¨ θ,
+
+7
+
+bQ̃ “ κ ` λ ´ ρζ,
+
+1
+uQ̃ “ ,
+2
+
+uQ “ ´
+
+1
+2
+
+(47)
+
+Conclusion
+
+We study optimal DEX liquidity provision when the DEX allows investors to concentrate
+liquidity to pre-specified price intervals (e.g., Uniswap v3). Importantly, and in contrast
+31
+
+to a limit order book, providing concentrated liquidity to a DEX entails providing two-way
+liquidity so that whenever an investor’s liquidity is utilized for an exchange, the investor automatically becomes a liquidity provider of the asset for which their liquidity was exchanged.
+For this reason, providing liquidity for an ETH-USDC exchange entails investing in a portfolio of ETH and USDC with dynamic weights that evolve with the underlying ETH-USDC
+price. This feature of DEXs with concentrated liquidity generates new trade-offs faced by
+liquidity providers and therefore characterizes the level of risk-adjusted expected fee revenue
+necessary to incentivize liquidity provision to a particular price interval. More explicitly, we
+show that without fees, providing liquidity to a particular price interval is always dominated
+by investing in a particular covered call investment. Thus, for any given level of fee revenue,
+liquidity provision will adjust so that the pro-rata return from fees paid to that price interval
+offsets the opportunity cost of investing in other assets. In turn, we characterize the equilibrium liquidity provision and provide a simple approximate expression that can be useful
+for empirical work. In doing so, we demonstrate the relevance of the time premium of the
+associated call option to the equilibrium liquidity provision to a particular price interval.
+
+32
+
+References
+Adams, H., N. Zinsmeister, and D. Robinson. 2020.
+
+Uniswap v2 core, 2020.
+
+URL:
+
+https://uniswap. org/whitepaper. pdf .
+Angeris, G., and T. Chitra. 2020. Improved Price Oracles: Constant Function Market Makers. In Proceedings of the 2nd ACM Conference on Advances in Financial Technologies,
+AFT ’20, p. 80–91. New York, NY, USA: Association for Computing Machinery. URL
+https://doi.org/10.1145/3419614.3423251.
+Angeris, G., A. Evans, and T. Chitra. 2021. Replicating monotonic payoffs without oracles.
+arXiv preprint arXiv:2111.13740 .
+Aoyagi, J. 2020. Liquidity provision by automated market makers. Available at SSRN
+3674178 .
+Aoyagi, J., and Y. Ito. 2021. Coexisting Exchange Platforms: Limit Order Books and
+Automated Market Makers .
+Barbon, A., and A. Ranaldo. 2022. On The Quality Of Cryptocurrency Markets Centralized
+Versus Decentralized Exchanges. Working Paper .
+Biais, B., C. Bisière, M. Bouvard, and C. Casamatta. 2019. The Blockchain Folk Theorem.
+Review of Financial Studies 32(5):1662–1715.
+Black, F., and M. Scholes. 1973. The pricing of options and corporate liabilities. Journal of
+Political Economy 81:637–654.
+Caparros, B., A. Chaudhary, and O. Klein. 2023. Blockchain Scaling and Liquidity Concentration on Decentralized Exchanges. Available at SSRN 4475460 .
+Capponi, A., and R. Jia. 2021. The Adoption of Blockchain-based Decentralized Exchanges.
+Columbia University Working Paper .
+33
+
+Cartea, Á., F. Drissi, and M. Monga. 2023. Decentralised finance and automated market
+making: Execution and speculation. arXiv preprint arXiv:2307.03499 .
+Chaudhary, A., R. Kozhan, and G. Viswanath-Natraj. 2023. Interest Rate Parity in Decentralized Finance. WBS Finance Group Research Paper Forthcoming .
+Chiu, J., and T. V. Koeppl. 2022. The economics of cryptocurrency: Bitcoin and beyond. Canadian Journal of Economics/Revue canadienne d’économique 55:1762–1798.
+URL https://onlinelibrary.wiley.com/doi/abs/10.1111/caje.12625.
+Chiu, J., E. Ozdenoren, K. Yuan, and S. Zhang. 2022. On the Fragility of DeFi Lending.
+Available at SSRN 4328481 .
+Cong, L. W., and Z. He. 2019. Blockchain Disruption and Smart Contracts. Review of
+Financial Studies 32(5):1754–1797.
+Cong, L. W., Y. Li, and N. Wang. 2021. Tokenomics: Dynamic Adoption and Valuation.
+Review of Financial Studies 34(3):1105–1155.
+Copeland, T., and D. Galai. 1983. Information effects and the bid-ask spread. Journal of
+Finance 38:1457–1469.
+Cox, J. C., J. E. Ingersoll Jr, and S. A. Ross. 1985. A Theory of the Term Structure of
+Interest Rates. Econometrica 53:385–407.
+Deng, J., H. Zong, and Y. Wang. 2023. Static replication of impermanent loss for concentrated liquidity provision in decentralised markets. Operations Research Letters 51:206–
+211.
+Duffie, D., J. Pan, and K. Singleton. 2000. Transform Analysis and Asset Pricing for Affine
+Jump-Diffusions. Econometrica 68:1343–1376.
+Easley, D., M. O’Hara, and S. Basu. 2019. From Mining to Markets: The Evolution of
+Bitcoin Transaction Fees. Journal of Financial Economics 134(1):91–109.
+34
+
+Engle, R. F. 1982. Autoregressive Conditional Heteroscedasticity with Estimates of the
+Variance of United Kingom Inflation. Econometrica 50:987–1007.
+Evans, A. 2021. Liquidity provider returns in geometric mean markets .
+Hasbrouck, J., T. Rivera, and F. Saleh. 2022. The Need for Fees at a DEX: How Increases
+in Fees Can Increase DEX Trading Volume. Working Paper .
+Heimbach, L., E. Schertenleib, and R. Wattenhofer. 2022. Risks and returns of uniswap v3
+liquidity providers. arXiv preprint arXiv:2205.08904 .
+Heston, S. 1993. A Closed-Form Solution for Options with Stochastic Volatility with Applications to Bond and Currency Options. Review of Financial Studies 6 :327–343.
+Huberman, G., J. D. Leshno, and C. Moallemi. 2021. Monopoly without a Monopolist: An
+Economic Analysis of the Bitcoin Payment System. The Review of Economic Studies URL
+https://doi.org/10.1093/restud/rdab014.
+John, K., L. Kogan, and F. Saleh. 2023. Smart Contracts and Decentralized Finance. Annual
+Review of Financial Economics Forthcoming.
+John, K., M. O’Hara, and F. Saleh. 2022. Bitcoin and Beyond. Annual Review of Financial
+Economics 14.
+John, K., T. Rivera, and F. Saleh. 2021. Economic Implications of Scaling Blockchains: Why
+the Consensus Protocol Matters. NYU Stern Working Paper .
+Karatzas, I., and S. Shreve. 1991. Brownian motion and stochastic calculus, vol. 113. Springer
+Science & Business Media.
+Lehar, A., and C. Parlour. 2020. Miner Collusion and the BitCoin Protocol. Working Paper
+.
+Lehar, A., and C. Parlour. 2021. Decentralized Exchanges. Working Paper .
+35
+
+Lehar, A., and C. A. Parlour. 2022. Systemic fragility in decentralized markets. Available
+at SSRN .
+Lehar, A., C. A. Parlour, and M. Zoican. 2022. Liquidity Fragmentation on Decentralized
+Exchanges. Available at SSRN 4267429 .
+Makarov, I., and A. Schoar. 2022. Cryptocurrencies and decentralized finance (DeFi). Tech.
+rep., National Bureau of Economic Research.
+Mayer, S. 2022. Token-Based Platforms and Speculators. Working Paper .
+Milionis, J., C. C. Moallemi, T. Roughgarden, and A. L. Zhang. 2022. Automated market
+making and loss-versus-rebalancing. arXiv preprint arXiv:2208.06046 .
+Neuder, M., R. Rao, D. J. Moroz, and D. C. Parkes. 2021. Strategic liquidity provision in
+uniswap v3. arXiv preprint arXiv:2106.12033 .
+Park, A. 2021. The Conceptual Flaws of Constant Product Automated Market Making.
+University of Toronto Working Paper .
+Rivera, T. J., F. Saleh, and Q. Vandeweyer. 2023. Equilibrium in a DeFi Lending Market.
+Available at SSRN 4389890 .
+Saleh, F. 2021. Blockchain Without Waste: Proof-of-Stake. Review of Financial Studies
+34(3):1156–1190.
+
+36
+
+Appendices
+A
+
+Proofs of Supporting Lemmas
+
+A.1
+
+Lemma A.1
+
+Lemma A.1. Price Interval Above Initial Price Level
+For any price interval i such that Ψi ą P0 , the following results hold:
+(a) For PT ď Ψi , RPi &L “ PPT0
+?
+i
+(b) For PT ě Ψi`1 , RPi &L “ Ψ
+1`∆
+P0
+i
+(c) For PT P rΨi , Ψi`1 s, Ψ
+ď RPi &L ď PPT0
+P0
+
+Proof.
+First note that whenever Ψi ą P0 then P̃i,0 “ Ψi and therefore, after substituting into
+Equation (11), RPi &L is given explicitly as:
+¯
+´b
+? ¯ ´
+ˆ PT
+P̃i,T ´ Ψi ` ? 1 ´ ? 1
+Ψi`1
+P̃i,T
+i
+´
+¯
+RP &L “
+?1 ´ ? 1
+ˆ P0
+Ψi
+
+(A.1)
+
+Ψi`1
+
+Then, PT ď Ψi implies P̃i,T “ Ψi which, when applied to Equation (A.1), yields (a).
+Similarly, PT ě Ψi`1 implies P̃i,T “ Ψi`1 which, when applied to Equation (A.1), yields (b).
+To establish (c), note that when PT P rΨi , Ψi`1 s, then P̃i,T “ PT and thus RPi &L “
+pi pPT q with the latter being given explicitly as follows:
+R
+P &L
+´?
+¯
+? ¯ ´
+PT ´ Ψi ` ?1PT ´ ? 1
+ˆ PT
+Ψi`1
+i
+p
+´
+¯
+RP &L pPT q “
+?1 ´ ? 1
+ˆ P0
+Ψi
+Ψi`1
+
+pi
+Further, R
+P &L is differentiable with:
+
+37
+
+(A.2)
+
+?1 ´ ? 1
+pi
+P
+Ψi`1
+dR
+1
+P &L
+“ 1
+ˆ
+1
+?
+dP
+P0
+´?
+Ψ
+i
+
+(A.3)
+
+Ψi`1
+
+and thus PT P rΨi , Ψi`1 s implies:
+pi
+1
+dR
+P &L
+P r0, s
+dP
+P0
+
+(A.4)
+
+pi pPT q is continuous and differentiable over the interval rΨi , Ψi`1 s and therefore
+Further, R
+P &L
+by the mean value theorem, for any PT P pΨi , Ψi`1 s there exists P 1 P pΨi , Ψi`1 s such that
+pi
+pi pPT q ´ R
+pi pΨi q “ dRP &L pP 1 qpPT ´ Ψi q ď 1 pPT ´ Ψi q
+R
+P &L
+P &L
+dP
+P0
+where the last inequality comes from the fact that
+
+pi
+pi
+dR
+dR
+P &L
+P &L
+ă P10 . In addition, dP
+ě 0 implies
+dP
+
+´
+¯
+pi pPT q ě R
+pi pΨi q “ Ψi and therefore Ψi ď Ri
+pi pPT q ´ R
+pi pΨi q `
+that R
+“
+R
+P &L
+P &L
+P &L
+P &L
+P &L
+P0
+PT
+pi pΨi q ď PT as desired for (c).
+R
+P &L
+P0
+
+A.2
+
+Lemma A.2
+
+Lemma A.2. Price Interval Below Initial Price Level
+For any price interval i such that Ψi`1 ă P0 , the following results hold:
+T
+(a) For PT ď Ψi , RPi &L “ Ψi ?P1`∆
+
+(b) For PT ě Ψi`1 , RPi &L “ 1
+1
+(c) For PT P rΨi , Ψi`1 s, ?1`∆
+ď RPi &L ď 1
+
+Proof.
+First note that Ψi`1 ă P0 and Equation (11) imply that the RPi &L is given explicitly as
+follows:
+
+38
+
+´b
+¯
+? ¯ ´ 1
+1
+?
+?
+ˆ PT
+P̃i,T ´ Ψi `
+´
+Ψi`1
+P̃i,T
+?
+?
+RPi &L “
+Ψi`1 ´ Ψi
+
+(A.5)
+
+Then, PT ď Ψi implies P̃i,T “ Ψi which, when applied to Equation (A.5), yields (a). Similarly, PT ě Ψi`1 implies P̃i,T “ Ψi`1 which, when applied to Equation (A.5), yields (b).
+To establish (c), note that when PT P rΨi , Ψi`1 s, then P̃i,T “ PT and thus RPi &L “
+i
+
+RP &L pPT q with the latter function being given explicitly as follows:
+´?
+¯
+? ¯ ´
+P ´ Ψi ` ?1P ´ ? 1
+ˆP
+Ψi`1
+i
+?
+?
+RP &L pP q “
+Ψi`1 ´ Ψi
+
+(A.6)
+
+i
+
+Note that RP &L is differentiable with the derivative given explicitly as follows:
+?1 ´ ? 1
+i
+P
+Ψi`1
+dRP &L
+? ě0
+“?
+dP
+Ψi`1 ´ Ψi
+i
+
+(A.7)
+i
+
+i
+
+1
+In turn, PT P rΨi , Ψi`1 s implies ?1`∆
+“ RP &L pΨi q ď RPi &L “ RP &L pPT q ď RP &L pΨi`1 q
+i
+
+i
+
+i
+
+where RP &L pΨi q ď RP &L pPT q ď RP &L pΨi`1 q follows from the fact that R is a weakly
+i
+
+1
+increasing function (i.e., Equation A.7). Finally, using the fact that RP &L pΨi q “ ?1`∆
+and
+i
+
+RP &L pΨi`1 q “ 1 we obtain (c).
+
+A.3
+
+Lemma A.3
+
+Lemma A.3. Price Interval Contains the Initial Price Level
+For any price interval i such that P0 P rΨi , Ψi`1 s, the following results hold:
+T
+(a) For PT ď Ψi , Ψi ?P1`∆
+ď RPi &L ď PΨTi
+
+(b) For PT ě Ψi`1 , 1 ď RPi &L ď
+
+?
+1`∆
+
+1
+(c) For PT P rΨi , Ψi`1 s, ?1`∆
+ď RPi &L ď
+
+?
+1`∆
+
+39
+
+Proof.
+As a preliminary step, we define a function, ΓpP, Ψi , Ψi`1 q as follows:
+
+ΓpP, Ψi , Ψi`1 q “
+
+´?
+a ¯ ´ 1
+1 ¯
+ˆP
+P ´ Ψi ` ? ´ ?
+Ψi`1
+P
+
+(A.8)
+
+BΓ
+1
+1
+“? ´?
+BP
+Ψi`1
+P
+
+(A.9)
+
+Then, note that:
+
+BΓ
+and thus P ď Ψi`1 implies that BP
+ě 0.
+
+We now turn to deriving (a). In particular, whenever PT ď Ψi and P0 P rΨi , Ψi`1 s, then
+RPi &L can be written as follows:
+´
+RPi &L “
+
+?1 ´ ? 1
+Ψi
+Ψi`1
+
+¯
+ˆ PT
+(A.10)
+
+ΓpP0 , Ψi , Ψi`1 q
+
+BΓ
+and thus, when PT ď Ψi the fact that BP
+ě 0 for P ď Ψi`1 and P0 P rΨi , Ψi`1 s implies that:
+
+´
+
+?1 ´ ? 1
+Ψi
+Ψi`1
+
+¯
+
+´
+ˆ PT
+
+ΓpΨi`1 , Ψi , Ψi`1 q
+
+ď RPi &L ď
+
+?1 ´ ? 1
+Ψi
+Ψi`1
+
+¯
+ˆ PT
+
+ΓpΨi , Ψi , Ψi`1 q
+
+(A.11)
+
+which, by direct verification, is equivalent to (a):
+PT
+P
+?T
+ď RPi &L ď
+Ψi
+Ψi 1 ` ∆
+
+(A.12)
+
+To prove (b), note that when PT ě Ψi`1 and P0 P rΨi , Ψi`1 s, then RPi &L can be written
+as follows:
+RPi &L “
+
+?
+?
+Ψi`1 ´ Ψi
+ΓpP0 , Ψi , Ψi`1 q
+
+(A.13)
+
+BΓ
+and thus, when PT ě Ψi`1 , the fact that BP
+ě 0 for P0 ď Ψi`1 and P0 P rΨi , Ψi`1 s implies:
+
+40
+
+?
+?
+?
+?
+Ψi`1 ´ Ψi
+Ψi`1 ´ Ψi
+i
+ď RP &L ď
+ΓpΨi`1 , Ψi , Ψi`1 q
+ΓpΨi , Ψi , Ψi`1 q
+
+(A.14)
+
+which, by direct verification, is equivalent to (b):
+
+1 ď RPi &L ď
+
+?
+1`∆
+
+(A.15)
+
+Finally, to establish (c), note that when PT P rΨi , Ψi`1 s and P0 P rΨi , Ψi`1 s, then RPi &L can
+be written as follows:
+
+RPi &L “
+
+ΓpPT , Ψi , Ψi`1 q
+ΓpP0 , Ψi , Ψi`1 q
+
+(A.16)
+
+BΓ
+and thus, when PT P rΨi , Ψi`1 s, the fact that BP
+ě 0 for P ď Ψi`1 and P0 P rΨi , Ψi`1 s
+
+implies:
+ΓpΨi , Ψi , Ψi`1 q
+ΓpΨi`1 , Ψi , Ψi`1 q
+ď RPi &L ď
+ΓpΨi`1 , Ψi , Ψi`1 q
+ΓpΨi , Ψi , Ψi`1 q
+
+(A.17)
+
+which, by direct verification, is equivalent to (c):
+?
+1
+?
+ď RPi &L ď 1 ` ∆
+1`∆
+
+A.4
+
+(A.18)
+
+Lemma A.4
+
+Lemma A.4. Limiting Fee Level
+For any price level P ą 0, let p :“ logpP q. Then, the following result holds:
+1
+lim`
+∆Ñ0 ∆
+
+żT
+
+żT
+QpPt P rΨip∆,P q , Ψip∆,P q`1 sq dt “
+
+0
+
+f pp, tq dt
+0
+
+41
+
+(A.19)
+
+where ip∆, P q is such that P P rΨip∆,P q , Ψip∆,P q`1 s for all ∆ ą 0.
+Proof.
+Let ψi p∆, P q :“ logpΨip∆,P q q and let δ :“ logp1 ` ∆q. Then:
+T
+ş
+
+QpPt P rΨip∆,P q , Ψip∆,P q`1 sq dt “
+
+T
+ş ψi p∆,P
+ş q`δ
+0
+
+0
+
+f pp, tq dp dt
+
+ψi p∆,P q
+
+In turn, continuity of f pp, tq in its first argument implies:
+
+1
+δ
+
+T
+ş
+
+T
+ş
+QpPt P rΨip∆,P q , Ψip∆,P q`1 sq dt “ f ppip∆,P q , tq dt
+
+0
+
+0
+
+where pip∆,P q P rψi p∆, P q, ψi p∆, P q ` δs Ď rp ´ δ, p ` δs.
+
+Finally, note that ∆ Ñ 0` ô δ Ñ 0` and thus:
+T
+ş
+lim` ∆1 QpPt P rΨip∆,P q , Ψip∆,P q`1 sq dt
+
+∆Ñ0
+
+0
+
+T
+ş
+∆
+ˆ lim` 1δ QpPt P rΨip∆,P q , Ψip∆,P q`1 sq dt
+“ lim` logp1`∆q
+δÑ0
+
+∆Ñ0
+
+0
+
+T
+ş
+
+“ lim` f ppip∆,P q , tq dt
+“
+
+δÑ0
+T
+ş
+
+0
+
+lim` f ppip∆,P q , tq dt
+
+0 δÑ0
+T
+ş
+
+“ f pp, tq dt
+0
+
+The second-to-last line follows from the Bounded Convergence Theorem, whereas the last
+line follows from continuity of f pp, tq and pip∆,P q P rp ´ δ, p ` δs for all δ. To provide more deT
+ş
+tail on the former, note that lim sup |f ppip∆,P q , tq| dt ă S ˆT ă 8 where S :“ maxtf pρ, τ q :
+∆Ñ0`
+
+0
+
+ρ P rp ´ ε, p ` εs, τ P r0, T su ă 8 for any ε ą 0 and where the existence of a finite maximum
+follows from continuity of f pp, tq.
+
+42
+
+A.5
+
+Lemma A.5
+
+Lemma A.5. Limiting Ex-Fee Portfolio Value
+For any price level P ą 0, the following result holds for any t P r0, 1s:
+$
+’
+’
+& ?Pt
+
+lim`
+
+∆Ñ0
+
+Π‹
+P
+´? ip∆,P q,t ¯ “
+?
+’
+‹
+’
+Li
+1`∆´1
+% P
+
+if Pt ă P
+
+(A.20)
+
+if Pt ě P
+
+where ip∆, P q is such that P P rΨip∆,P q , Ψip∆,P q`1 s for all ∆ ą 0.
+Proof.
+For Pt ă P , the result arises by
+´ direct verification,¯applying Equation (20) to Equation (8):
+1
+? 1
+´?
+ˆPt
+Ψip∆,P q
+Ψip∆,P q`1
+Π‹ip∆,P q,t
+´
+¯
+?
+“ lim` ?Ψ Pt
+“ ?PPt
+lim`
+“ lim`
+1`∆´1
+?
+∆Ñ0
+
+L‹i
+
+1`∆´1
+
+∆Ñ0
+
+∆Ñ0
+
+ip∆,P q`1
+
+For Pt ą P , the result also arises directly, by applying Equation (20) to Equation (8):
+?
+?
+?
+a
+Π‹ip∆,P q,t
+Ψip∆,P q`1 ´ Ψip∆,P q
+´
+¯
+?
+“
+lim
+Ψ
+“
+P
+lim`
+“
+lim
+ip∆,P
+q
+1`∆´1
+?
+`
+`
+∆Ñ0
+
+L‹i
+
+1`∆´1
+
+∆Ñ0
+
+∆Ñ0
+
+For the case of Pt “ P , it is useful to define Π̃pX, Ψi , Ψi`1 q as follows:
+
+Π̃pX, Ψi , Ψi`1 q :“
+Direct inspection reveals
+
+´?
+a ¯ ´ 1
+1 ¯
+X ´ Ψi ` ? ´ ?
+ˆX
+Ψi`1
+X
+
+Π‹ip∆,P q,t
+L‹i
+
+(A.21)
+
+B Π̃
+“ Π̃pPt , Ψip∆,P q , Ψip∆,P q`1 q and also that BX
+ě 0 when-
+
+ever X ď Ψi`1 . In turn, we have the following result:
+
+Π̃pΨip∆,P q , Ψip∆,P q , Ψip∆,P q`1 q ď
+
+Π‹ip∆,P q,t
+L‹i
+
+ď Π̃pΨip∆,P q`1 , Ψip∆,P q , Ψip∆,P q`1 q
+
+(A.22)
+
+´
+¯
+Moreover, applying Π̃pΨip∆,P q , Ψip∆,P q , Ψip∆,P q`1 q “ ?Ψ 1
+´ ?Ψ 1
+ˆ Ψip∆,P q “
+ip∆,P q
+ip∆,P q`1
+´?
+¯
+a
+a
+Ψ
+1 ` ∆ ´ 1 ?Ψip∆,P q and Π̃pΨip∆,P q`1 , Ψip∆,P q , Ψip∆,P q`1 q “ Ψip∆,P q`1 ´ Ψip∆,P q “
+ip∆,P q`1
+
+43
+
+´?
+¯a
+1`∆´1
+Ψip∆,P q to Equation (A.22) and taking the limit as ∆ Ñ 0` completes the
+proof as follows:
+?
+?
+Π‹ip∆,P q,t
+a
+Ψip∆,P q
+¯ ď lim
+P “ lim` a
+Ψ
+“
+P
+ď lim` ´?
+ip∆,P
+q
+∆Ñ0
+∆Ñ0`
+Ψip∆,P q`1 ∆Ñ0 L‹ 1 ` ∆ ´ 1
+
+(A.23)
+
+i
+
+A.6
+
+Lemma A.6
+
+Lemma A.6. Limiting Ex-Fee Portfolio Return
+For any price level P ą 0, the following result holds:
+ip∆,P q
+
+lim` RP &L “
+
+∆Ñ0
+
+PT ´ pPT ´ P q`
+P ´ pP ´ PT q`
+mintPT , P u
+“
+“
+mintP0 , P u
+mintP0 , P u
+mintP0 , P u
+
+where ip∆, P q is such that P P rΨip∆,P q , Ψip∆,P q`1 s for all ∆ ą 0.
+Proof.
+Equation (7) yields:
+Π‹
+
+Π‹ip∆,P q,T
+ip∆,P q
+RP &L “ ‹
+Πip∆,P q,0
+
+“
+
+L‹i
+
+ip∆,P q,T
+`?
+˘
+
+1`∆´1
+
+Π‹ip∆,P q,0
+L‹i
+
+`?
+
+˘
+
+1`∆´1
+
+Taking ∆ Ñ 0` and applying Lemma A.5 then implies the result:
+Π‹
+ip∆,P q,T
+?
+‹
+L
+1`∆´1
+i
+Π‹
+`
+ip∆,P
+q,0
+∆Ñ0
+?
+L‹
+1`∆´1
+i
+
+`
+
+ip∆,P q
+lim` RP &L “
+∆Ñ0
+
+lim
+
+`
+
+“
+˘
+
+Π‹
+ip∆,P q,T
+∆Ñ0` L‹ ?1`∆´1
+i
+Π‹
+ip∆,P q,0
+lim
+`
+∆Ñ0 L‹ ?1`∆´1
+i
+
+lim
+
+˘
+
+`
+`
+
+˘
+T ,P u
+“ mintP
+mintP0 ,P u
+
+˘
+
+where the last equality follows by direct verification.
+
+44
+
+(A.24)
+
+A.7
+
+Lemma A.7
+
+Lemma A.7. Limiting Ex-Fee Expected Return
+For any price level P ą 0, the following result holds:
+ip∆,P q
+
+lim` EQ rRP &L s “
+
+∆Ñ0
+
+P0 erT ´ erT CpP, T q
+mintP0 , P u
+
+(A.25)
+
+where ip∆, P q is such that P P rΨip∆,P q , Ψip∆,P q`1 s for all ∆ ą 0 and CpK, τ q :“ e´rT EQ rpPτ ´
+Kq` s refers to the price of a European call option with ETH-USDC as the underlying, K as
+the strike price and τ as the time to maturity.
+Proof.
+Lemmas A.1 - A.3 imply that for all ε ą 0:
+
+lim sup RPi &L ď p1 ` εq ˆ maxt
+∆Ñ0`
+
+P ?
+, 1 ` ∆u ă 8
+P0
+
+(A.26)
+
+and thus the tail of tRPi &L u∆ is bounded so that the Bounded Convergence Theorem implies:
+
+ip∆,P q
+
+ip∆,P q
+
+lim EQ rRP &L s “ EQ r lim` RP &L s
+
+∆Ñ0`
+
+(A.27)
+
+∆Ñ0
+
+Moreover, Lemma A.6 further implies:
+
+ip∆,P q
+
+lim` RP &L “
+
+∆Ñ0
+
+mintPT , P u
+PT ´ pPT ´ P q`
+“
+mintP0 , P u
+mintP0 , P u
+
+(A.28)
+
+where the second equality follows from mintx, yu “ x ´ px ´ yq` .
+1
+2
+
+T
+ş
+
+Finally, Equation (5) and Ere 0
+
+σt2 dWt
+
+s ă 8 imply that Mt :“ e´rt Pt is a Q-martingale
+
+and thus EQ rPT s “ erT EQ rMT s “ erT M0 “ erT P0 . In turn, Equations (A.27) and (A.28)
+imply the desired result:
+
+ip∆,P q
+
+lim` EQ rRP &L s “
+
+∆Ñ0
+
+EQ rPT s ´ EQ rpPT ´ P0 q` s
+P0 erT ´ erT CpP, T q
+“
+mintP0 , P u
+mintP0 , P u
+45
+
+(A.29)
+
+B
+
+Proofs of Results in Manuscript Body
+
+B.1
+
+Proof of Proposition 4.1
+
+The Q-measure is such that all investments must generate the same expected return as the
+risk-free investment (i.e., Equation 14 must hold). Then, applying Equations (6) and (13) to
+Equation (14) yields Equation (15). Solving for Π‹i,0 in Equation (15) then yields Equation
+(16).
+Equation (17) follows from applying the Q-expectation to Equation (12) and then applying Tonelli’s Theorem to interchange the expectation and the integral.
+In order to derive Equations (18) and (19), note that the equilibrium value L‹i does not
+depend on time t. Therefore, setting t “ 0 and applying Equation (9) to Equation (8) then
+implies that, in equilibrium,
+
+Π‹i,0 “ L‹i
+
+˙
+ˆb
+a
+1
+1
+q ˆ P0
+p P̃i,0 ´ Ψi q ` p b
+´?
+Ψ
+i`1
+P̃i,0
+
+which after rearranging gives our expression for L‹i .
+Finally, Equation (20) follows from applying the previous equilibrium solutions to Equation (9).
+
+B.2
+
+Proof of Proposition 5.1
+
+Proof.
+This follows directly from Lemma A.6. More explicitly:
+ip∆,P q
+
+lim` RP &L “
+
+∆Ñ0
+
+mintPT , P u
+PT ´ pPT ´ P q`
+“
+mintP0 , P u
+P0 ´ pP0 ´ P q`
+
+46
+
+where the first equality is established by Lemma A.6 and the second equality follows from
+the identity mintx, yu “ x ´ px ´ yq` .
+
+B.3
+
+Proof of Proposition 5.2
+
+Proof.
+This result follows directly from CpP, 0, T | F0 q ě CI pP0 , P q. In turn, that result is wellknown, but we re-derive it below for completeness:
+CpP, 0, T | F0 q
+“ e´rT EQ rpPT ´ P q` | F0 s
+`
+˘`
+ě e´rT EQ rPT | F0 s ´ P
+`
+˘`
+“ e´rT EQ rPT | F0 s ´ e´rT P
+“ pP0 ´ e´rT P q`
+ě pP0 ´ P q`
+“ CI pP0 , P q
+where the first inequality follows from Jensen’s Inequality while the third equality follows
+1
+2
+
+T
+ş
+
+because Equation (5) and Ere 0
+
+σt2 dWt
+
+s ă 8 imply that Mt :“ e´rt Pt is a Q-martingale. The
+
+first and last equalities follow by definition. All other lines above follow from arithmetic.
+
+B.4
+
+Proof of Proposition 5.3
+
+Applying the equilibrium solutions from Proposition 4.1 to Equation (8) implies that equilibrium liquidity for price interval i at time t, Π‹i,t , can be written as a univariate function,
+Π‹i , of the time t price Pt as follows:
+Π‹i,t “ Π‹i pPt q :“ U SDCi‹ pPt q ` ET Hi‹ pPt q ˆ Pt
+
+(B.1)
+
+with U SDCi‹ pPt q and ET Hi‹ pPt q denoting the equilibrium USDC and ETH holdings, written
+explicitly as a function of the time t price Pt as follows:
+47
+
+U SDCi‹ pPt q :“
+
+´ 1
+1 ¯
+´?
+ˆ Li
+ET Hi‹ pPt q :“ b
+Ψ
+i`1
+P̃i,t
+
+´b
+a ¯
+P̃i,t ´ Ψi ˆ Li ,
+
+(B.2)
+
+where P̃i,t denotes the projection of Pt onto rΨi , Ψi`1 s as per Equation (10).
+Note that Π‹i pPt q is continuously differentiable everywhere but not twice continuously
+differentiable everywhere. In particular, Π‹i pPt q is not twice continuously differentiable at
+Pt “ Ψi and Pt “ Ψi`1 even though it is twice continuously differentiable at all other points.
+Then, since the hypothesis for the standard Ito’s lemma is not satisfied, we instead invoke a
+generalized version of Ito’s lemma for functions twice continuously differentiable at all but
+finitely many points (see Chapter 3.6 Section D of Karatzas and Shreve 1991):
+
+dΠ‹i,t “ dΠ‹i pPt q “
+
+dΠ‹i
+1 d2 Π‹i
+drPt , Pt s
+dPt `
+dPt
+2 dPt2
+
+(B.3)
+
+Notably, although we require a generalized version of Ito’s lemma, this generalized version
+reduces to the form of the usual Ito’s lemma because Π‹i is continuously differentiable even at
+the two points at which the second derivative does not exist. Then, to proceed, we compute
+dΠ‹
+
+the first derivative of Π‹i , dPti explicitly as follows:
+dΠ‹i
+“ ET Hi‹ pPt q
+dPt
+Furthermore, we compute the second derivative of Π‹i ,
+
+(B.4)
+d2 Π‹i
+,
+dPt2
+
+at all points where this
+
+second derivative exists (i.e., when Pt ‰ Ψi , Ψi`1 ):
+$
+’
+’
+&0
+
+if Pt R rΨi , Ψi`1 s
+
+d2 Π‹i
+“
+’
+dPt2
+L‹i
+’
+%´ ?
+3
+2
+
+(B.5)
+if Pt P pΨi , Ψi`1 q
+
+Pt
+
+48
+
+Then, Equations (B.4) - (B.5) imply that for Pt R rΨi , Ψi`1 s, Equation (B.3) becomes:
+
+dΠ‹i,t “ ET Hi‹ pPt q dPt “ ET Hi‹ pPt q ˆ Pt
+
+dPt
+Pt
+
+(B.6)
+
+which, in turn, implies:
+dΠ‹i,t
+ET Hi‹ pPt q ˆ Pt dPt
+‹ dPt
+“
+“ ωi,t
+‹
+‹
+Πi,t
+Πi,t
+Pt
+Pt
+
+(B.7)
+
+which establishes Proposition 5.3 for Pt R rΨi , Ψi`1 s.
+Similarly, Equations (B.4) - (B.5) imply that for Pt P pΨi , Ψi`1 q Equation (B.3) becomes:
+
+dΠ‹i,t “ ET Hi‹ pPt q dPt ´
+
+?
+L‹i
+dPt L‹i σt2 Pt
+‹
+a drPt , Pt s “ Pt ˆ ET Hi pPt q
+dt
+´
+Pt
+4
+4 Pt3
+
+(B.8)
+
+which, in turn, implies:
+?
+dΠ‹i,t
+Pt ˆ ET Hi‹ pPt q dPt L‹i σt2 Pt
+li,t
+‹ dPt
+“
+´
+dt “ ωi,t
+´ ‹ dt
+‹
+‹
+‹
+Πi,t
+Πi,t
+Pt
+4Πi,t
+Pt
+Πi,t
+
+(B.9)
+
+thereby completing the proof.
+
+B.5
+
+Proof of Proposition 5.4
+
+‹
+‹
+When Pt ă Ψi , Equation (20) implies U SDCi,t
+“ 0 and thus Pt ă Ψi ùñ ωi,t
+“ 1, thereby
+
+establishing Equation (30).
+‹
+‹
+When Pt ą Ψi`1 , Equation (20) implies ET Hi,t
+“ 0 and thus Pt ą Ψi`1 ùñ ωi,t
+“ 0,
+
+thereby establishing Equation (32).
+´?
+? ¯
+‹
+P ´ Ψi ˆ
+For Pt P rΨi , Ψi`1 s, Equation (20) implies that U SDCi,t
+“ U SDCi‹ pP q :“
+´
+¯
+‹
+L‹i and ET Hi,t
+“ ET Hi‹ pP q :“ ?1P ´ ? 1
+ˆ L‹i which, in turn, establishes Equation
+Ψi`1
+
+(31) whereby
+
+49
+
+‹
+ωi,t
+“ ωi‹ pP q :“
+
+ET Hi‹ pP q ˆ P
+U SDCi‹ pP q ` ET Hi‹ pP q ˆ P
+
+(B.10)
+
+By direct verification, ωi‹ pΨi q “ 1, ωi‹ pΨi`1 q “ 0 and moreover ωi‹ : rΨi , Ψi`1 s is continuous. To conclude the proof, we show that ωi‹ is monotonically decreasing. To establish that
+dωi‹ pP q
+ď 0 if and only if
+dP
+
+result, we first note that
+
+d
+dU SDCi‹ pP q
+rET Hi‹ pP q ˆ P s ˆ U SDCi‹ pP q ´
+ET Hi‹ pP q ˆ P ď 0
+dP
+dP
+which after substituting the expression from Equation (20) and rearranging holds if and only
+if
+
+d
+2
+
+Ψi
+ď
+Ψi`1
+
+c
+
+d
+Ψi
+`
+P
+
+P
+Ψi`1
+
+(B.11)
+
+Finally, in order to show that (B.11) always holds, note that P P rΨi , Ψi`1 s implies
+b
+b
+b
+b
+Ψi
+Ψi
+Ψi
+Ψi
+Ψi
+P
+P
+P
+P
+,
+P r0, 1s. In turn, P ď
+and Ψi`1 ď Ψi`1 and thus P ` Ψi`1 ď
+` ΨPi`1
+P Ψi`1
+P
+P
+b
+i
+so that 2 ΨΨi`1
+ď ΨPi ` ΨPi`1 is a sufficient condition for inequality (B.11) to hold. Finally,
+direct verification yields:
+d
+2
+
+d
+´c Ψ
+P
+Ψi
+Ψi
+P ¯2
+i
+`
+´
+ě0
+ď
+ô
+Ψi`1
+P
+Ψi`1
+P
+Ψi`1
+
+which completes the proof.
+
+B.6
+
+Proof of Proposition 5.5
+
+This result follows directly from Lemmas A.4 and A.7.
+
+50
+
+(B.12)
+
+

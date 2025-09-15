@@ -27,6 +27,7 @@
     "hardhat": "^2.26.0"
   },
   "dependencies": {
+    "@sylphlab/pdf-reader-mcp": "^0.3.23",
     "abbrev": "^1.0.9",
     "abitype": "^1.0.8",
     "acorn": "^8.15.0",
