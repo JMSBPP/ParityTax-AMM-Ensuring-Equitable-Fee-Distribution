@@ -38,6 +38,7 @@ import {IParityTaxHook} from "../interfaces/IParityTaxHook.sol";
 
 import {Exttload} from "@uniswap/v4-core/src/Exttload.sol";
 import {LiquidityMetrics} from "../LiquidityMetrics.sol";
+import {IParityTaxExtt} from "../interfaces/IParityTaxExtt.sol";
 
 /**
  * @title ParityTaxHookBase
@@ -72,6 +73,9 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
     /// @notice LP oracle for liquidity price information
     ILPOracle lpOracle;
 
+    /// @notice ParityTaxExtt contract for transient storage operations
+    IParityTaxExtt parityTaxExtt;
+
 
     /// @notice Mapping to track PLP block number commitments for liquidity withdrawal validation
     /// @dev TODO: This are to be migrated to enumerable mappings for iteration
@@ -103,18 +107,21 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
 
     /**
      * @notice Initializes the ParityTaxHookBase with required dependencies
-     * @dev Sets up the pool manager, position manager, and LP oracle for hook operations
+     * @dev Sets up the pool manager, position manager, LP oracle, and ParityTaxExtt for hook operations
      * @param _poolManager The Uniswap V4 pool manager contract
      * @param _lpm The position manager for liquidity operations
      * @param _lpOracle Oracle for liquidity price information
+     * @param _parityTaxExtt The ParityTaxExtt contract for transient storage operations
      */
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
-        ILPOracle _lpOracle
+        ILPOracle _lpOracle,
+        IParityTaxExtt _parityTaxExtt
     ) BaseHook(_poolManager) LiquidityMetrics(_poolManager){
         lpm = _lpm;
         lpOracle = _lpOracle;
+        parityTaxExtt = _parityTaxExtt;
     }
 
     /**
@@ -214,76 +221,64 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
      * @inheritdoc IParityTaxHook
      */
     function tstore_plp_liquidity(int256 liquidityChange) external{
-        _tstore_plp_liquidity(liquidityChange);
+        parityTaxExtt.tstore_plp_liquidity(liquidityChange);
     }
 
     /**
      * @inheritdoc IParityTaxHook
      */
     function tstore_plp_feesAccrued(uint256 feesAccruedOn0, uint256 feesAccruedOn1) external{
-        _tstore_plp_feesAccrued(feesAccruedOn0,feesAccruedOn1);
+        parityTaxExtt.tstore_plp_feesAccrued(feesAccruedOn0, feesAccruedOn1);
     }
 
 
 
     /**
      * @notice Internal function to store PLP liquidity change in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param liquidityChange The change in liquidity amount
      */
     function _tstore_plp_liquidity(int256 liquidityChange) internal virtual{
-        assembly("memory-safe"){
-            tstore(PLP_LIQUIDITY_POSITION_LOCATION, liquidityChange)
-        }
+        parityTaxExtt.tstore_plp_liquidity(liquidityChange);
     }
 
     /**
      * @notice Internal function to store PLP fees accrued in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param feesAccruedOn0 The fees accrued on currency0
      * @param feesAccruedOn1 The fees accrued on currency1
      */
     function _tstore_plp_feesAccrued(uint256 feesAccruedOn0, uint256 feesAccruedOn1) internal virtual{
-        assembly("memory-safe"){
-            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x01), feesAccruedOn0)
-            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x02), feesAccruedOn1)
-
-        }
+        parityTaxExtt.tstore_plp_feesAccrued(feesAccruedOn0, feesAccruedOn1);
     }
 
     /**
      * @notice Internal function to store PLP token ID in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param tokenId The PLP position token ID
      */
     function _tstore_plp_tokenId(uint256 tokenId) internal{
-        assembly("memory-safe"){
-            tstore(add(PLP_LIQUIDITY_POSITION_LOCATION,0x03), tokenId)
-        }
+        parityTaxExtt.tstore_plp_tokenId(tokenId);
     }
 
 
 
     /**
      * @notice Internal function to store pre-swap sqrt price in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param beforeSwapSqrtPriceX96 The sqrt price before the swap
      */
     function _tstore_swap_beforeSwapSqrtPriceX96(uint160 beforeSwapSqrtPriceX96 ) internal{
-        assembly("memory-safe"){
-            tstore(PRICE_IMPACT_LOCATION, beforeSwapSqrtPriceX96)
-        }
+        parityTaxExtt.tstore_swap_beforeSwapSqrtPriceX96(beforeSwapSqrtPriceX96);
     }
 
     /**
      * @notice Internal function to store pre-swap external sqrt price in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param beforeSwapExternalSqrtPriceX96 The external sqrt price before the swap
      */
     function _tstore_swap_beforeSwapExternalSqrtPriceX96(uint160 beforeSwapExternalSqrtPriceX96 ) internal{
-        assembly("memory-safe"){
-            tstore(add(PRICE_IMPACT_LOCATION,0x01), beforeSwapExternalSqrtPriceX96)
-        }
+        parityTaxExtt.tstore_swap_beforeSwapExternalSqrtPriceX96(beforeSwapExternalSqrtPriceX96);
     }
 
 
@@ -291,18 +286,16 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
 
     /**
      * @notice Internal function to store JIT token ID in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param tokenId The JIT position token ID
      */
     function _tstore_jit_tokenId(uint256 tokenId) internal{
-        assembly("memory-safe"){
-            tstore(JIT_LIQUIDITY_POSITION_LOCATION, tokenId)
-        }
+        parityTaxExtt.tstore_jit_tokenId(tokenId);
     }
 
     /**
      * @notice Internal function to store JIT fee revenue in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param feeRevenueOn0 The fee revenue on currency0
      * @param feeRevenueOn1 The fee revenue on currency1
      */
@@ -310,209 +303,193 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
         uint256 feeRevenueOn0,
         uint256 feeRevenueOn1
     ) internal {
-        assembly("memory-safe"){
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x04), feeRevenueOn0)
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x05), feeRevenueOn1)
-        }
+        parityTaxExtt.tstore_jit_feeRevenue(feeRevenueOn0, feeRevenueOn1);
     }
 
     /**
      * @notice Internal function to store JIT position info in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param positionInfo The JIT position information
      */
     function _tstore_jit_positionInfo(
         PositionInfo positionInfo
     ) internal{
-        bytes32 lpPositionInfo = bytes32(PositionInfo.unwrap(
-            positionInfo
-        ));
-        assembly("memory-safe"){
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02), lpPositionInfo)
-        }
+        parityTaxExtt.tstore_jit_positionInfo(positionInfo);
     }
 
     /**
      * @notice Internal function to store JIT liquidity in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param liquidity The JIT liquidity amount
      */
     function _tstore_jit_liquidity(
         uint256 liquidity
     ) internal{
-        assembly("memory-safe"){
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x03), liquidity)
-        }
+        parityTaxExtt.tstore_jit_liquidity(liquidity);
     }
 
     /**
      * @notice Internal function to store JIT position key in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param positionKey The JIT position key
      */
     function _tstore_jit_positionKey(
         bytes32 positionKey
     ) internal{
-        assembly("memory-safe"){
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x01), positionKey)
-        }
+        parityTaxExtt.tstore_jit_positionKey(positionKey);
     }
 
     /**
      * @notice Internal function to store JIT owner in transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param owner The JIT position owner address
      */
     function _tstore_jit_owner(
         address owner
     ) internal{
-        assembly("memory-safe"){
-            tstore(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x06), owner)
-        }
+        parityTaxExtt.tstore_jit_owner(owner);
     }
 
     
     /**
      * @notice Internal function to store complete JIT liquidity position in transient storage
-     * @dev Stores all JIT position data by calling individual storage functions
+     * @dev Delegates to ParityTaxExtt contract for transient storage operations
      * @param jitLiquidityPosition The complete JIT liquidity position data
      */
     function _tstore_jit_liquidityPosition(LiquidityPosition memory jitLiquidityPosition) internal{
-        
-        _tstore_jit_positionKey(jitLiquidityPosition.positionKey);
-        _tstore_jit_liquidity(
-            jitLiquidityPosition.liquidity
-        );
-        _tstore_jit_positionInfo(jitLiquidityPosition.positionInfo);
-        _tstore_jit_feeRevenue(
-            jitLiquidityPosition.feeRevenueOnCurrency0,
-            jitLiquidityPosition.feeRevenueOnCurrency1
-        );
-        _tstore_jit_owner(jitLiquidityPosition.owner);
+        parityTaxExtt.tstore_jit_liquidityPosition(jitLiquidityPosition);
     }
 
     /**
      * @notice Internal function to load PLP token ID from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return tokenId The PLP position token ID
      */
     function _tload_plp_tokenId() internal view returns(uint256 tokenId){
-        assembly("memory-safe"){
-            tokenId := tload(add(PLP_LIQUIDITY_POSITION_LOCATION, 0x03))
+        bytes32 slot;
+        assembly {
+            slot := add(PLP_LIQUIDITY_POSITION_LOCATION, 0x03)
         }
-
+        bytes32 value = parityTaxExtt.exttload(slot);
+        tokenId = uint256(value);
     }
 
     /**
      * @notice Internal function to load pre-swap sqrt price from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return The sqrt price before the swap
      */
-    function _tload_swap_beforeSwapSqrtPriceX96() internal returns(uint160){
-        uint256 _beforeSwapSqrtPriceX96;
-        assembly("memory-safe"){
-            _beforeSwapSqrtPriceX96 := tload(PRICE_IMPACT_LOCATION)
-        }
-        return uint160(_beforeSwapSqrtPriceX96);
+    function _tload_swap_beforeSwapSqrtPriceX96() internal view returns(uint160){
+        bytes32 value = parityTaxExtt.exttload(PRICE_IMPACT_LOCATION);
+        return uint160(uint256(value));
     }
 
     /**
      * @notice Internal function to load pre-swap external sqrt price from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return The external sqrt price before the swap
      */
-    function _tload_swap_beforeSwapExternalSqrtPriceX96() internal returns(uint160){
-        uint256 _beforeSwapExternalSqrtPriceX96;
-        assembly("memory-safe"){
-            _beforeSwapExternalSqrtPriceX96 := tload(add(PRICE_IMPACT_LOCATION,0x01))
+    function _tload_swap_beforeSwapExternalSqrtPriceX96() internal view returns(uint160){
+        bytes32 slot;
+        assembly {
+            slot := add(PRICE_IMPACT_LOCATION, 0x01)
         }
-        return uint160(_beforeSwapExternalSqrtPriceX96);
+        bytes32 value = parityTaxExtt.exttload(slot);
+        return uint160(uint256(value));
     }
 
     /**
      * @notice Internal function to load JIT token ID from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @dev NOTE: This function is to be called during JIT Resolver removeLiquidity Flow
      * @return jitTokenId The JIT position token ID
      */
     function _tload_jit_tokenId() internal view returns(uint256 jitTokenId){
-        assembly("memory-safe"){
-            jitTokenId := tload(JIT_LIQUIDITY_POSITION_LOCATION)
-        }
+        bytes32 value = parityTaxExtt.exttload(JIT_LIQUIDITY_POSITION_LOCATION);
+        jitTokenId = uint256(value);
     }
 
     /**
      * @notice Internal function to load JIT position info from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return jitPositionInfo The JIT position information
      */
     function _tload_jit_positionInfo() internal view returns(PositionInfo jitPositionInfo){
-        bytes32 positionInfo;
-        assembly("memory-safe"){
-            positionInfo := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02))
-        
+        bytes32 slot;
+        assembly {
+            slot := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02)
         }
-        jitPositionInfo = PositionInfo.wrap(uint256(positionInfo));
+        bytes32 value = parityTaxExtt.exttload(slot);
+        jitPositionInfo = PositionInfo.wrap(uint256(value));
     }
 
     /**
      * @notice Internal function to load JIT position key from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return jitPositionKey The JIT position key
      */
     function _tload_jit_positionKey() internal view returns(bytes32 jitPositionKey){
-        assembly("memory-safe"){
-            jitPositionKey := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x01))
+        bytes32 slot;
+        assembly {
+            slot := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x01)
         }
+        jitPositionKey = parityTaxExtt.exttload(slot);
     }
 
     /**
      * @notice Internal function to load JIT liquidity from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return jitLiquidity The JIT liquidity amount
      */
     function _tload_jit_liquidity() internal view returns(uint256 jitLiquidity){
-        assembly("memory-safe"){
-            jitLiquidity := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x03))
+        bytes32 slot;
+        assembly {
+            slot := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x03)
         }
+        bytes32 value = parityTaxExtt.exttload(slot);
+        jitLiquidity = uint256(value);
     }
 
     /**
      * @notice Internal function to load JIT fee revenue from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return The fee revenue on currency0 and currency1
      */
     function _tload_jit_feeRevenue() internal view returns(uint256,uint256){
-        uint256 feesOn0;
-        uint256 feesOn1;
-
-        assembly("memory-safe"){
-            feesOn0 := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x04))
-            feesOn1 := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x05))
+        bytes32 slot0;
+        bytes32 slot1;
+        assembly {
+            slot0 := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x04)
+            slot1 := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x05)
         }
-
-        return (feesOn0, feesOn1);
+        bytes32 value0 = parityTaxExtt.exttload(slot0);
+        bytes32 value1 = parityTaxExtt.exttload(slot1);
+        
+        return (uint256(value0), uint256(value1));
     }
 
     /**
      * @notice Internal function to load JIT owner from transient storage
-     * @dev Uses assembly for efficient transient storage operations
+     * @dev Uses IExttload to read from ParityTaxExtt contract
      * @return owner The JIT position owner address
      */
     function _tload_jit_owner() internal view returns(address owner){
-        assembly("memory-safe"){
-            owner := tload(add(JIT_LIQUIDITY_POSITION_LOCATION, 0x06))
+        bytes32 slot;
+        assembly {
+            slot := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x06)
         }
+        bytes32 value = parityTaxExtt.exttload(slot);
+        owner = address(uint160(uint256(value)));
     }
 
 
 
     /**
      * @notice Internal function to load complete JIT liquidity position from transient storage
-     * @dev Constructs a complete LiquidityPosition struct from stored JIT data
+     * @dev Constructs a complete LiquidityPosition struct from stored JIT data using IExttload
      * @return jitLiquidityPosition The complete JIT liquidity position data
      */
-    function _tload_jit_liquidityPosition() internal returns(LiquidityPosition memory jitLiquidityPosition){
+    function _tload_jit_liquidityPosition() internal view returns(LiquidityPosition memory jitLiquidityPosition){
         (uint256 feesOn0,uint256 feesOn1) = _tload_jit_feeRevenue();
 
         jitLiquidityPosition = LiquidityPosition({
@@ -608,21 +585,21 @@ abstract contract ParityTaxHookBase is IParityTaxHook,Exttload,BaseHook, Liquidi
      * @dev TODO: This is a placeholder, to be implemented
      * @return The current price (currently returns 1 as placeholder)
      */
-    function getCurrentPrice() public view returns(uint256){
+    function getCurrentPrice() public pure returns(uint256){
         return 1;
     }
 
     /**
      * @inheritdoc IParityTaxHook
      */
-    function positionManager() external returns(IPositionManager){
+    function positionManager() external view returns(IPositionManager){
         return lpm;
     }
 
     /**
      * @inheritdoc IParityTaxHook
      */
-    function FiscalPolicy() external returns(IFiscalPolicy){
+    function FiscalPolicy() external view returns(IFiscalPolicy){
         return fiscalPolicy;
     }
 

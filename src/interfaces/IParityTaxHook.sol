@@ -15,6 +15,7 @@ import {IFiscalPolicy} from "./IFiscalPolicy.sol";
 import {IExttload} from "@uniswap/v4-core/src/interfaces/IExttload.sol";
 import {IPLPResolver} from "./IPLPResolver.sol";
 import {IJITResolver} from "./IJITResolver.sol";
+import {IParityTaxExtt} from "./IParityTaxExtt.sol";
 
 /**
  * @title IParityTaxHook
@@ -187,6 +188,13 @@ interface IParityTaxHook is IExttload{
         address owner,
         uint256 tokenId
     ) external view returns(uint48);
+
+    /**
+     * @notice Returns the ParityTaxExtt instance for transient storage operations
+     * @dev This allows external contracts to access the transient storage through ParityTaxExtt
+     * @return The ParityTaxExtt contract instance
+     */
+    function getParityTaxExtt() external view returns (IParityTaxExtt);
 
 
 

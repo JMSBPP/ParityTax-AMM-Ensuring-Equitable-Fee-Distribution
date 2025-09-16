@@ -39,6 +39,7 @@ import "./interfaces/IParityTaxHook.sol";
 import "./types/Shared.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import "./base/ParityTaxHookBase.sol";
+import {IParityTaxExtt} from "./interfaces/IParityTaxExtt.sol";
 //===================================================================
 
 
@@ -91,21 +92,24 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
     /**
      * @notice Initializes the ParityTaxHook with required dependencies
-     * @dev Sets up the pool manager, position manager, and LP oracle for hook operations
+     * @dev Sets up the pool manager, position manager, LP oracle, and ParityTaxExtt for hook operations
      * @param _poolManager The Uniswap V4 pool manager contract
      * @param _lpm The position manager for liquidity operations
      * @param _lpOracle Oracle for liquidity price information
+     * @param _parityTaxExtt The ParityTaxExtt contract for transient storage operations
      * @dev WARNING: The ParityTaxRouter is not needed as any router that calls the swap/modifyLiquidity
      * with the right hookData and no claims is valid
      */
     constructor(
         IPoolManager _poolManager,
         IPositionManager _lpm,
-        ILPOracle _lpOracle
+        ILPOracle _lpOracle,
+        IParityTaxExtt _parityTaxExtt
     ) ParityTaxHookBase(
         _poolManager,
         _lpm,
-        _lpOracle
+        _lpOracle,
+        _parityTaxExtt
         ) 
     {
 
@@ -122,8 +126,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         uint160) internal virtual override returns (bytes4) {
             return IHooks.beforeInitialize.selector;
     }
-
-
 
 
     /**
@@ -607,6 +609,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         bytes calldata
     ) internal virtual override returns (bytes4){
         return IHooks.afterDonate.selector;
+    }
+
+    /**
+     * @notice Returns the ParityTaxExtt instance for transient storage operations
+     * @dev This allows external contracts to access the transient storage through ParityTaxExtt
+     * @return The ParityTaxExtt contract instance
+     */
+    function getParityTaxExtt() external view returns (IParityTaxExtt) {
+        return parityTaxExtt;
     }
 
 

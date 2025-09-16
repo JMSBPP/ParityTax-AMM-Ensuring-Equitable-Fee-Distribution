@@ -68,7 +68,8 @@ dmypy.json
 # Reference files (PDFs)
 refs/
 *.pdf
-pdfs/
+pdf_analysis/
+pdf_env/
 documents/
 
 # Issue files

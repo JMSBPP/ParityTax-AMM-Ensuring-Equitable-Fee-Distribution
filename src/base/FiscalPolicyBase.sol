@@ -23,6 +23,7 @@ import {PoolKey,PoolId,PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.so
 import {ILPOracle} from "../interfaces/ILPOracle.sol";
 import {IParityTaxRouter} from "../interfaces/IParityTaxRouter.sol";
 import {ISubscriber} from "@uniswap/v4-periphery/src/interfaces/ISubscriber.sol";
+import {IParityTaxExtt} from "../interfaces/IParityTaxExtt.sol";
 
 import "../types/Shared.sol"; 
 
@@ -128,12 +129,13 @@ abstract contract FiscalPolicyBase is IFiscalPolicy, UUPSUpgradeable, AbstractCa
         BalanceDelta jitTaxPaymentDelta = _calculateTaxPayment(jitFeeRevenueDelta);
         console2.log("Tax Payment Delta:", BalanceDelta.unwrap(jitTaxPaymentDelta));
         console2.log("JIT Liquidity Liability:", BalanceDelta.unwrap(jitFeeRevenueDelta - jitTaxPaymentDelta));
+        IParityTaxExtt parityTaxExtt = parityTaxHook.getParityTaxExtt();
+        bytes32 slot;
+        assembly {
+            slot := add(JIT_LIQUIDITY_POSITION_LOCATION, 0x02)
+        }
         PositionInfo jitPositionInfo = PositionInfo.wrap(
-            uint256(
-                parityTaxHook.exttload(
-                    bytes32(uint256(JIT_LIQUIDITY_POSITION_LOCATION) + 2)
-                    )
-            )
+            uint256(parityTaxExtt.exttload(slot))
         );
         bytes25 poolKeyLookUpPoolId = jitPositionInfo.poolId();
         PoolKey memory poolKey = abi.decode(

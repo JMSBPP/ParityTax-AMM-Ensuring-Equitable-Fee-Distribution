@@ -12,6 +12,8 @@ import {
     StateLibrary
 } from "../src/ParityTaxHook.sol";
 
+import {ParityTaxExtt} from "../src/ParityTaxExtt.sol";
+
 import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
 import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -68,6 +70,7 @@ contract ParityTaxHookTest is FiscalPolicySetUp, LiquidityResolversSetUp, HookTe
     using SafeCast for *;
     PoolKey noHookKey;    
     ParityTaxHook parityTaxHook;
+    ParityTaxExtt parityTaxExtt;
 
     address alice = makeAddr("ALICE");
     address bob = makeAddr("BOB");
@@ -81,10 +84,8 @@ contract ParityTaxHookTest is FiscalPolicySetUp, LiquidityResolversSetUp, HookTe
         deployMintAndApprove2Currencies();
         deployAndApprovePosm(manager);
         
-
-
-        
-        
+        // Deploy ParityTaxExtt contract
+        parityTaxExtt = new ParityTaxExtt();
 
         parityTaxHook = ParityTaxHook(
             address(
@@ -106,7 +107,8 @@ contract ParityTaxHookTest is FiscalPolicySetUp, LiquidityResolversSetUp, HookTe
             abi.encode(
                 manager,
                 lpm,
-                lpOracle
+                lpOracle,
+                parityTaxExtt
             ),
             address(parityTaxHook)
         );

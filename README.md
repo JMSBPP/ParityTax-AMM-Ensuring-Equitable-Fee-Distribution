@@ -71,20 +71,82 @@ A more balanced liquidity ecosystem where:
 
 ## Key-Metrics
 
+## Deployed Contracts
+
+### Sepolia Testnet (Chain ID: 11155111)
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **ParityTaxHook** | `0x468947142AEf4F380b5E0794B5c2296faa6d6Fd3` | Core hook contract for equitable fee distribution |
+| **ParityTaxExtt** | `0x1118879ccce8a1237c91a5256ad1796ad9085b91` | Extension contract for additional functionality |
+| **UniformFiscalPolicy** | `0x9152dF1c95787C830A8b794f087757D22Ac1950F` | Fiscal policy implementation |
+| **ParityTaxRouter** | `0xD47A70d43C79b150Fed628520cae1fBf3849a19D` | Router for swap operations |
+| **MockJITResolver** | `0x9CfbE05028cD3E1e1aD05f4B43c8FE6842eFE6Ef` | JIT liquidity resolver |
+| **MockPLPResolver** | `0x918633d1Ee594Ba0a51787f40fA99674E946dE4e` | PLP liquidity resolver |
+
+**Deployer**: `0xbd8a7d2a59c7452b411f01797fd82f8270aefFF3`
+
+### Reactive Testnet (Chain ID: 5318007)
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **SubscriptionBatchCall** | `0x2ce57C52bA83f84d607A972bf8A699902A2e94Fc` | Library for batch execution of ParityTax hook subscriptions |
+| **FiscalListeningPost** | `0x3E68044b4291F5a22Ac31D9Ad6793B535BD1d3C3` | Reactive network bridge for forwarding event data |
+
+**Deployer**: `0xBD8A7d2a59C7452b411f01797fd82f8270aefFF3`  
+**Verification**: SubscriptionBatchCall verified on Sourcify
+
 ## Setup
 ```sh
 
-git clone https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution.git
+git clone -b atrium-cohort6-deliverable https://github.com/JMSBPP/ParityTax-AMM-Ensuring-Equitable-Fee-Distribution.git
 cd ParityTax-AMM-Ensuring-Equitable-Fee-Distribution
-git checkout atrium-cohort5-deliverable
-forge install
+```
+
+### Build
+```sh
+make build
+# or
 forge build
 ```
-### Build
 
 ### Test
+```sh
+make test
+# or
+forge test
+
+# Run specific tests
+make test-hook
+make test-gas
+```
 
 ### Deploy
+```sh
+# Deploy liquidity resolvers to Sepolia
+make deploy-liquidity-resolvers
+
+# Deploy fiscal policy to Sepolia
+make deploy-fiscal-policy
+
+# Deploy all contracts
+make deploy-all
+```
+
+### Available Make Commands
+| Command | Description |
+|---------|-------------|
+| `make help` | Show all available commands |
+| `make build` | Build the project |
+| `make test` | Run all tests |
+| `make test-hook` | Run ParityTax-specific tests |
+| `make test-gas` | Run tests with gas reporting |
+| `make deploy-liquidity-resolvers` | Deploy liquidity resolvers to Sepolia |
+| `make deploy-fiscal-policy` | Deploy fiscal policy to Sepolia |
+| `make deploy-all` | Deploy all contracts to Sepolia |
+| `make clean` | Clean build artifacts |
+| `make format` | Format Solidity code |
+| `make sizes` | Show contract sizes |
 
 
 

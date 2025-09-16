@@ -16,6 +16,8 @@ import {
     ParityTaxHook
 } from "../src/ParityTaxHook.sol";
 
+import {ParityTaxExtt} from "../src/ParityTaxExtt.sol";
+
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
@@ -32,7 +34,6 @@ contract DeployParityTaxHookScript is Script {
 
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
 
-
         uint160 flags = uint160(        
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
             Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG| 
@@ -41,16 +42,19 @@ contract DeployParityTaxHookScript is Script {
             Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_DONATE_FLAG
         );
 
+        vm.startBroadcast(deployerPrivateKey);
+
+        // Deploy ParityTaxExtt contract
+        ParityTaxExtt parityTaxExtt = new ParityTaxExtt();
+
         bytes memory constructorArgs = abi.encode(
-            IPoolManager(poolManager), IPositionManager(lpm), ILPOracle(lpOracle)
+            IPoolManager(poolManager), IPositionManager(lpm), ILPOracle(lpOracle), parityTaxExtt
         );
 
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(ParityTaxHook).creationCode, constructorArgs);
 
-        vm.startBroadcast(deployerPrivateKey);
-
-        parityTaxHook = new ParityTaxHook{salt: salt}(IPoolManager(poolManager), IPositionManager(lpm), ILPOracle(lpOracle));
+        parityTaxHook = new ParityTaxHook{salt: salt}(IPoolManager(poolManager), IPositionManager(lpm), ILPOracle(lpOracle), parityTaxExtt);
         require(address(parityTaxHook) == hookAddress, "ParityTaxHookScript: hook address mismatch");
 
         vm.stopBroadcast();
