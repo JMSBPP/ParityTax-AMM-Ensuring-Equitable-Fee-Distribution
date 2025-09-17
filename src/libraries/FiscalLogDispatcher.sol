@@ -89,9 +89,9 @@ library FiscalLogDispatcher{
                 afterSwapExternalSqrtPriceX96
             );
 
-            // Encode callback data for IFiscalPolicy.calculateOptimalTax function
+            // Encode callback data for IFiscalPolicy.onPriceImpact function
             bytes memory callbackData = abi.encodeCall(
-                IFiscalPolicy.calculateOptimalTax,
+                IFiscalPolicy.onPriceImpact,
                 (
                     poolId,
                     abi.encode(priceImpactCallback)
@@ -100,6 +100,33 @@ library FiscalLogDispatcher{
 
             return callbackData;
             
+        } else if (log.topic_0 == LIQUIDITY_ON_SWAP_TOPIC0){
+            // Decode LiquidityOnSwap event data from the log record
+            (
+                uint128 totalLiquidity,
+                uint128 jitLiquidity,
+                uint128 plpLiquidity
+            ) = abi.decode(log.data, (uint128, uint128, uint128));
+
+            // Extract pool ID from topic1 of the log record
+            PoolId poolId = PoolId.wrap(bytes32(log.topic_1));
+
+            // Create LiquidityOnSwapCallback struct with decoded data and block number
+            LiquidityOnSwapCallback memory liquidityOnSwapCallback = LiquidityOnSwapCallback(
+                uint48(log.block_number),
+                totalLiquidity,
+                jitLiquidity,
+                plpLiquidity
+            );
+            bytes memory callbackData = abi.encodeCall(
+                IFiscalPolicy.onLiquidityOnSwap,
+                (
+                    poolId,
+                    abi.encode(liquidityOnSwapCallback)
+                )
+            );
+
+            return callbackData;
         }
     }
 

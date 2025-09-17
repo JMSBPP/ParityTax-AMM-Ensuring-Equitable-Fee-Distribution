@@ -31,6 +31,9 @@ bytes32 constant  PLP_LIQUIDITY_POSITION_LOCATION = 0x369fcc6be4409721b124e1944a
 /// @dev keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.PRICE_IMPACT")) - 1)) & ~bytes32(uint256(0xff))
 bytes32 constant  PRICE_IMPACT_LOCATION = 0x9a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
 
+/// @dev Transient storage location for liquidity on swap data
+/// @dev keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.LIQUIDITY_ON_SWAP")) - 1)) & ~bytes32(uint256(0xff))
+bytes32 constant LIQUIDITY_ON_SWAP_LOCATION = 0x5a6e024ebb4e856a20885b7e11ce369a95696ac0f9ef8bcb2bc66a08583efa00;
 /// @dev Transient storage location for tax rate data
 /// @dev keccak256(abi.encode(uint256(keccak256("openzeppelin.transient-storage.TAX_RATE")) - 1)) & ~bytes32(uint256(0xff))
 bytes32 constant TAX_RATE_SLOT = 0x27ab0422f76b78bf083331c8c5fff9ffc12f6849edb4cd1117fbfe5487d3ed00;

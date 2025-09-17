@@ -1,7 +1,7 @@
 # ParityTax-AMM Makefile
 # Deployment and development commands for ParityTax-AMM project
 
-.PHONY: help build test deploy-liquidity-resolvers deploy-fiscal-policy deploy-all clean
+.PHONY: help build test deploy-fiscal-log-dispatcher deploy-liquidity-resolvers deploy-fiscal-policy deploy-all clean
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "=================================="
 	@echo "build                    - Build the project"
 	@echo "test                     - Run tests"
+	@echo "deploy-fiscal-log-dispatcher - Deploy FiscalLogDispatcher library to Reactive Testnet"
 	@echo "deploy-liquidity-resolvers - Deploy liquidity resolvers to Sepolia"
 	@echo "deploy-fiscal-policy     - Deploy fiscal policy to Sepolia"
 	@echo "deploy-all              - Deploy all contracts to Sepolia"
@@ -21,6 +22,22 @@ build:
 # Run tests
 test:
 	forge test
+
+
+deploy-lp-oracle:
+	forge script script/DeployLPOracle.s.sol:DeployLPOracleScript \
+		--broadcast --rpc-url sepolia --verify
+	
+deploy-fiscal-log-dispatcher:
+	forge create --broadcast --rpc-url reactive-testnet --private-key $$PRIVATE_KEY --chain-id 5318007 src/libraries/FiscalLogDispatcher.sol:FiscalLogDispatcher
+
+deploy-parity-tax-hook:
+	forge script script/DeployParityTaxHook.s.sol:DeployParityTaxHookScript \
+		--sig "run(address,address,address)" \
+		0xE03A1074c86CFeDd5C142C4F04F1a1536e203543 \
+		0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4 \
+		0x2f1AE40ca3a236c50B39Db42BCCbBb525063253e \
+		--broadcast --rpc-url sepolia --verify
 
 # Deploy Liquidity Resolvers to Sepolia
 deploy-liquidity-resolvers:
@@ -44,7 +61,7 @@ deploy-fiscal-policy:
 		--broadcast --rpc-url sepolia --verify
 
 # Deploy all contracts (run both deployment scripts)
-deploy-all: deploy-liquidity-resolvers deploy-fiscal-policy
+deploy-all: deploy-lp-oracle deploy-parity-tax-hook deploy-liquidity-resolvers deploy-fiscal-policy
 	@echo "All contracts deployed successfully!"
 
 # Clean build artifacts

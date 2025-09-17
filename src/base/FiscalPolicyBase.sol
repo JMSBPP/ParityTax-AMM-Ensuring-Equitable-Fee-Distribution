@@ -104,13 +104,17 @@ abstract contract FiscalPolicyBase is IFiscalPolicy, UUPSUpgradeable, AbstractCa
      * @inheritdoc IFiscalPolicy
      * @dev Processes fee revenue remittance and applies taxation based on commitment type
      */
+
+     // TODO: This can be simplified to just call the _calculateTaxPayment function
+    // after retriving the tax rate from transient storage calculated and stored
+    // by the calculateOptimalTax function
     function remit(PoolId poolId,FeeRevenueInfo feeRevenueInfo) external returns(BalanceDelta){
         
-        _remit(poolId, feeRevenueInfo); 
         if (feeRevenueInfo.commitment() == JIT_COMMITMENT){
             _applyTax(poolId,feeRevenueInfo);
 
         }
+        return BalanceDeltaLibrary.ZERO_DELTA;
 
     }
 
@@ -207,6 +211,7 @@ abstract contract FiscalPolicyBase is IFiscalPolicy, UUPSUpgradeable, AbstractCa
         assembly("memory-safe"){
             tstore(TAX_RATE_SLOT, taxRate)
         }
+        emit TaxRate(PoolId.unwrap(poolId), taxRate);
         return taxRate;
     }
 
@@ -253,6 +258,26 @@ abstract contract FiscalPolicyBase is IFiscalPolicy, UUPSUpgradeable, AbstractCa
     function _onLiquidityCommitmment(PoolId ,bytes memory) internal virtual returns(bytes memory){
 
     }
+
+    function onLiquidityOnSwap(PoolId poolId, bytes memory data) external returns(bytes memory){
+        if (data.length > uint256(0x80)) revert InvalidDataLength();
+
+        LiquidityOnSwapCallback memory liquidityOnSwapCallback = abi.decode(data, (LiquidityOnSwapCallback));
+        return _onLiquidityOnSwap(poolId, liquidityOnSwapCallback);
+    }
+
+    function onPriceImpact(PoolId poolId, bytes memory data) external returns(bytes memory){
+        // NOTE: 224 is the length of the PriceImpactCallback struct abi encoded
+        if (data.length > uint256(0xe0)) revert InvalidDataLength();
+        PriceImpactCallback memory priceImpactCallback = abi.decode(data, (PriceImpactCallback));
+        return _onPriceImpact(poolId, priceImpactCallback);
+    }
+
+    function _onLiquidityOnSwap(PoolId poolId, LiquidityOnSwapCallback memory liquidityOnSwapCallback) internal virtual returns(bytes memory);
+
+    function _onPriceImpact(PoolId poolId, PriceImpactCallback memory priceImpactCallback) internal virtual returns(bytes memory);
+
+
 
     /**
      * @notice Internal function to process fee revenue remittance

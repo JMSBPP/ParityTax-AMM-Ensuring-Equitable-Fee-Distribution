@@ -37,7 +37,8 @@ contract UniformFiscalPolicy is FiscalPolicyBase{
     
     /// @notice Fixed offset for tax rate calculation in testing
     /// @dev Used to calculate uniform tax rate by subtracting from pool LP fee
-    uint24 constant internal TEST_TAX_RATE_OFFSET = 400;
+    uint24 constant internal HIGH_TAX_RATE = 400;
+    uint24 constant internal LOW_TAX_RATE = 200;
 
     // ================================ CONSTRUCTOR ================================
     
@@ -66,8 +67,123 @@ contract UniformFiscalPolicy is FiscalPolicyBase{
      * @return uint24 The calculated uniform tax rate in pips (1/10000)
      */
     function _calculateOptimalTax(PoolId poolId ,bytes memory) internal virtual override returns(uint24){
-        (,,, uint24 lpFee) = lpm.poolManager().getSlot0(poolId);
-        return lpFee - TEST_TAX_RATE_OFFSET;
+        PriceImpactCallback memory priceImpactCallback = _tload_priceImpactCallback();
+        LiquidityOnSwapCallback memory liquidityOnSwapCallback = _tload_liquidityOnSwapCallback();
+        // int256 orderFlowElasticity = _calculateOrderFlowElasticity(liquidityOnSwapCallback, priceImpactCallback);
+        uint256 concentration = (liquidityOnSwapCallback.jitLiquidity * 10000) / (liquidityOnSwapCallback.jitLiquidity + liquidityOnSwapCallback.plpLiquidity);
+
+
+        if (concentration > 5000) {
+            return uint24(HIGH_TAX_RATE);  
+        } else{
+            return uint24(LOW_TAX_RATE);
+        }
+    }
+
+    function _accrueCredit(PoolId,bytes memory) internal virtual override returns(uint256,uint256){
+        // TODO: Here is where developers implement custom logic for rewarding distribution
+        // This function is called on afterDonate to map the plp's commitment to the credit accrual
+        // based on the multipliers for both currencies by this function
+    } 
+
+    function _onLiquidityOnSwap(PoolId /*poolId*/, LiquidityOnSwapCallback memory liquidityOnSwapCallback) internal virtual override returns(bytes memory){
+        uint48 blockNumber = liquidityOnSwapCallback.blockNumber;
+        uint128 totalLiquidity = liquidityOnSwapCallback.totalLiquidity;
+        uint128 jitLiquidity = liquidityOnSwapCallback.jitLiquidity;
+        uint128 plpLiquidity = liquidityOnSwapCallback.plpLiquidity;
+
+        assembly("memory-safe") {
+            tstore(LIQUIDITY_ON_SWAP_LOCATION, blockNumber)
+            tstore(add(LIQUIDITY_ON_SWAP_LOCATION, 0x01), totalLiquidity)
+            tstore(add(LIQUIDITY_ON_SWAP_LOCATION, 0x02), jitLiquidity)
+            tstore(add(LIQUIDITY_ON_SWAP_LOCATION, 0x03), plpLiquidity)
+        }
+
+        return bytes("");
+    }
+
+    function _onPriceImpact(PoolId /*poolId*/, PriceImpactCallback memory priceImpactCallback) internal virtual override returns(bytes memory){
+        // NOTE: Stores the PriceImpactCallback in transient storage
+        uint160 beforeSwapSqrtPriceX96 = priceImpactCallback.beforeSwapSqrtPriceX96;
+        uint160 beforeSwapExternalSqrtPriceX96 = priceImpactCallback.beforeSwapExternalSqrtPriceX96;
+        uint160 afterSwapSqrtPriceX96 = priceImpactCallback.afterSwapSqrtPriceX96;
+        uint160 afterSwapExternalSqrtPriceX96 = priceImpactCallback.afterSwapExternalSqrtPriceX96;
+        uint48 blockNumber = priceImpactCallback.blockNumber;
+        SwapIntent swapIntent = priceImpactCallback.swapIntent;
+        BalanceDelta swapDelta = priceImpactCallback.swapDelta;
+
+        assembly("memory-safe") {
+            tstore(PRICE_IMPACT_LOCATION, beforeSwapSqrtPriceX96)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x01), beforeSwapExternalSqrtPriceX96)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x02), afterSwapSqrtPriceX96)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x03), afterSwapExternalSqrtPriceX96)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x04), blockNumber)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x05), swapIntent)
+            tstore(add(PRICE_IMPACT_LOCATION, 0x06), swapDelta)
+        }
+
+        return bytes("");
+    }
+
+    function _tload_priceImpactCallback() internal view returns(PriceImpactCallback memory priceImpactCallback){
+        uint160 beforeSwapSqrtPriceX96;
+        uint160 beforeSwapExternalSqrtPriceX96;
+        uint160 afterSwapSqrtPriceX96;
+        uint160 afterSwapExternalSqrtPriceX96;
+        uint48 blockNumber;
+        SwapIntent swapIntent;
+        BalanceDelta swapDelta;
+
+        assembly("memory-safe") {
+            beforeSwapSqrtPriceX96 := tload(PRICE_IMPACT_LOCATION)
+            beforeSwapExternalSqrtPriceX96 := tload(add(PRICE_IMPACT_LOCATION, 0x01))
+            afterSwapSqrtPriceX96 := tload(add(PRICE_IMPACT_LOCATION, 0x02))
+            afterSwapExternalSqrtPriceX96 := tload(add(PRICE_IMPACT_LOCATION, 0x03))
+            blockNumber := tload(add(PRICE_IMPACT_LOCATION, 0x04))
+            swapIntent := tload(add(PRICE_IMPACT_LOCATION, 0x05))
+            swapDelta := tload(add(PRICE_IMPACT_LOCATION, 0x06))
+        }
+
+        priceImpactCallback = PriceImpactCallback({
+            blockNumber: blockNumber,
+            swapIntent: swapIntent,
+            swapDelta: swapDelta,
+            beforeSwapSqrtPriceX96: beforeSwapSqrtPriceX96,
+            beforeSwapExternalSqrtPriceX96: beforeSwapExternalSqrtPriceX96,
+            afterSwapSqrtPriceX96: afterSwapSqrtPriceX96,
+            afterSwapExternalSqrtPriceX96: afterSwapExternalSqrtPriceX96
+        });
+
+        return priceImpactCallback;
+    }
+
+    function _tload_liquidityOnSwapCallback() internal view returns(LiquidityOnSwapCallback memory liquidityOnSwapCallback){
+        uint48 blockNumber;
+        uint128 totalLiquidity;
+        uint128 jitLiquidity;
+        uint128 plpLiquidity;
+
+        assembly("memory-safe") {
+            blockNumber := tload(LIQUIDITY_ON_SWAP_LOCATION)
+            totalLiquidity := tload(add(LIQUIDITY_ON_SWAP_LOCATION, 0x01))
+            jitLiquidity := tload(add(LIQUIDITY_ON_SWAP_LOCATION, 0x02))
+            plpLiquidity := tload(add(LIQUIDITY_ON_SWAP_LOCATION, 0x03))
+        }
+
+        liquidityOnSwapCallback = LiquidityOnSwapCallback({
+            blockNumber: blockNumber,
+            totalLiquidity: totalLiquidity,
+            jitLiquidity: jitLiquidity,
+            plpLiquidity: plpLiquidity
+        });
+
+        return liquidityOnSwapCallback;
+    }
+
+    function _calculateOrderFlowElasticity(
+        LiquidityOnSwapCallback memory liquidityOnSwapCallback,
+        PriceImpactCallback memory priceImpactCallback
+    ) private pure returns(int256){
     }
 
 

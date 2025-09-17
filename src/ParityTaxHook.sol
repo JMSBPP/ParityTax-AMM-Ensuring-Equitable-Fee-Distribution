@@ -245,11 +245,11 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             
             if(_jitLiquidityPosition.liquidity > uint256(0x00)){
                 jitResolver.removeLiquidity(_jitLiquidityPosition);
-                LiquidityPosition memory jitLiquidityPosition = _tload_jit_liquidityPosition();
+                
                 FeeRevenueInfo jitFeeRevenueInfo = uint48(block.number).init(
                     JIT_COMMITMENT,
-                    uint80(jitLiquidityPosition.feeRevenueOnCurrency0),
-                    uint80(jitLiquidityPosition.feeRevenueOnCurrency1)
+                    uint80(_jitLiquidityPosition.feeRevenueOnCurrency0),
+                    uint80(_jitLiquidityPosition.feeRevenueOnCurrency1)
                 );
 
                 fiscalPolicy.remit(
@@ -300,10 +300,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
         uint256 jitTokenId = _tload_jit_tokenId();
 
         
-        Commitment memory jitCommitment = Commitment({
-            committer: address(jitResolver),
-            blockNumberCommitment: JIT_COMMITMENT
-        });
 
         Commitment memory plpCommitment;
         
@@ -318,8 +314,9 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
 
             if (lpCommitment.blockNumberCommitment >= MIN_PLP_BLOCK_NUMBER_COMMITMENT && jitTokenId == uint256(0x00)){
                 plpCommitment = lpCommitment;  
+                
                 uint48 plpBlockNumberCommitment = plpCommitment.blockNumberCommitment + uint48(block.number);
-                lpCommitment.blockNumberCommitment = plpBlockNumberCommitment;
+                plpCommitment.blockNumberCommitment = plpBlockNumberCommitment;
             
                 uint256 plpPositionTokenId = plpResolver.commitLiquidity(
                     poolKey,
@@ -333,15 +330,15 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                     poolId,
                     plpPositionTokenId,
                     plpCommitment.committer,
-                    plpBlockNumberCommitment
+                    plpCommitment.blockNumberCommitment
                 );
             
                 
                 emit LiquidityCommitted(
                     PoolId.unwrap(poolId),
                     uint48(block.number),
-                    lpCommitment.blockNumberCommitment,
-                    lpCommitment.committer,
+                    plpCommitment.blockNumberCommitment,
+                    plpCommitment.committer,
                     plpPositionTokenId,
                     abi.encode(liquidityParams)
                 );
@@ -355,13 +352,12 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                 }
 
 
-                lpCommitment = jitCommitment;
-                
+
                 emit LiquidityCommitted(
                     PoolId.unwrap(poolId),
                     uint48(block.number),
-                    lpCommitment.blockNumberCommitment,
-                    lpCommitment.committer,
+                    JIT_COMMITMENT,
+                    address(jitResolver),
                     jitTokenId,
                     abi.encode(liquidityParams)
                 );
@@ -369,11 +365,7 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
             } else if (jitTokenId == uint256(0x00) && lpCommitment.blockNumberCommitment < MIN_PLP_BLOCK_NUMBER_COMMITMENT){
                 revert InvalidPLPBlockCommitment();
             }
-
-
-
-
-        }
+     }
         //==================================================================//
         
         return IHooks.beforeAddLiquidity.selector;
@@ -417,7 +409,6 @@ contract ParityTaxHook is IParityTaxHook, ParityTaxHookBase{
                 uint80(int80(feeDelta.amount1()))
             );
 
-            console2.log("Fiscal Policy Address:", address(fiscalPolicy));
 
             fiscalPolicy.remit(
                 poolId,

@@ -21,6 +21,15 @@ import {IParityTaxRouter} from "./IParityTaxRouter.sol";
 import {ISubscriber} from "@uniswap/v4-periphery/src/interfaces/ISubscriber.sol";
 
 interface IFiscalPolicy is ISubscriber{ 
+    
+    event TaxRate(
+        bytes32 indexed poolId,
+        uint24 indexed taxRate
+    );
+
+    
+    
+    error InvalidDataLength();
     /**
      * @notice Processes fee revenue remittance and applies taxation
      * @dev Handles fee revenue from both JIT and PLP liquidity providers,
@@ -69,6 +78,10 @@ interface IFiscalPolicy is ISubscriber{
      * @return bytes The response data for the commitment process
      */
     function onLiquidityCommitmment(PoolId poolId, bytes memory data) external returns(bytes memory);
+
+    function onLiquidityOnSwap(PoolId poolId, bytes memory data) external returns(bytes memory);
+
+    function onPriceImpact(PoolId poolId, bytes memory data) external returns(bytes memory);
 
     /**
      * @notice Returns the liquidity provider oracle instance
