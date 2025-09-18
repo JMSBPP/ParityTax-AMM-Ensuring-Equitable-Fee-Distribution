@@ -14,9 +14,13 @@ gas_limit = "3000000000"
 verbosity = 1
 
 
+
+
 fs_permissions = [
     { access = "read-write", path = ".forge-snapshots/" }, 
-    { access = "read", path = "foundry-out/" }
+    { access = "read", path = "foundry-out/" },
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./reports" }
 ]
 
 
@@ -35,7 +39,8 @@ remappings = [
     "permit2/=lib/v4-periphery/lib/permit2/",
     "v4-core/=lib/v4-periphery/lib/v4-core/",
     "solmate/=lib/solmate/",
-    "solady/=lib/solady/src/"
+    "solady/=lib/solady/src/",
+    "foundry-devops/=lib/foundry-devops/src/"
 ]
 
 
