@@ -29,6 +29,14 @@
 
 ## Demo
 
+### 📹 **Video Presentation**
+Watch our 4-minute presentation explaining the ParityTax-AMM system:
+**[🎬 View Video](https://drive.google.com/file/d/1Ir-s0Yr0zhBfmUP3KnZ3e4IetGfXURUG/view?usp=sharing)**
+
+### 📊 **Presentation Slides**
+Access the complete slide deck with technical details and research foundation:
+**[📋 View Slides](https://drive.google.com/file/d/10kbFEvBUufra7dhaF0yyoh3ohS6qFLox/view?usp=sharing)**
+
 
 
 ##  Problem Description
@@ -116,7 +124,19 @@ This solution represents a fundamental advancement in AMM design, successfully b
 
 
 
-## Arquitecture
+## Architecture
+
+### System Context Diagram
+
+The following diagram shows the ParityTax-AMM system and its interactions with external entities:
+
+<p align="center">
+  <img src="docs/contextDiagram.excalidraw.png" alt="ParityTax-AMM System Context Diagram" width="800"/>
+</p>
+
+**Legend:**
+- **Bold Arrows**: Causal communication (direct actions)
+- **Dashed Arrows**: Informational communication (data exchange)
 
 ## Key-Metrics
 
@@ -126,12 +146,12 @@ This solution represents a fundamental advancement in AMM design, successfully b
 
 | Contract | Address | Description |
 |----------|---------|-------------|
-| **ParityTaxHook** | `0x468947142AEf4F380b5E0794B5c2296faa6d6Fd3` | Core hook contract for equitable fee distribution |
-| **ParityTaxExtt** | `0x1118879ccce8a1237c91a5256ad1796ad9085b91` | Extension contract for additional functionality |
-| **UniformFiscalPolicy** | `0x67A0505adb53cfA37B8E522B7C683a3f7787312f` | Fiscal policy implementation |
-| **ParityTaxRouter** | `0x124eff2236c00357B7C84442af0BCd7dC10f74F8` | Router for swap operations |
-| **MockJITResolver** | `0x9CfbE05028cD3E1e1aD05f4B43c8FE6842eFE6Ef` | JIT liquidity resolver |
-| **MockPLPResolver** | `0x918633d1Ee594Ba0a51787f40fA99674E946dE4e` | PLP liquidity resolver |
+| **ParityTaxHook** | [`0x468947142AEf4F380b5E0794B5c2296faa6d6Fd3`](https://sepolia.etherscan.io/address/0x468947142AEf4F380b5E0794B5c2296faa6d6Fd3) | Core hook contract for equitable fee distribution |
+| **ParityTaxExtt** | [`0x1118879ccce8a1237c91a5256ad1796ad9085b91`](https://sepolia.etherscan.io/address/0x1118879ccce8a1237c91a5256ad1796ad9085b91) | Extension contract for additional functionality |
+| **UniformFiscalPolicy** | [`0x67A0505adb53cfA37B8E522B7C683a3f7787312f`](https://sepolia.etherscan.io/address/0x67A0505adb53cfA37B8E522B7C683a3f7787312f) | Fiscal policy implementation |
+| **ParityTaxRouter** | [`0x124eff2236c00357B7C84442af0BCd7dC10f74F8`](https://sepolia.etherscan.io/address/0x124eff2236c00357B7C84442af0BCd7dC10f74F8) | Router for swap operations |
+| **MockJITResolver** | [`0x9CfbE05028cD3E1e1aD05f4B43c8FE6842eFE6Ef`](https://sepolia.etherscan.io/address/0x9CfbE05028cD3E1e1aD05f4B43c8FE6842eFE6Ef) | JIT liquidity resolver |
+| **MockPLPResolver** | [`0x918633d1Ee594Ba0a51787f40fA99674E946dE4e`](https://sepolia.etherscan.io/address/0x918633d1Ee594Ba0a51787f40fA99674E946dE4e) | PLP liquidity resolver |
 
 **Deployer**: `0xbd8a7d2a59c7452b411f01797fd82f8270aefFF3`
 
@@ -139,8 +159,8 @@ This solution represents a fundamental advancement in AMM design, successfully b
 
 | Contract | Address | Description |
 |----------|---------|-------------|
-| **SubscriptionBatchCall** | `0x2ce57C52bA83f84d607A972bf8A699902A2e94Fc` | Library for batch execution of ParityTax hook subscriptions |
-| **FiscalListeningPost** | `0x8d460Ef1587dBE692ACE520e9bBBef25A9ceCa11` | Reactive network bridge for forwarding event data |
+| **SubscriptionBatchCall** | [`0x2ce57C52bA83f84d607A972bf8A699902A2e94Fc`](https://lasna.reactscan.net/address/0x2ce57C52bA83f84d607A972bf8A699902A2e94Fc) | Library for batch execution of ParityTax hook subscriptions |
+| **FiscalListeningPost** | [`0x8d460Ef1587dBE692ACE520e9bBBef25A9ceCa11`](https://lasna.reactscan.net/address/0x8d460Ef1587dBE692ACE520e9bBBef25A9ceCa11) | Reactive network bridge for forwarding event data |
 
 **Deployer**: `0xBD8A7d2a59C7452b411f01797fd82f8270aefFF3`  
 **Verification**: SubscriptionBatchCall verified on Sourcify
@@ -161,10 +181,7 @@ forge build
 
 ### Test
 ```sh
-make test
-# or
-forge test
-
+make test-hook
 # Run specific tests
 make test-gas
 ```
@@ -198,29 +215,48 @@ make deploy-all
 
 ## References
 
-[1] [**The Paradox of Just-in-Time Liquidity in AMMs**](https://arxiv.org/abs/2401.00000)  
-*Authors: [Author Names]*  
-*Journal: [Journal Name]*  
+[1] [**The Paradox of Just-in-Time Liquidity in Decentralized Exchanges: More Providers Can Sometimes Mean Less Liquidity**](https://arxiv.org/abs/2311.18164)  
+*Authors: Agostino Capponi, Ruizhe Jia, Brian Zhu*  
+*Journal: arXiv preprint*  
 *Year: 2024*  
-*DOI: [DOI if available]*
+*arXiv: 2311.18164*
 
-[2] [**Empirical Analysis of Liquidity Provision in Decentralized Exchanges**](https://arxiv.org/abs/2401.00001)  
-*Authors: [Author Names]*  
-*Journal: [Journal Name]*  
+[2] [**Decentralised dealers? Examining liquidity provision in decentralised exchanges**](https://www.bis.org/publ/work1227.htm)  
+*Authors: Matteo Aquilina, Sean Foley, Leonardo Gambacorta, William Krekel*  
+*Journal: BIS Working Papers*  
 *Year: 2024*  
-*DOI: [DOI if available]*
+*Number: 1227*
 
-[3] [**Competition and Welfare in Automated Market Makers**](https://arxiv.org/abs/2401.00002)  
-*Authors: [Author Names]*  
-*Journal: [Journal Name]*  
+[3] [**The Cost of Permissionless Liquidity Provision in Automated Market Makers**](https://arxiv.org/abs/2402.18256)  
+*Authors: Julian Ma, Davide Crapis*  
+*Journal: arXiv preprint*  
 *Year: 2024*  
-*DOI: [DOI if available]*
+*arXiv: 2402.18256*
 
 [4] [**Empirical Analysis of Liquidity Provision in Decentralized Exchanges**](https://arxiv.org/abs/2401.00001)  
 *Authors: [Author Names]*  
 *Journal: [Journal Name]*  
 *Year: 2024*  
 *DOI: [DOI if available]*
+
+## Bibliography
+
+The complete bibliography is available in BibTeX format: [`docs/bibtex.txt`](docs/bibtex.txt)
+
+### Research Papers
+
+| Paper | Authors | Year | Link |
+|-------|---------|------|------|
+| **The Paradox of Just-in-Time Liquidity in Decentralized Exchanges** | Capponi, A., Jia, R., Zhu, B. | 2024 | [arXiv:2311.18164](https://arxiv.org/abs/2311.18164) |
+| **Decentralised dealers? Examining liquidity provision in decentralised exchanges** | Aquilina, M., Foley, S., Gambacorta, L., Krekel, W. | 2024 | [BIS Working Papers No. 1227](https://www.bis.org/publ/work1227.htm) |
+| **The Cost of Permissionless Liquidity Provision in Automated Market Makers** | Ma, J., Crapis, D. | 2024 | [arXiv:2402.18256](https://arxiv.org/abs/2402.18256) |
+
+### Key Findings
+
+- **JIT Paradox**: More JIT liquidity providers can lead to less overall liquidity (Capponi et al., 2024)
+- **Market Concentration**: ~80% of TVL controlled by sophisticated participants (BIS, 2024)
+- **Fee Extraction**: JIT LPs extract disproportionate fees through strategic positioning (Capponi et al., 2024)
+- **Regulatory Concerns**: SEC and BIS have raised concerns about market structure imbalances (BIS, 2024)
 
 
 

@@ -1,7 +1,7 @@
 /.github
 /.vscode
 /.cursor
-aiUtils/foundryAssistant/out/
+aiUtils/
 
 # Compiler files
 cache/
@@ -12,8 +12,7 @@ foundry-out/
 /broadcast/*/31337/
 /broadcast/**/dry-run/
 
-# Docs
-docs/
+
 
 # AI utilities and generated content
 aiUtils/
@@ -93,3 +92,5 @@ node_modules
 
 # Makefile (if not needed in repo)
 # Makefile
+pdf_analysis/
+pdf_env/

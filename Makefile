@@ -74,11 +74,11 @@ install:
 
 # Run specific test file
 test-hook:
-	forge test --match-contract ParityTaxTest
+	forge test --match-path test/ParityTaxTest.t.sol
 
 # Run tests with gas reporting
 test-gas:
-	forge test --gas-report
+	forge test --match-path test/ParityTaxTest.t.sol --gas-report
 
 # Check for linting issues
 lint:
@@ -91,3 +91,18 @@ format:
 # Show contract sizes
 sizes:
 	forge build --sizes
+
+# Compile LaTeX presentation with traditional BibTeX
+presentation:
+	cd docs && pdflatex presentation.tex
+	cd docs && bibtex presentation
+	cd docs && pdflatex presentation.tex
+	cd docs && pdflatex presentation.tex  # Run twice for proper references
+
+# Clean LaTeX build artifacts
+clean-presentation:
+	cd docs && rm -f *.aux *.log *.nav *.out *.snm *.toc *.vrb *.fls *.fdb_latexmk *.bbl *.bcf *.blg *.run.xml
+
+# View presentation (requires pdf viewer)
+view-presentation: presentation
+	cd docs && xdg-open presentation.pdf 2>/dev/null || open presentation.pdf 2>/dev/null || echo "Please open docs/presentation.pdf manually"
