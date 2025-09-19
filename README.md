@@ -186,18 +186,6 @@ make test-hook
 make test-gas
 ```
 
-### Deploy
-```sh
-# Deploy liquidity resolvers to Sepolia
-make deploy-liquidity-resolvers
-
-# Deploy fiscal policy to Sepolia
-make deploy-fiscal-policy
-
-# Deploy all contracts
-make deploy-all
-```
-
 ### Available Make Commands
 | Command | Description |
 |---------|-------------|
