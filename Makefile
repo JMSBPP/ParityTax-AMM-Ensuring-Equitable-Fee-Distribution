@@ -1,7 +1,7 @@
 # ParityTax-AMM Makefile
 # Deployment and development commands for ParityTax-AMM project
 
-.PHONY: help build test deploy-fiscal-log-dispatcher deploy-liquidity-resolvers deploy-fiscal-policy deploy-all clean
+.PHONY: help build test deploy-fiscal-log-dispatcher deploy-liquidity-resolvers deploy-fiscal-policy deploy-all clean test-onboarding test-docker
 
 # Default target
 help:
@@ -14,6 +14,10 @@ help:
 	@echo "deploy-fiscal-policy     - Deploy fiscal policy to Sepolia"
 	@echo "deploy-all              - Deploy all contracts to Sepolia"
 	@echo "clean                   - Clean build artifacts"
+	@echo "test-onboarding         - Test developer onboarding process"
+	@echo "test-docker             - Test with Docker (isolated environment)"
+	@echo "format                  - Format Solidity code"
+	@echo "sizes                   - Show contract sizes"
 
 # Build the project
 build:
@@ -106,3 +110,16 @@ clean-presentation:
 # View presentation (requires pdf viewer)
 view-presentation: presentation
 	cd docs && xdg-open presentation.pdf 2>/dev/null || open presentation.pdf 2>/dev/null || echo "Please open docs/presentation.pdf manually"
+
+# Test developer onboarding process
+test-onboarding:
+	@echo "Testing developer onboarding process..."
+	chmod +x scripts/test-developer-onboarding.sh
+	./scripts/test-developer-onboarding.sh
+
+# Test with Docker (isolated environment)
+test-docker:
+	@echo "Testing with Docker (isolated environment)..."
+	docker build -f Dockerfile.test -t paritytax-test .
+	docker run --rm paritytax-test forge test
+	@echo "Docker test completed successfully!"
